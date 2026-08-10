@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Introducing Non-Abstract Large System Design — Detailed Study Notebook</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root{
+    --paper:#F6F1E4;
+    --paper-line:#DED4B8;
+    --ink:#242121;
+    --ink-soft:#5B564C;
+    --marker:#2F5FA8;
+    --marker-soft:#DCE6F4;
+    --coral:#B84B2A;
+    --coral-soft:#F4E1D6;
+    --moss:#4C6B4F;
+    --moss-soft:#E1E9DD;
+    --tab:#EFC94C;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#E7DEC7;
+    font-family:'Source Serif 4', Georgia, serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    padding:32px 12px 80px;
+  }
+
+  .page{
+    max-width:860px;
+    width:100%;
+  }
+
+  .cover{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line), 0 18px 40px -20px rgba(0,0,0,.35);
+    padding:44px 40px 36px;
+    margin-bottom:22px;
+    position:relative;
+  }
+  .eyebrow{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:15px;
+    letter-spacing:.04em;
+  }
+  h1.title{
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:clamp(30px,4.4vw,44px);
+    margin:6px 0 4px;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .subtitle{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:60ch;
+    margin:8px 0 18px;
+  }
+  .source-note{
+    font-family:'Patrick Hand', cursive;
+    font-size:14.5px;
+    background:var(--marker-soft);
+    border:1px dashed var(--marker);
+    padding:10px 14px;
+    display:inline-block;
+    color:#1e3c66;
+    transform:rotate(-0.4deg);
+  }
+  .source-note a{color:#1e3c66;}
+
+  section.card{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line);
+    padding:30px 38px;
+    margin-bottom:16px;
+    position:relative;
+  }
+
+  .tab{
+    position:absolute;
+    top:-14px;
+    left:34px;
+    background:var(--tab);
+    color:#3a2c05;
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:13.5px;
+    padding:5px 14px 6px;
+    box-shadow:0 3px 6px rgba(0,0,0,.18);
+    transform:rotate(-1.2deg);
+  }
+
+  h2{
+    font-family:'Kalam', cursive;
+    font-size:25px;
+    margin:10px 0 10px;
+    color:var(--ink);
+  }
+  h3{
+    font-family:'Kalam', cursive;
+    font-size:18.5px;
+    margin:22px 0 6px;
+    color:var(--marker);
+  }
+  p{ line-height:1.62; font-size:16px; margin:10px 0; }
+  ul, ol{ line-height:1.6; font-size:16px; padding-left:22px;}
+  li{margin:4px 0;}
+  strong{color:var(--ink);}
+
+  .callout{
+    background:var(--moss-soft);
+    border-left:4px solid var(--moss);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .callout b{color:var(--moss);}
+
+  .fails{
+    background:var(--coral-soft);
+    border-left:4px solid var(--coral);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .fails b{color:var(--coral);}
+
+  .math{
+    font-family:'Patrick Hand', cursive;
+    background:#fbf8ef;
+    border:1px dashed #b8ac86;
+    padding:10px 16px;
+    font-size:16.5px;
+    margin:10px 0;
+    color:#3a3527;
+  }
+
+  .diagram-wrap{
+    margin:18px 0 6px;
+    text-align:center;
+  }
+  .diagram-wrap svg{ max-width:100%; height:auto; }
+  .diagram-caption{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14.5px;
+    margin-top:4px;
+  }
+
+  .sketch-font{ font-family:'Patrick Hand', cursive; }
+
+  table.recap{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+    margin:12px 0;
+  }
+  table.recap th, table.recap td{
+    border:1px solid var(--paper-line);
+    padding:8px 10px;
+    text-align:left;
+    vertical-align:top;
+  }
+  table.recap th{
+    background:var(--marker-soft);
+    font-family:'Kalam', cursive;
+    color:#1e3c66;
+  }
+
+  .four-q{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin:14px 0;
+  }
+  .qbox{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:12px 14px;
+  }
+  .qbox .qnum{
+    font-family:'Kalam', cursive;
+    color:var(--coral);
+    font-size:17px;
+  }
+  .qbox p{margin:4px 0 0; font-size:14.5px;}
+
+  footer{
+    text-align:center;
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14px;
+    margin-top:28px;
+  }
+  @media (max-width:600px){
+    .cover, section.card{padding:24px 20px;}
+    .four-q{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">an SRE design notebook</div>
+    <h1 class="title">Introducing Non-Abstract Large System Design</h1>
+    <p class="subtitle">A detailed, plain-English walk-through of Non-Abstract Large System Design — how Google's SREs turn a vague requirement into a real, resource-costed system, one honest failure at a time.</p>
+    <div class="source-note">📖 Based on <em>Chapter 12</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/non-abstract-design/" target="_blank">sre.google/workbook/non-abstract-design</a>. Ideas summarized in my own words; diagrams are original sketches, not the book's figures (the source is CC BY-NC-ND, so I can't reproduce or remix its text/images — go to the link for the official ones).</div>
+  </div>
+
+  <!-- SECTION 1 -->
+  <section class="card">
+    <div class="tab">01 — the idea</div>
+    <h2>What is NALSD, really?</h2>
+    <p>It's a way of designing systems where you're never allowed to hand-wave. Every time you say "we'll store the logs" or "a server will handle it," you have to immediately ask: <em>how many servers, how much disk, how much bandwidth — actually?</em></p>
+    <p>The name says it directly: <strong>Non-Abstract</strong>. No system runs on an "abstract cloud" — it runs on real disks with real IOPS limits, real network cards with real bandwidth caps, and real datacenters that occasionally lose power. NALSD forces you to keep translating your whiteboard boxes into numbers, over and over, until the design either survives contact with reality or breaks in a way you can now see and fix.</p>
+    <div class="callout"><b>Key mindset:</b> the exact numbers you land on matter less than the habit of producing them. A reasonable, honestly-derived estimate beats a precise-looking guess.</div>
+
+    <h3>The four questions you keep asking</h3>
+    <p>Every iteration of a design gets pushed through the same checklist:</p>
+    <div class="four-q">
+      <div class="qbox"><div class="qnum">1. Is it possible?</div><p>Forget cost for a second — is there even a design, in principle, that solves the problem?</p></div>
+      <div class="qbox"><div class="qnum">2. Can we do better?</div><p>Is there a simpler or asymptotically faster way to do the same thing?</p></div>
+      <div class="qbox"><div class="qnum">3. Is it feasible?</div><p>Given real machines, money, and time — can we actually build this at the required scale?</p></div>
+      <div class="qbox"><div class="qnum">4. Is it resilient?</div><p>What happens when a disk, a machine, or an entire datacenter dies?</p></div>
+    </div>
+    <p>You don't march through these once — you loop through them, iteration after iteration, each time replacing whatever part of the design just failed.</p>
+  </section>
+
+  <!-- SECTION 2 -->
+  <section class="card">
+    <div class="tab">02 — the problem</div>
+    <h2>The example: a live ad click-through-rate dashboard</h2>
+    <p>The book uses one running example throughout, so this summary sticks with it too. Google's AdWords needs to show every advertiser a dashboard of their <strong>click-through rate (CTR)</strong> — clicks ÷ impressions — for each ad and search term.</p>
+    <p>Two logs feed this: a <strong>query log</strong> (every search, with which ads were shown) and a <strong>click log</strong> (every click, with which ad and which search it belonged to). The dashboard has to join these two logs together by a shared <code>query_id</code>.</p>
+    <div class="math">
+      Targets to hit:<br>
+      • 99.9% of dashboard loads finish in &lt; 1 second<br>
+      • 99.9% of the data shown is &lt; 5 minutes old<br>
+      • Scale: ~500,000 searches/sec and ~10,000 clicks/sec
+    </div>
+    <p>Those SLOs are the whole game. Almost every design below dies because it can't hit the "fresh within 5 minutes" target, not because it can't store the data.</p>
+  </section>
+
+  <!-- SECTION 3: ONE MACHINE -->
+  <section class="card">
+    <div class="tab">03 — attempt 1</div>
+    <h2>Just... use one machine?</h2>
+    <p>The cheapest possible design: dump both logs into a single SQL database on one box, index by <code>query_id</code> and <code>search_term</code>, and let a query join them on demand.</p>
+    <p>It's a useful starting point precisely because it's easy to reason about — and easy to break.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 300" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect x="0" y="0" width="640" height="300" fill="#FBF8EF"/>
+        <!-- search + click sources -->
+        <g>
+          <rect x="20" y="30" width="130" height="46" rx="4" fill="#fff" stroke="#242121" stroke-width="2" transform="rotate(-0.6 85 53)"/>
+          <text x="85" y="58" text-anchor="middle" font-size="14">search traffic</text>
+        </g>
+        <g>
+          <rect x="20" y="210" width="130" height="46" rx="4" fill="#fff" stroke="#242121" stroke-width="2" transform="rotate(0.5 85 233)"/>
+          <text x="85" y="238" text-anchor="middle" font-size="14">ad clicks</text>
+        </g>
+        <!-- arrows -->
+        <path d="M150 53 C 230 53, 230 130, 300 145" stroke="#2F5FA8" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+        <path d="M150 233 C 230 233, 230 160, 300 150" stroke="#2F5FA8" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+        <!-- the one machine -->
+        <rect x="300" y="95" width="190" height="110" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.5" transform="rotate(-0.4 395 150)"/>
+        <text x="395" y="140" text-anchor="middle" font-size="16" font-weight="bold">ONE machine</text>
+        <text x="395" y="162" text-anchor="middle" font-size="13">SQL db</text>
+        <text x="395" y="180" text-anchor="middle" font-size="13">index: query_id,</text>
+        <text x="395" y="196" text-anchor="middle" font-size="13">search_term</text>
+        <!-- dashboard -->
+        <path d="M490 150 L 560 150" stroke="#2F5FA8" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+        <rect x="560" y="120" width="60" height="60" rx="4" fill="#fff" stroke="#242121" stroke-width="2" transform="rotate(0.8 590 150)"/>
+        <text x="590" y="146" text-anchor="middle" font-size="12">CTR</text>
+        <text x="590" y="162" text-anchor="middle" font-size="12">dash</text>
+        <!-- scribbled failure notes -->
+        <text x="330" y="245" font-size="14" fill="#B84B2A" transform="rotate(-2 330 245)">~100 TB/day of logs...</text>
+        <text x="330" y="268" font-size="14" fill="#B84B2A" transform="rotate(1.5 330 268)">and a single point of failure!</text>
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L9,3 z" fill="#2F5FA8"/>
+          </marker>
+        </defs>
+      </svg>
+      <div class="diagram-caption">sketch — the "one machine" design (original, not from the book)</div>
+    </div>
+
+    <h3>Why it collapses</h3>
+    <p>Two independent failures:</p>
+    <ul>
+      <li><strong>Disk throughput:</strong> at 2 KB per log line and 500,000 queries/sec, that's roughly <strong>86 TB of query logs a day</strong> — call it 100 TB once you round for overhead. A single machine can't sustain the write rate: even fast HDDs top out around 200 IOPS, meaning you'd theoretically need <em>thousands</em> of disks just for writes.</li>
+      <li><strong>RAM:</strong> if you instead tried to keep it all in memory on a standard 64 GB box, you'd need on the order of <strong>1,500+ machines'</strong> worth of RAM just to hold one day of data. That's not "one machine" anymore.</li>
+      <li><strong>Reliability:</strong> even setting the math aside — one machine is one power cycle away from taking the whole dashboard down.</li>
+    </ul>
+    <div class="fails"><b>Verdict:</b> not feasible, not resilient. But the exercise wasn't wasted — it told us exactly which numbers (IOPS, RAM) are the real constraints going forward.</div>
+  </section>
+
+  <!-- SECTION 4: MAPREDUCE -->
+  <section class="card">
+    <div class="tab">04 — attempt 2</div>
+    <h2>Batch it with MapReduce?</h2>
+    <p>Obvious next move: don't fight one machine, spread the join across many with a MapReduce batch job. Feed it a chunk of query logs and click logs, get back CTR numbers per ad.</p>
+    <p>This solves the <em>scale</em> problem cleanly — throw more workers at it and it keeps working, no matter how huge the input.</p>
+    <div class="fails"><b>Why it still fails:</b> the freshness SLO. MapReduce processes logs in discrete batches. To hit "fresh within 5 minutes" you'd need tiny, frequent batches — but a click can land in a different batch than the query it belongs to, and once a batch closes, that click never gets joined. Batching and "always-fresh joins" are fundamentally in tension here.</div>
+    <p class="sketch-font" style="color:var(--ink-soft)">→ so instead of chasing MapReduce workarounds, the design pivots to something built for continuous streams.</p>
+  </section>
+
+  <!-- SECTION 5: LOGJOINER -->
+  <section class="card">
+    <div class="tab">05 — attempt 3</div>
+    <h2>LogJoiner: stop batching, start looking things up</h2>
+    <p>Clicks are much rarer than searches (10,000/sec vs 500,000/sec), so scale the design around that asymmetry. Instead of joining two huge streams, build one big lookup table for queries, and only chase down the query for each <em>click</em> as it happens.</p>
+    <p>Three new pieces:</p>
+    <ul>
+      <li><strong>QueryStore</strong> — every query log entry, keyed by <code>query_id</code>, ready to be looked up on demand.</li>
+      <li><strong>LogJoiner</strong> — for each incoming click, looks up its query in QueryStore and joins them. If the query hasn't arrived yet, it waits a bit and retries, then gives up after a timeout.</li>
+      <li><strong>ClickMap</strong> and <strong>QueryMap</strong> — the joined results and the raw query counts, both organized by <code>ad_id</code> so the dashboard can fetch them instantly.</li>
+    </ul>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 700 340" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect x="0" y="0" width="700" height="340" fill="#FBF8EF"/>
+        <!-- query log -->
+        <rect x="20" y="20" width="140" height="44" rx="4" fill="#fff" stroke="#242121" stroke-width="2" transform="rotate(-0.5 90 42)"/>
+        <text x="90" y="47" text-anchor="middle" font-size="13">query log</text>
+        <!-- click log -->
+        <rect x="20" y="270" width="140" height="44" rx="4" fill="#fff" stroke="#242121" stroke-width="2" transform="rotate(0.6 90 292)"/>
+        <text x="90" y="297" text-anchor="middle" font-size="13">click log</text>
+
+        <!-- QueryStore -->
+        <rect x="230" y="20" width="150" height="60" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.5" transform="rotate(-0.3 305 50)"/>
+        <text x="305" y="45" text-anchor="middle" font-size="14" font-weight="bold">QueryStore</text>
+        <text x="305" y="63" text-anchor="middle" font-size="11.5">keyed by query_id</text>
+
+        <!-- QueryMap -->
+        <rect x="230" y="110" width="150" height="60" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.5" transform="rotate(0.3 305 140)"/>
+        <text x="305" y="135" text-anchor="middle" font-size="14" font-weight="bold">QueryMap</text>
+        <text x="305" y="153" text-anchor="middle" font-size="11.5">keyed by ad_id</text>
+
+        <!-- LogJoiner -->
+        <rect x="460" y="230" width="150" height="60" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.5" transform="rotate(-0.4 535 260)"/>
+        <text x="535" y="255" text-anchor="middle" font-size="14" font-weight="bold">LogJoiner</text>
+        <text x="535" y="273" text-anchor="middle" font-size="11.5">click → lookup → join</text>
+
+        <!-- ClickMap -->
+        <rect x="460" y="130" width="150" height="60" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.5" transform="rotate(0.3 535 160)"/>
+        <text x="535" y="155" text-anchor="middle" font-size="14" font-weight="bold">ClickMap</text>
+        <text x="535" y="173" text-anchor="middle" font-size="11.5">keyed by ad_id</text>
+
+        <!-- dashboard -->
+        <rect x="640" y="150" width="0" height="0"/>
+        <circle cx="650" cy="150" r="0"/>
+
+        <!-- arrows -->
+        <path d="M160 42 C 195 42, 195 50, 230 50" stroke="#242121" stroke-width="2" fill="none" marker-end="url(#a2)"/>
+        <path d="M160 42 C 195 42, 195 140, 230 140" stroke="#242121" stroke-width="2" fill="none" marker-end="url(#a2)"/>
+        <path d="M160 292 C 350 292, 350 270, 460 260" stroke="#242121" stroke-width="2" fill="none" marker-end="url(#a2)"/>
+        <path d="M305 80 C 305 150, 400 220, 460 250" stroke="#B84B2A" stroke-width="2" stroke-dasharray="5 4" fill="none" marker-end="url(#a3)"/>
+        <path d="M535 230 C 535 200, 535 190, 535 190" stroke="#2F5FA8" stroke-width="2" fill="none" marker-end="url(#a2)"/>
+
+        <text x="380" y="220" font-size="12.5" fill="#B84B2A" transform="rotate(-8 380 220)">"look up this query_id for me"</text>
+
+        <defs>
+          <marker id="a2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#242121"/></marker>
+          <marker id="a3" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#B84B2A"/></marker>
+        </defs>
+      </svg>
+      <div class="diagram-caption">sketch — LogJoiner looks up each click against QueryStore instead of batching (original diagram)</div>
+    </div>
+
+    <div class="math">
+      QueryMap ≈ 2 TB/day · ClickMap ≈ 20 GB/day · LogJoiner network load ≈ 400 Mbps<br>
+      (small enough to run — except the 2 TB QueryMap still needs more small, fast writes than one machine's disks can sustain.)
+    </div>
+    <div class="fails"><b>Still not done:</b> QueryMap's write pattern hits the same IOPS wall the one-machine design hit. Time to split the work across machines.</div>
+  </section>
+
+  <!-- SECTION 6: SHARDING -->
+  <section class="card">
+    <div class="tab">06 — attempt 4</div>
+    <h2>Sharding: many small LogJoiners instead of one big one</h2>
+    <p>Split the incoming logs across N LogJoiner instances using a simple rule: hash the <code>query_id</code>, take it modulo N, and route the record to that shard. Every shard now only sees a slice of the traffic, so each one stays comfortably within a single machine's IOPS and RAM budget.</p>
+    <p>QueryMap shards by <code>ad_id</code> instead (since that's the key the dashboard looks up by), and ClickMap reuses the same scheme.</p>
+
+    <h3>The reliability catch</h3>
+    <p>Sharding alone creates <em>more</em> single points of failure, not fewer — now you have N of them. The fix: <strong>send every record to two shards instead of one</strong>, spread across different machines. If one replica dies mid-join, its twin already has the work. Losing both replicas at once is rare enough that the SLO's error budget can absorb it — worst case, a brief window of slightly-stale data while the logs get reprocessed.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect x="0" y="0" width="700" height="260" fill="#FBF8EF"/>
+        <!-- incoming stream -->
+        <rect x="20" y="100" width="120" height="50" rx="4" fill="#fff" stroke="#242121" stroke-width="2" transform="rotate(-0.5 80 125)"/>
+        <text x="80" y="130" text-anchor="middle" font-size="13">click log</text>
+        <!-- sharder -->
+        <rect x="200" y="100" width="130" height="50" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2.5" transform="rotate(0.4 265 125)"/>
+        <text x="265" y="122" text-anchor="middle" font-size="13" font-weight="bold">log sharder</text>
+        <text x="265" y="140" text-anchor="middle" font-size="10.5">hash(query_id) mod N</text>
+        <!-- shards, each with 2 replicas -->
+        <g>
+          <rect x="420" y="20" width="90" height="42" rx="4" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="465" y="45" text-anchor="middle" font-size="11.5">shard 1 (a)</text>
+          <rect x="420" y="68" width="90" height="42" rx="4" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2" stroke-dasharray="4 3"/>
+          <text x="465" y="93" text-anchor="middle" font-size="11.5">shard 1 (b)</text>
+        </g>
+        <g>
+          <rect x="420" y="130" width="90" height="42" rx="4" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="465" y="155" text-anchor="middle" font-size="11.5">shard 2 (a)</text>
+          <rect x="420" y="178" width="90" height="42" rx="4" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2" stroke-dasharray="4 3"/>
+          <text x="465" y="203" text-anchor="middle" font-size="11.5">shard 2 (b)</text>
+        </g>
+        <text x="465" y="235" text-anchor="middle" font-size="12" fill="var(--ink-soft)">... shard N ...</text>
+
+        <path d="M140 125 L 200 125" stroke="#242121" stroke-width="2" fill="none" marker-end="url(#a4)"/>
+        <path d="M330 118 C 380 90, 380 60, 420 45" stroke="#B84B2A" stroke-width="2" fill="none" marker-end="url(#a5)"/>
+        <path d="M330 118 C 380 100, 380 90, 420 89" stroke="#B84B2A" stroke-width="2" stroke-dasharray="4 3" fill="none" marker-end="url(#a5)"/>
+        <path d="M330 132 C 380 150, 380 150, 420 151" stroke="#B84B2A" stroke-width="2" fill="none" marker-end="url(#a5)"/>
+        <path d="M330 132 C 380 170, 380 178, 420 198" stroke="#B84B2A" stroke-width="2" stroke-dasharray="4 3" fill="none" marker-end="url(#a5)"/>
+        <text x="345" y="70" font-size="11" fill="#B84B2A" transform="rotate(-25 345 70)">duplicate write</text>
+
+        <defs>
+          <marker id="a4" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#242121"/></marker>
+          <marker id="a5" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#B84B2A"/></marker>
+        </defs>
+      </svg>
+      <div class="diagram-caption">sketch — sharding + replica pairs for fault tolerance (original diagram)</div>
+    </div>
+
+    <div class="fails"><b>One gap remains:</b> all of this still lives in a single datacenter. Lose the datacenter, lose every ClickMap and QueryMap shard — and every advertiser's dashboard — at once.</div>
+  </section>
+
+  <!-- SECTION 7: MULTIDATACENTER -->
+  <section class="card">
+    <div class="tab">07 — attempt 5</div>
+    <h2>Multidatacenter: surviving a whole datacenter going dark</h2>
+    <p>To survive a datacenter-scale outage, the data itself — not just the compute — needs copies in multiple, geographically separate datacenters. That's the textbook <strong>consensus problem</strong>: how do several replicas, in different places, agree on the current state without one becoming an unreliable single source of truth?</p>
+    <p>The recipe here: keep 3–5 replicas of ClickMap/QueryMap, and use a consensus protocol like <strong>Paxos</strong> so a write is only accepted once enough replicas agree they've seen it — surviving the loss of a minority of them, including an entire datacenter.</p>
+
+    <div class="callout"><b>The cost of agreement:</b> consensus needs at least one network round trip between distant datacenters — roughly 25 ms. That caps you at about 40 sequential operations/sec <em>per process</em>, so you compensate the only way you can: run many parallel processes, sharded by <code>ad_id</code>, so the 40/sec limit applies to thousands of shards at once instead of one global queue.</p></div>
+
+    <div class="math">
+      ~1,000,000 queries/sec ÷ 40 ops/sec ≈ 25,500 parallel tasks needed<br>
+      → roughly 157 MB RAM and ~640 Kbps network per task<br>
+      → about 4 TB total RAM per datacenter ≈ only ~64 machines, using ~25% of network capacity
+    </div>
+    <p>That's a genuinely comfortable margin — proof the design isn't just theoretically resilient, it's cheap enough to actually run.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 700 300" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect x="0" y="0" width="700" height="300" fill="#FBF8EF"/>
+        <!-- DC A -->
+        <rect x="30" y="40" width="260" height="200" rx="8" fill="#fbf8ef" stroke="#242121" stroke-width="2" stroke-dasharray="6 4" transform="rotate(-0.3 160 140)"/>
+        <text x="160" y="66" text-anchor="middle" font-size="14" font-weight="bold">Datacenter A</text>
+        <rect x="55" y="90" width="90" height="42" rx="4" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+        <text x="100" y="115" text-anchor="middle" font-size="11">ClickMap</text>
+        <rect x="165" y="90" width="90" height="42" rx="4" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+        <text x="210" y="115" text-anchor="middle" font-size="11">QueryMap</text>
+        <text x="160" y="165" text-anchor="middle" font-size="11" fill="var(--ink-soft)">sharded by ad_id,</text>
+        <text x="160" y="182" text-anchor="middle" font-size="11" fill="var(--ink-soft)">~25,500 tasks</text>
+
+        <!-- DC B -->
+        <rect x="410" y="40" width="260" height="200" rx="8" fill="#fbf8ef" stroke="#242121" stroke-width="2" stroke-dasharray="6 4" transform="rotate(0.3 540 140)"/>
+        <text x="540" y="66" text-anchor="middle" font-size="14" font-weight="bold">Datacenter B</text>
+        <rect x="435" y="90" width="90" height="42" rx="4" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+        <text x="480" y="115" text-anchor="middle" font-size="11">ClickMap</text>
+        <rect x="545" y="90" width="90" height="42" rx="4" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+        <text x="590" y="115" text-anchor="middle" font-size="11">QueryMap</text>
+
+        <!-- consensus link -->
+        <path d="M290 111 C 340 111, 360 111, 410 111" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#a6)" marker-start="url(#a7)"/>
+        <text x="350" y="100" text-anchor="middle" font-size="11.5" fill="#B84B2A">Paxos vote (~25ms)</text>
+
+        <text x="160" y="215" text-anchor="middle" font-size="11" fill="var(--ink-soft)">a write only</text>
+        <text x="160" y="230" text-anchor="middle" font-size="11" fill="var(--ink-soft)">"counts" once a</text>
+        <text x="540" y="215" text-anchor="middle" font-size="11" fill="var(--ink-soft)">majority of replicas</text>
+        <text x="540" y="230" text-anchor="middle" font-size="11" fill="var(--ink-soft)">agree they saw it</text>
+
+        <defs>
+          <marker id="a6" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#B84B2A"/></marker>
+          <marker id="a7" markerWidth="9" markerHeight="9" refX="2" refY="3" orient="auto"><path d="M8,0 L8,6 L0,3 z" fill="#B84B2A"/></marker>
+        </defs>
+      </svg>
+      <div class="diagram-caption">sketch — replicas across datacenters agreeing via Paxos before a write "counts" (original diagram)</div>
+    </div>
+
+    <div class="callout"><b>Checked against the original requirements:</b> handles 10,000 clicks/sec and 500,000 queries/sec, dashboard reads stay fast because ClickMap/QueryMap are pre-joined and keyed by <code>ad_id</code>, and every stage scales horizontally — so if latency creeps up, you add machines rather than redesign.</div>
+  </section>
+
+  <!-- RECAP -->
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>The whole journey in one table</h2>
+    <table class="recap">
+      <tr><th>Design</th><th>What it solved</th><th>What broke it</th></tr>
+      <tr><td>One machine</td><td>Simple to reason about</td><td>IOPS wall, RAM wall, single point of failure</td></tr>
+      <tr><td>MapReduce</td><td>Scales horizontally, no size limit</td><td>Batches can't stay fresh within 5 minutes</td></tr>
+      <tr><td>LogJoiner</td><td>Streams, looks up instead of batching</td><td>QueryMap writes still too fast for one machine</td></tr>
+      <tr><td>Sharded LogJoiner</td><td>Splits load; replicas add resilience</td><td>Still just one datacenter — one outage away from total loss</td></tr>
+      <tr><td>Multidatacenter (Paxos)</td><td>Survives a datacenter-scale failure</td><td>— meets all stated SLOs, at a manageable machine count</td></tr>
+    </table>
+  </section>
+
+  <!-- TAKEAWAYS -->
+  <section class="card">
+    <div class="tab">takeaways</div>
+    <h2>Using this yourself</h2>
+    <ul>
+      <li>Start absurdly simple (one machine), and let the numbers — not intuition — tell you where it breaks.</li>
+      <li>Convert every design into concrete units: bytes/day, IOPS, Mbps, machines. If you can't, you don't understand the design yet.</li>
+      <li>Freshness/latency SLOs often kill a design before capacity does — check them early.</li>
+      <li>Resilience isn't a bolt-on at the end: ask "what if this dies?" at every single iteration, not just the last one.</li>
+      <li>Perfect assumptions aren't the goal. Reasonable, explicit, checkable ones are.</li>
+    </ul>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source material: Google SRE Workbook, Ch. 12, CC BY-NC-ND 4.0 · sre.google/workbook/non-abstract-design</footer>
+
+</div>
+</body>
+</html>

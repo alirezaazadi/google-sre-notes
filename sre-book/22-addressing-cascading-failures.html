@@ -1,0 +1,346 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Addressing Cascading Failures — Study Notebook</title><style>
+  @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root{
+    --paper:#F6F1E4;
+    --paper-line:#DED4B8;
+    --ink:#242121;
+    --ink-soft:#5B564C;
+    --marker:#2F5FA8;
+    --marker-soft:#DCE6F4;
+    --coral:#B84B2A;
+    --coral-soft:#F4E1D6;
+    --moss:#4C6B4F;
+    --moss-soft:#E1E9DD;
+    --tab:#EFC94C;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#E7DEC7;
+    font-family:'Source Serif 4', Georgia, serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    padding:32px 12px 80px;
+  }
+
+  .page{
+    max-width:860px;
+    width:100%;
+  }
+
+  .cover{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line), 0 18px 40px -20px rgba(0,0,0,.35);
+    padding:44px 40px 36px;
+    margin-bottom:22px;
+    position:relative;
+  }
+  .eyebrow{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:15px;
+    letter-spacing:.04em;
+  }
+  h1.title{
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:clamp(30px,4.4vw,44px);
+    margin:6px 0 4px;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .subtitle{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:60ch;
+    margin:8px 0 18px;
+  }
+  .source-note{
+    font-family:'Patrick Hand', cursive;
+    font-size:14.5px;
+    background:var(--marker-soft);
+    border:1px dashed var(--marker);
+    padding:10px 14px;
+    display:inline-block;
+    color:#1e3c66;
+    transform:rotate(-0.4deg);
+  }
+  .source-note a{color:#1e3c66;}
+
+  section.card{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line);
+    padding:30px 38px;
+    margin-bottom:16px;
+    position:relative;
+  }
+
+  .tab{
+    position:absolute;
+    top:-14px;
+    left:34px;
+    background:var(--tab);
+    color:#3a2c05;
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:13.5px;
+    padding:5px 14px 6px;
+    box-shadow:0 3px 6px rgba(0,0,0,.18);
+    transform:rotate(-1.2deg);
+  }
+
+  h2{
+    font-family:'Kalam', cursive;
+    font-size:25px;
+    margin:10px 0 10px;
+    color:var(--ink);
+  }
+  h3{
+    font-family:'Kalam', cursive;
+    font-size:18.5px;
+    margin:22px 0 6px;
+    color:var(--marker);
+  }
+  p{ line-height:1.62; font-size:16px; margin:10px 0; }
+  ul, ol{ line-height:1.6; font-size:16px; padding-left:22px;}
+  li{margin:4px 0;}
+  strong{color:var(--ink);}
+
+  .callout{
+    background:var(--moss-soft);
+    border-left:4px solid var(--moss);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .callout b{color:var(--moss);}
+
+  .fails{
+    background:var(--coral-soft);
+    border-left:4px solid var(--coral);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .fails b{color:var(--coral);}
+
+  .math{
+    font-family:'Patrick Hand', cursive;
+    background:#fbf8ef;
+    border:1px dashed #b8ac86;
+    padding:10px 16px;
+    font-size:16.5px;
+    margin:10px 0;
+    color:#3a3527;
+  }
+
+  .diagram-wrap{
+    margin:18px 0 6px;
+    text-align:center;
+  }
+  .diagram-wrap svg{ max-width:100%; height:auto; }
+  .diagram-caption{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14.5px;
+    margin-top:4px;
+  }
+
+  .sketch-font{ font-family:'Patrick Hand', cursive; }
+
+  table.recap{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+    margin:12px 0;
+  }
+  table.recap th, table.recap td{
+    border:1px solid var(--paper-line);
+    padding:8px 10px;
+    text-align:left;
+    vertical-align:top;
+  }
+  table.recap th{
+    background:var(--marker-soft);
+    font-family:'Kalam', cursive;
+    color:#1e3c66;
+  }
+
+  .four-q{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin:14px 0;
+  }
+  .qbox{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:12px 14px;
+  }
+  .qbox .qnum{
+    font-family:'Kalam', cursive;
+    color:var(--coral);
+    font-size:17px;
+  }
+  .qbox p{margin:4px 0 0; font-size:14.5px;}
+
+  footer{
+    text-align:center;
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14px;
+    margin-top:28px;
+  }
+  @media (max-width:600px){
+    .cover, section.card{padding:24px 20px;}
+    .four-q{grid-template-columns:1fr;}
+  }
+
+
+  .concept-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin:14px 0;
+  }
+  .concept-box{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:13px 15px;
+  }
+  .concept-box h4{
+    font-family:'Kalam',cursive;
+    color:var(--marker);
+    margin:0 0 5px;
+    font-size:17px;
+  }
+  .concept-box p{font-size:14.8px;margin:0;line-height:1.52;}
+  .chapter-map{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:8px;
+    align-items:stretch;
+    margin:16px 0 8px;
+  }
+  .map-node{
+    position:relative;
+    background:#fffdf8;
+    border:2px solid var(--marker);
+    min-height:72px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:9px 8px;
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .map-node:not(:last-child)::after{
+    content:'→';
+    position:absolute;
+    right:-18px;
+    top:23px;
+    color:var(--coral);
+    font-size:25px;
+    z-index:2;
+  }
+  .spectrum{
+    display:grid;
+    gap:9px;
+    margin:14px 0;
+  }
+  .spectrum-row{
+    display:grid;
+    grid-template-columns:160px 1fr 46px;
+    gap:10px;
+    align-items:center;
+  }
+  .spectrum-label{font-size:14px;color:var(--ink-soft);}
+  .spectrum-track{
+    height:19px;
+    border:1px solid var(--paper-line);
+    background:#efe8d4;
+    position:relative;
+    overflow:hidden;
+  }
+  .spectrum-fill{
+    height:100%;
+    background:var(--marker-soft);
+    border-right:3px solid var(--marker);
+  }
+  .spectrum-value{
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .timeline{
+    border-left:3px solid var(--marker);
+    margin:14px 0 14px 13px;
+    padding-left:20px;
+  }
+  .timeline-item{
+    position:relative;
+    margin:0 0 15px;
+    padding:0 0 0 4px;
+  }
+  .timeline-item::before{
+    content:'';
+    width:11px;height:11px;border-radius:50%;
+    background:var(--coral);
+    position:absolute;left:-31px;top:7px;
+    border:2px solid var(--paper);
+  }
+  .timeline-item b{font-family:'Kalam',cursive;color:var(--marker);}
+  .source-derived{
+    font-family:'Patrick Hand',cursive;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    border-top:1px dashed var(--paper-line);
+    margin-top:12px;
+    padding-top:7px;
+  }
+  .interview{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:14px 16px;
+    margin:10px 0;
+  }
+  .interview b{color:var(--marker);}
+  .why{
+    background:var(--marker-soft);
+    border-left:4px solid var(--marker);
+    padding:10px 16px;
+    margin:14px 0;
+    font-size:15px;
+  }
+  code{
+    background:#eee6d2;
+    padding:1px 4px;
+    border-radius:3px;
+    font-size:.92em;
+  }
+  @media(max-width:650px){
+    .concept-grid{grid-template-columns:1fr;}
+    .map-node:not(:last-child)::after{display:none;}
+    .spectrum-row{grid-template-columns:105px 1fr 38px;}
+  }
+
+    .concept-chart{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;}
+    .concept-chart .concept-step{background:#fbf8ef;border:1px solid var(--paper-line);padding:12px 14px;position:relative;}
+    .concept-chart .concept-step .step-no{font-family:'Kalam',cursive;color:var(--coral);font-size:15px;}
+    .concept-chart .concept-step .step-title{font-family:'Patrick Hand',cursive;color:#1e3c66;font-size:17px;line-height:1.25;margin-top:3px;}
+    @media(max-width:600px){.concept-chart{grid-template-columns:1fr;}}
+    </style></head><body><div class="page">
+    <div class="cover">
+      <div class="eyebrow">Google Site Reliability Engineering Book · Chapter 22</div>
+      <h1 class="title">Addressing Cascading Failures</h1>
+      <p class="subtitle">A cascading failure is positive feedback in a distributed system: one failure increases load or latency elsewhere, causing additional failures, which further increase the pressure. The chapter explains the resource feedback loops that create cascades and the concrete controls—load shedding, deadlines, bounded queues, backoff, capacity headroom, isolation, and overload testing—that stop them.</p>
+      <div class="source-note">📖 Based on the official Google SRE source: <a href="https://sre.google/sre-book/addressing-cascading-failures/" target="_blank">https://sre.google/sre-book/addressing-cascading-failures/</a>. This is a careful paraphrased study summary. Diagrams and charts are original study visuals.</div>
+    </div>
+    <section class="card"><div class="tab">map</div><h2>How the chapter fits together</h2><p>Read this diagram as the chapter’s argument, not just as a list of keywords. Each step creates the need for the next one.</p><div class="diagram-wrap"><svg viewBox="0 0 719 234" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive"><defs><marker id="mapArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#B84B2A"/></marker></defs><rect x="20" y="20" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">partial failure</tspan></text><rect x="257" y="20" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">load shifts</tspan></text><rect x="494" y="20" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="52" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">latency/resources</tspan><tspan x="596" dy="18">worsen</tspan></text><rect x="20" y="134" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="166" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">retries + health</tspan><tspan x="122" dy="18">failures</tspan></text><rect x="257" y="134" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">more replicas fail</tspan></text><rect x="494" y="134" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">system collapse</tspan></text><path d="M 229 56 L 249 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 56 L 486 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 596 95 L 596 110 L 122 110 L 122 126" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 229 170 L 249 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 170 L 486 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/></svg><div class="diagram-caption">original study sketch — redraw this flow from memory after reading</div></div></section><section class="card"><div class="tab">chart</div><h2>Chapter structure at a glance</h2><p>This chart mirrors the explanatory sections below. It is useful for navigation first; after reading, use it as a recall checklist.</p><div class="concept-chart"><div class="concept-step"><div class="step-no">01</div><div class="step-title">How a small failure becomes a large one</div></div><div class="concept-step"><div class="step-no">02</div><div class="step-title">Resource exhaustion feeds on itself</div></div><div class="concept-step"><div class="step-no">03</div><div class="step-title">Why returning below the original traffic level may not recover the system</div></div><div class="concept-step"><div class="step-no">04</div><div class="step-title">Retries are a positive-feedback mechanism unless controlled</div></div><div class="concept-step"><div class="step-no">05</div><div class="step-title">Bound the amount of useless work</div></div><div class="concept-step"><div class="step-no">06</div><div class="step-title">Capacity planning must include failure modes</div></div><div class="concept-step"><div class="step-no">07</div><div class="step-title">You need to know the shape of overload before production discovers it</div></div></div></section><section class="card"><div class="tab">01 — cascade</div><h2>How a small failure becomes a large one</h2><p>The book defines cascading failure as a failure that grows over time because the failure itself makes more failure likely. A classic example is losing one replica, which moves its traffic to surviving replicas. If the survivors have insufficient headroom, they become overloaded and fail too.</p><p>In the Shakespeare example, cluster A normally handles about 1,000 QPS. After another cluster fails, A is asked to handle about 1,200 QPS. Instead of simply serving 1,000 and rejecting 200 cleanly, resource exhaustion can make its successful throughput fall <em>below</em> the previous 1,000 QPS.</p><p>That distinction is central. A well-behaved overloaded service reaches a plateau of useful work. A cascading service experiences a falling useful-throughput curve as extra offered load destroys the capacity it still had.</p><div class="math">Illustrative chapter sequence: A is healthy at ~1,000 QPS. Failover raises offered load to ~1,200 QPS. If overload causes crashes or deadline misses, useful throughput can fall below 1,000 QPS—so 200 extra QPS can destroy more than 200 QPS of service.</div></section><section class="card"><div class="tab">02 — resources</div><h2>Resource exhaustion feeds on itself</h2><p>CPU, memory, threads, file descriptors, queue capacity, and caches are not independent. Exhausting one resource often increases pressure on another.</p><p>The chapter's Java example is a useful causal chain: poorly tuned GC consumes CPU → requests finish more slowly → more requests remain in progress → RAM usage increases → less RAM is available for cache → cache hit rate falls → more backend RPCs are issued → backends run out of CPU or threads → health checks fail.</p><p>This produces the classic <strong>GC death spiral</strong>: less CPU causes slower requests and more live state, which increases GC pressure and removes still more CPU.</p><p>During an incident, secondary symptoms can therefore look like primary causes. The backend crash may be real, but its initiating cause can be an upstream cache collapse.</p></section><section class="card"><div class="tab">03 — crash loops</div><h2>Why returning below the original traffic level may not recover the system</h2><p>Once several tasks have crashed, the fleet has less capacity than before the overload. Newly restarted tasks may immediately receive a flood of queued or retried traffic and crash again.</p><p>The chapter gives the intuition that a service healthy at 10,000 QPS but entering a cascade around 11,000 QPS may <strong>not</strong> recover merely by lowering traffic to 9,000 QPS. With much of the fleet unhealthy, 9,000 QPS can still be far above the reduced fleet's instantaneous capacity.</p><p>Recovery often requires a much more aggressive load reduction—sometimes almost a complete drain—until enough replicas are healthy, caches are warm, retries have subsided, and capacity is restored.</p><div class="callout"><b>Recovery principle:</b> the load needed to recover can be much lower than the load that the healthy fleet can sustain.</div></section><section class="card"><div class="tab">04 — retries</div><h2>Retries are a positive-feedback mechanism unless controlled</h2><p>Automatic retries improve reliability for isolated transient failures, but during broad overload they generate new demand precisely when capacity is lowest.</p><p>The chapter walks through a retry wave in which 100 QPS of retries becomes 200, then 300, while fewer original requests succeed. The backend spends CPU, memory and file descriptors on requests that will eventually fail, then crashes and shifts its traffic to the remaining tasks.</p><p>Even after original traffic returns to its pre-incident level, retry traffic can keep the service overloaded.</p><p>Use randomized exponential backoff, add jitter so clients do not synchronize, and bound retries. For wide failures, stop retries entirely or return an error that communicates that retry is not useful.</p></section><section class="card"><div class="tab">05 — deadlines and queues</div><h2>Bound the amount of useless work</h2><p>Every request should have a deadline that represents how long the caller still cares about the result. Work should not continue indefinitely after the user or upstream caller has timed out.</p><p>Unbounded queues turn overload into latency. A queue can make a service appear to accept requests even though it has merely postponed their failure; queued requests also consume memory and can make recovery slower.</p><p>Reject work early once the system crosses a safe concurrency/queue threshold. This keeps resource use bounded and gives clients a chance to degrade, back off, or redirect.</p></section><section class="card"><div class="tab">06 — preserve headroom</div><h2>Capacity planning must include failure modes</h2><p>Capacity planning for normal peak traffic is insufficient if the service must survive a cluster, zone, machine group, or dependency failure.</p><p>Planned drains and maintenance can produce the same load redistribution as unexpected failures. A dependency being drained may also force traffic to a distant site and raise latency.</p><p>Traffic profiles change too: a frontend change may make each request more expensive even if QPS is unchanged. Organic user data growth can increase payload size.</p><p>Do not count opportunistic slack CPU from other jobs as guaranteed capacity. The chapter warns that resource overcommit can make apparent headroom disappear suddenly when another workload uses the shared slack.</p></section><section class="card"><div class="tab">07 — test beyond failure</div><h2>You need to know the shape of overload before production discovers it</h2><p>The chapter recommends load testing until the component fails—and continuing beyond the initial failure point.</p><p>A healthy overload curve should show successful throughput increasing until capacity is reached, then roughly flattening while errors/degraded responses rise. A dangerous curve shows successful throughput declining as offered load continues upward.</p><p>Test with realistic dependencies, failure modes, reduced capacity, cache states, request mixes, and retry behavior. The exact cascade path is difficult to predict from first principles, so empirical overload testing is essential.</p><p>Run tests within committed resources rather than relying on borrowed cluster slack, otherwise the test may certify capacity the service does not truly own.</p><table class="recap"><tr><th>Behavior after capacity</th><th>Good overload behavior</th><th>Dangerous cascading behavior</th></tr><tr><td>Useful throughput</td><td>Plateaus near safe capacity</td><td>Drops as offered load rises</td></tr><tr><td>Latency</td><td>Bounded for admitted work</td><td>Grows without bound</td></tr><tr><td>Queues</td><td>Bounded / shed excess</td><td>Grow until memory/threads exhaust</td></tr><tr><td>Retries</td><td>Budgeted + jittered</td><td>Synchronize and amplify load</td></tr><tr><td>Recovery</td><td>Stable once offered load is reduced</td><td>Crash loops; needs deep load reduction</td></tr></table></section><section class="card"><div class="tab">interview</div><h2>Questions you should be able to explain aloud</h2><p>These are not trivia questions. A strong answer explains the mechanism, the reason for it, and the trade-off.</p><div class="concept-grid"><div class="concept-box"><h4>Question 1</h4><p>Define a cascading failure and give a concrete sequence.</p></div><div class="concept-box"><h4>Question 2</h4><p>Explain the GC death spiral example.</p></div><div class="concept-box"><h4>Question 3</h4><p>Why might lowering traffic below the original healthy QPS still not recover the service?</p></div><div class="concept-box"><h4>Question 4</h4><p>How should useful throughput behave after saturation?</p></div><div class="concept-box"><h4>Question 5</h4><p>Why are jitter and retry limits essential?</p></div><div class="concept-box"><h4>Question 6</h4><p>What capacity headroom should a multihomed service reserve?</p></div></div></section><section class="card"><div class="tab">recap</div><h2>Chapter recap</h2><p>Use this table only after reading the chapter summary. It is a retrieval aid, not a substitute for the explanation above.</p><table class="recap"><tr><th>Idea</th><th>What to remember</th></tr><tr><td>1</td><td>A cascade is positive feedback, not just 'high traffic'.</td></tr><tr><td>2</td><td>Resource shortages interact; secondary symptoms can hide the initiating cause.</td></tr><tr><td>3</td><td>Recovery traffic may need to fall far below healthy-fleet capacity.</td></tr><tr><td>4</td><td>Retries, queues, and deadlines must be bounded.</td></tr><tr><td>5</td><td>Preserve capacity for failover and maintenance.</td></tr><tr><td>6</td><td>Test the service beyond its saturation point and inspect useful throughput.</td></tr></table></section><footer>Study summary · Addressing Cascading Failures · source material © Google/O’Reilly under the source site’s stated license</footer></div></body></html>

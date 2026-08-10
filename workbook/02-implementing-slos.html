@@ -1,0 +1,346 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Implementing SLOs — Study Notebook</title><style>
+  @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root{
+    --paper:#F6F1E4;
+    --paper-line:#DED4B8;
+    --ink:#242121;
+    --ink-soft:#5B564C;
+    --marker:#2F5FA8;
+    --marker-soft:#DCE6F4;
+    --coral:#B84B2A;
+    --coral-soft:#F4E1D6;
+    --moss:#4C6B4F;
+    --moss-soft:#E1E9DD;
+    --tab:#EFC94C;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#E7DEC7;
+    font-family:'Source Serif 4', Georgia, serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    padding:32px 12px 80px;
+  }
+
+  .page{
+    max-width:860px;
+    width:100%;
+  }
+
+  .cover{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line), 0 18px 40px -20px rgba(0,0,0,.35);
+    padding:44px 40px 36px;
+    margin-bottom:22px;
+    position:relative;
+  }
+  .eyebrow{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:15px;
+    letter-spacing:.04em;
+  }
+  h1.title{
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:clamp(30px,4.4vw,44px);
+    margin:6px 0 4px;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .subtitle{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:60ch;
+    margin:8px 0 18px;
+  }
+  .source-note{
+    font-family:'Patrick Hand', cursive;
+    font-size:14.5px;
+    background:var(--marker-soft);
+    border:1px dashed var(--marker);
+    padding:10px 14px;
+    display:inline-block;
+    color:#1e3c66;
+    transform:rotate(-0.4deg);
+  }
+  .source-note a{color:#1e3c66;}
+
+  section.card{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line);
+    padding:30px 38px;
+    margin-bottom:16px;
+    position:relative;
+  }
+
+  .tab{
+    position:absolute;
+    top:-14px;
+    left:34px;
+    background:var(--tab);
+    color:#3a2c05;
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:13.5px;
+    padding:5px 14px 6px;
+    box-shadow:0 3px 6px rgba(0,0,0,.18);
+    transform:rotate(-1.2deg);
+  }
+
+  h2{
+    font-family:'Kalam', cursive;
+    font-size:25px;
+    margin:10px 0 10px;
+    color:var(--ink);
+  }
+  h3{
+    font-family:'Kalam', cursive;
+    font-size:18.5px;
+    margin:22px 0 6px;
+    color:var(--marker);
+  }
+  p{ line-height:1.62; font-size:16px; margin:10px 0; }
+  ul, ol{ line-height:1.6; font-size:16px; padding-left:22px;}
+  li{margin:4px 0;}
+  strong{color:var(--ink);}
+
+  .callout{
+    background:var(--moss-soft);
+    border-left:4px solid var(--moss);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .callout b{color:var(--moss);}
+
+  .fails{
+    background:var(--coral-soft);
+    border-left:4px solid var(--coral);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .fails b{color:var(--coral);}
+
+  .math{
+    font-family:'Patrick Hand', cursive;
+    background:#fbf8ef;
+    border:1px dashed #b8ac86;
+    padding:10px 16px;
+    font-size:16.5px;
+    margin:10px 0;
+    color:#3a3527;
+  }
+
+  .diagram-wrap{
+    margin:18px 0 6px;
+    text-align:center;
+  }
+  .diagram-wrap svg{ max-width:100%; height:auto; }
+  .diagram-caption{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14.5px;
+    margin-top:4px;
+  }
+
+  .sketch-font{ font-family:'Patrick Hand', cursive; }
+
+  table.recap{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+    margin:12px 0;
+  }
+  table.recap th, table.recap td{
+    border:1px solid var(--paper-line);
+    padding:8px 10px;
+    text-align:left;
+    vertical-align:top;
+  }
+  table.recap th{
+    background:var(--marker-soft);
+    font-family:'Kalam', cursive;
+    color:#1e3c66;
+  }
+
+  .four-q{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin:14px 0;
+  }
+  .qbox{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:12px 14px;
+  }
+  .qbox .qnum{
+    font-family:'Kalam', cursive;
+    color:var(--coral);
+    font-size:17px;
+  }
+  .qbox p{margin:4px 0 0; font-size:14.5px;}
+
+  footer{
+    text-align:center;
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14px;
+    margin-top:28px;
+  }
+  @media (max-width:600px){
+    .cover, section.card{padding:24px 20px;}
+    .four-q{grid-template-columns:1fr;}
+  }
+
+
+  .concept-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin:14px 0;
+  }
+  .concept-box{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:13px 15px;
+  }
+  .concept-box h4{
+    font-family:'Kalam',cursive;
+    color:var(--marker);
+    margin:0 0 5px;
+    font-size:17px;
+  }
+  .concept-box p{font-size:14.8px;margin:0;line-height:1.52;}
+  .chapter-map{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:8px;
+    align-items:stretch;
+    margin:16px 0 8px;
+  }
+  .map-node{
+    position:relative;
+    background:#fffdf8;
+    border:2px solid var(--marker);
+    min-height:72px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:9px 8px;
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .map-node:not(:last-child)::after{
+    content:'→';
+    position:absolute;
+    right:-18px;
+    top:23px;
+    color:var(--coral);
+    font-size:25px;
+    z-index:2;
+  }
+  .spectrum{
+    display:grid;
+    gap:9px;
+    margin:14px 0;
+  }
+  .spectrum-row{
+    display:grid;
+    grid-template-columns:160px 1fr 46px;
+    gap:10px;
+    align-items:center;
+  }
+  .spectrum-label{font-size:14px;color:var(--ink-soft);}
+  .spectrum-track{
+    height:19px;
+    border:1px solid var(--paper-line);
+    background:#efe8d4;
+    position:relative;
+    overflow:hidden;
+  }
+  .spectrum-fill{
+    height:100%;
+    background:var(--marker-soft);
+    border-right:3px solid var(--marker);
+  }
+  .spectrum-value{
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .timeline{
+    border-left:3px solid var(--marker);
+    margin:14px 0 14px 13px;
+    padding-left:20px;
+  }
+  .timeline-item{
+    position:relative;
+    margin:0 0 15px;
+    padding:0 0 0 4px;
+  }
+  .timeline-item::before{
+    content:'';
+    width:11px;height:11px;border-radius:50%;
+    background:var(--coral);
+    position:absolute;left:-31px;top:7px;
+    border:2px solid var(--paper);
+  }
+  .timeline-item b{font-family:'Kalam',cursive;color:var(--marker);}
+  .source-derived{
+    font-family:'Patrick Hand',cursive;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    border-top:1px dashed var(--paper-line);
+    margin-top:12px;
+    padding-top:7px;
+  }
+  .interview{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:14px 16px;
+    margin:10px 0;
+  }
+  .interview b{color:var(--marker);}
+  .why{
+    background:var(--marker-soft);
+    border-left:4px solid var(--marker);
+    padding:10px 16px;
+    margin:14px 0;
+    font-size:15px;
+  }
+  code{
+    background:#eee6d2;
+    padding:1px 4px;
+    border-radius:3px;
+    font-size:.92em;
+  }
+  @media(max-width:650px){
+    .concept-grid{grid-template-columns:1fr;}
+    .map-node:not(:last-child)::after{display:none;}
+    .spectrum-row{grid-template-columns:105px 1fr 38px;}
+  }
+
+    .concept-chart{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;}
+    .concept-chart .concept-step{background:#fbf8ef;border:1px solid var(--paper-line);padding:12px 14px;position:relative;}
+    .concept-chart .concept-step .step-no{font-family:'Kalam',cursive;color:var(--coral);font-size:15px;}
+    .concept-chart .concept-step .step-title{font-family:'Patrick Hand',cursive;color:#1e3c66;font-size:17px;line-height:1.25;margin-top:3px;}
+    @media(max-width:600px){.concept-chart{grid-template-columns:1fr;}}
+    </style></head><body><div class="page">
+    <div class="cover">
+      <div class="eyebrow">Google SRE Workbook · Chapter 2</div>
+      <h1 class="title">Implementing SLOs</h1>
+      <p class="subtitle">This is the Workbook’s central practical chapter: how to go from vague reliability expectations to measurable SLIs, defensible SLOs, an agreed error-budget policy, and a continuous-improvement process that actually influences engineering priorities.</p>
+      <div class="source-note">📖 Based on the official Google SRE source: <a href="https://sre.google/workbook/implementing-slos/" target="_blank">https://sre.google/workbook/implementing-slos/</a>. This is a careful paraphrased study summary. Diagrams and charts are original study visuals.</div>
+    </div>
+    <section class="card"><div class="tab">map</div><h2>How the chapter fits together</h2><p>Read this diagram as the chapter’s argument, not just as a list of keywords. Each step creates the need for the next one.</p><div class="diagram-wrap"><svg viewBox="0 0 719 234" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive"><defs><marker id="mapArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#B84B2A"/></marker></defs><rect x="20" y="20" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Identify users</tspan></text><rect x="257" y="20" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Specify SLIs</tspan></text><rect x="494" y="20" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Choose implementations</tspan></text><rect x="20" y="134" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Set targets + window</tspan></text><rect x="257" y="134" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Agree policy</tspan></text><rect x="494" y="134" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Review and improve</tspan></text><path d="M 229 56 L 249 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 56 L 486 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 596 95 L 596 110 L 122 110 L 122 126" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 229 170 L 249 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 170 L 486 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/></svg><div class="diagram-caption">original study sketch — redraw this flow from memory after reading</div></div></section><section class="card"><div class="tab">chart</div><h2>Chapter structure at a glance</h2><p>This chart mirrors the explanatory sections below. It is useful for navigation first; after reading, use it as a recall checklist.</p><div class="concept-chart"><div class="concept-step"><div class="step-no">01</div><div class="step-title">Why SREs need SLOs</div></div><div class="concept-step"><div class="step-no">02</div><div class="step-title">Start with the user and define SLI specifications</div></div><div class="concept-step"><div class="step-no">03</div><div class="step-title">Choose the measurement point deliberately</div></div><div class="concept-step"><div class="step-no">04</div><div class="step-title">Set an initial SLO and an evaluation window</div></div><div class="concept-step"><div class="step-no">05</div><div class="step-title">Get stakeholder agreement and create an error-budget policy</div></div><div class="concept-step"><div class="step-no">06</div><div class="step-title">Build a continuous-improvement loop</div></div><div class="concept-step"><div class="step-no">07</div><div class="step-title">Use error-budget cost to prioritize reliability work</div></div></div></section><section class="card"><div class="tab">visual</div><h2>What SLO work actually consists of</h2><div class="spectrum"><div class="spectrum-row"><div class="spectrum-label">User journey / outcome</div><div class="spectrum-track"><div class="spectrum-fill" style="width:100%"></div></div><div class="spectrum-value">5</div></div><div class="spectrum-row"><div class="spectrum-label">Measurement design</div><div class="spectrum-track"><div class="spectrum-fill" style="width:100%"></div></div><div class="spectrum-value">5</div></div><div class="spectrum-row"><div class="spectrum-label">Target + window</div><div class="spectrum-track"><div class="spectrum-fill" style="width:100%"></div></div><div class="spectrum-value">5</div></div><div class="spectrum-row"><div class="spectrum-label">Stakeholder policy</div><div class="spectrum-track"><div class="spectrum-fill" style="width:100%"></div></div><div class="spectrum-value">5</div></div><div class="spectrum-row"><div class="spectrum-label">Continuous review</div><div class="spectrum-track"><div class="spectrum-fill" style="width:100%"></div></div><div class="spectrum-value">5</div></div></div><div class="diagram-caption">This is not a monitoring-only chapter; each stage is required for the SLO to influence decisions.</div></section><section class="card"><div class="tab">01 — why</div><h2>Why SREs need SLOs</h2><p>Engineering time is scarce. Without explicit reliability targets, teams easily spend too much time polishing reliability that users do not need—or too little time fixing reliability that users do need. SLOs create a common data-based way to compare that opportunity cost against feature work.</p><p>The chapter goes further than treating SLOs as reporting. SLOs drive SRE work: short-term defense of the objective, medium-term projects that keep the objective achievable, and decisions about whether a service needs more or less SRE attention.</p><p>A useful SLO therefore needs <strong>teeth</strong>. A dashboard that says '99.9%' but changes no engineering decision is not yet functioning as an SRE mechanism.</p><div class="callout"><b>Key mindset:</b> the purpose of an SLO is not to make a graph green. It is to improve decisions.</div></section><section class="card"><div class="tab">02 — sli</div><h2>Start with the user and define SLI specifications</h2><p>Choose one application first, identify who its users are, and list the critical ways they interact with it. Then draw a high-level architecture showing request flow, data flow, and critical dependencies. This prevents the monitoring system from dictating what you think matters.</p><p>The chapter strongly favors SLIs that can be expressed as a ratio of <strong>good events / valid events</strong>. Examples include successful HTTP requests divided by all valid HTTP requests, calls that complete under a latency threshold divided by all calls, or requests served with sufficiently fresh data divided by all such requests.</p><p>This normalized 0–100% form is convenient because the SLO is a target percentage and the error budget naturally becomes 100% minus that target.</p><p>The chapter distinguishes <strong>SLI specification</strong> from <strong>SLI implementation</strong>. The specification is the user outcome you care about independent of instrumentation. The implementation is the exact measurement method.</p><div class="math"><b>Source example:</b><br>99.9% SLO over 3,000,000 requests → error budget = 0.1% × 3,000,000 = <strong>3,000 bad requests</strong>.<br>If one outage causes 1,500 errors, it consumes <strong>50% of the budget</strong>.</div><table class="recap"><tr><th>Specification</th><th>Possible implementation</th><th>Trade-off</th></tr><tr><td>Homepage loads under 100 ms</td><td>Backend server log</td><td>Cheap, but misses requests that never reach the server.</td></tr><tr><td>Same user outcome</td><td>Browser-based black-box probe</td><td>Captures path/network failure, but covers only synthetic locations.</td></tr><tr><td>Same user outcome</td><td>Client-side JavaScript telemetry</td><td>Closest to real experience, but adds client code and telemetry infrastructure.</td></tr></table></section><section class="card"><div class="tab">03 — sources</div><h2>Choose the measurement point deliberately</h2><p>For request/response services, the chapter considers application logs, load-balancer monitoring, black-box monitoring, and client-side instrumentation. The closer the signal is to the user, the better its quality can be—but cost and coverage vary.</p><p>In the Example Game Service, load-balancer metrics are selected for API and HTTP availability/latency because they already exist and are closer to the user than backend logs. Any HTTP 5xx is counted as failure; other status classes are treated as successful for that particular availability definition.</p><p>For a data pipeline, different outcomes need different SLIs. Freshness can use a watermark; coverage compares expected versus processed records; correctness can use known-good test data or an independent expensive computation sampled against production output.</p><p>The important lesson is that correctness is not automatically observable. Sometimes you must create 'golden data' or an independent verification path specifically so correctness can be measured.</p><div class="callout"><b>Precision vs recall:</b> an SLI can miss real user pain (poor recall) or count technically bad events that users never notice (poor precision). Both are reasons to refine it.</div></section><section class="card"><div class="tab">04 — targets</div><h2>Set an initial SLO and an evaluation window</h2><p>The book previously warned against simply making current performance the SLO, because accidental overperformance can become an expensive permanent obligation. The Workbook softens that advice pragmatically: if you have no better evidence, current performance can be a starting point, provided you deliberately iterate.</p><p>Select a reporting/evaluation window that matches how you make decisions. The running example uses a four-week rolling window. Windows that are too short create noise; windows that are too long react slowly and can hide recent behavior.</p><p>Examine historical performance if available. Ask whether days that would have violated the proposed SLO correspond to incidents users actually noticed. If they do not, the SLI or target may be measuring the wrong thing.</p><p>If there is no historical data, configure a low-fidelity measurement now rather than waiting for a perfect telemetry stack. The chapter explicitly prioritizes establishing a feedback loop.</p><table class="recap"><tr><th>Question</th><th>If the answer is “no”…</th></tr><tr><td>Would users be unhappy below this target?</td><td>The SLO may be unnecessarily strict.</td></tr><tr><td>Can the production team defend it sustainably?</td><td>Relax it, improve the system, or add resources.</td></tr><tr><td>Will product/development actually change behavior when budget is gone?</td><td>The SLO has no teeth yet.</td></tr></table></section><section class="card"><div class="tab">05 — agreement</div><h2>Get stakeholder agreement and create an error-budget policy</h2><p>Three groups must accept the SLO. Product management must believe it is sufficient for users. Development must agree to reduce risk when the budget is exhausted. The production/SRE team must believe the objective is defensible without heroic toil or burnout.</p><p>The error-budget policy is where the SLO becomes operational. Typical actions include prioritizing reliability bugs, temporarily dedicating engineering effort to reliability, or freezing selected production changes until sufficient budget returns.</p><p>The policy should be written before the argument happens. Otherwise, when reliability is poor, stakeholders will debate both the facts and the response while under pressure.</p><p>The document should record authors, reviewers, approvers, approval/revisit dates, service context, exact SLI implementations, SLO targets, and how the error budget is calculated and consumed.</p><div class="fails"><b>Failure mode:</b> an SLO approved by SRE alone is not a shared contract. If product and development do not accept the consequences of exhausting the budget, the mechanism will collapse exactly when you need it.</div></section><section class="card"><div class="tab">06 — iteration</div><h2>Build a continuous-improvement loop</h2><p>A mature SLO is not static. Compare SLO performance with customer complaints, manually discovered outages, support tickets, user research, and business metrics. The purpose is to test whether the SLI remains a useful approximation of user happiness.</p><p>If the SLO is green but users are unhappy, tighten or redesign the measurement. If the SLO is red but users remain happy, you may be spending engineering effort on reliability users do not value.</p><p>Review the cheapest/highest-return improvement first. Early iterations should favor quick learning over elaborate instrumentation because each iteration reduces uncertainty about what is actually worth measuring.</p><div class="chapter-map"><div class="map-node">SLO data</div><div class="map-node">Customer feedback</div><div class="map-node">Compare</div><div class="map-node">Change SLI/target</div><div class="map-node">Repeat</div></div></section><section class="card"><div class="tab">07 — decisions</div><h2>Use error-budget cost to prioritize reliability work</h2><p>The chapter gives a useful comparison. One bad API release causes 14,066 errors against an error budget of 109,897—about 13% of the budget. A rare database server failure causes 72,000 errors—about 65%. But if bad releases happen two or three times per year and the database failure happens only once every five years, annual expected error-budget cost can still make release safety the higher-value investment.</p><p>This is classic SRE thinking: do not prioritize solely by how dramatic one incident looked. Combine <strong>frequency × impact</strong> and make the decision using the reliability currency you already defined.</p><p>The chapter also presents a matrix using three dimensions—SLO performance, operational toil, and customer satisfaction. For example, meeting the SLO with low toil but low customer satisfaction suggests the SLO is too loose; missing the SLO with low toil but high customer satisfaction suggests it may be too strict.</p><p>At the advanced end, teams model critical user journeys rather than isolated RPCs, reason about dependencies, and may carefully experiment with relaxing reliability when they have budget to determine how technical metrics relate to business outcomes.</p><div class="math"><b>Source comparison:</b><br>Bad release: 14,066 / 109,897 ≈ <strong>13%</strong> of budget.<br>Single database failure: 72,000 / 109,897 ≈ <strong>65%</strong>.<br>But expected annual cost depends on frequency; recurring bad releases can justify fixing release safety first.</div></section><section class="card"><div class="tab">interview</div><h2>Questions you should be able to explain aloud</h2><p>These are not trivia questions. A strong answer explains the mechanism, the reason for it, and the trade-off.</p><div class="concept-grid"><div class="concept-box"><h4>Question 1</h4><p>Design availability and latency SLIs for a public API and tell me where you would measure them.</p></div><div class="concept-box"><h4>Question 2</h4><p>Why can using current performance as the initial SLO be acceptable, and what is the danger?</p></div><div class="concept-box"><h4>Question 3</h4><p>How would you resolve disagreement between product, developers, and SRE about an SLO?</p></div><div class="concept-box"><h4>Question 4</h4><p>How can error-budget consumption help prioritize two very different reliability projects?</p></div></div></section><section class="card"><div class="tab">recap</div><h2>Chapter recap</h2><p>Use this table only after reading the chapter summary. It is a retrieval aid, not a substitute for the explanation above.</p><table class="recap"><tr><th>Idea</th><th>What to remember</th></tr><tr><td>SLI specification</td><td>The user outcome that matters, independent of instrumentation.</td></tr><tr><td>SLI implementation</td><td>The exact source and formula used to measure that outcome.</td></tr><tr><td>Ratio form</td><td>Good events / valid events makes SLO and budget arithmetic simple.</td></tr><tr><td>Error-budget policy</td><td>Predetermined actions when reliability is outside the agreed range.</td></tr><tr><td>Continuous improvement</td><td>Validate the SLO against actual user satisfaction and revise it.</td></tr></table></section><footer>Study summary · Implementing SLOs · source material © Google/O’Reilly under the source site’s stated license</footer></div></body></html>

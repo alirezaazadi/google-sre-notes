@@ -1,0 +1,349 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Software Engineering in SRE — Study Notebook</title><style>
+  @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root{
+    --paper:#F6F1E4;
+    --paper-line:#DED4B8;
+    --ink:#242121;
+    --ink-soft:#5B564C;
+    --marker:#2F5FA8;
+    --marker-soft:#DCE6F4;
+    --coral:#B84B2A;
+    --coral-soft:#F4E1D6;
+    --moss:#4C6B4F;
+    --moss-soft:#E1E9DD;
+    --tab:#EFC94C;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#E7DEC7;
+    font-family:'Source Serif 4', Georgia, serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    padding:32px 12px 80px;
+  }
+
+  .page{
+    max-width:860px;
+    width:100%;
+  }
+
+  .cover{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line), 0 18px 40px -20px rgba(0,0,0,.35);
+    padding:44px 40px 36px;
+    margin-bottom:22px;
+    position:relative;
+  }
+  .eyebrow{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:15px;
+    letter-spacing:.04em;
+  }
+  h1.title{
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:clamp(30px,4.4vw,44px);
+    margin:6px 0 4px;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .subtitle{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:60ch;
+    margin:8px 0 18px;
+  }
+  .source-note{
+    font-family:'Patrick Hand', cursive;
+    font-size:14.5px;
+    background:var(--marker-soft);
+    border:1px dashed var(--marker);
+    padding:10px 14px;
+    display:inline-block;
+    color:#1e3c66;
+    transform:rotate(-0.4deg);
+  }
+  .source-note a{color:#1e3c66;}
+
+  section.card{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line);
+    padding:30px 38px;
+    margin-bottom:16px;
+    position:relative;
+  }
+
+  .tab{
+    position:absolute;
+    top:-14px;
+    left:34px;
+    background:var(--tab);
+    color:#3a2c05;
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:13.5px;
+    padding:5px 14px 6px;
+    box-shadow:0 3px 6px rgba(0,0,0,.18);
+    transform:rotate(-1.2deg);
+  }
+
+  h2{
+    font-family:'Kalam', cursive;
+    font-size:25px;
+    margin:10px 0 10px;
+    color:var(--ink);
+  }
+  h3{
+    font-family:'Kalam', cursive;
+    font-size:18.5px;
+    margin:22px 0 6px;
+    color:var(--marker);
+  }
+  p{ line-height:1.62; font-size:16px; margin:10px 0; }
+  ul, ol{ line-height:1.6; font-size:16px; padding-left:22px;}
+  li{margin:4px 0;}
+  strong{color:var(--ink);}
+
+  .callout{
+    background:var(--moss-soft);
+    border-left:4px solid var(--moss);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .callout b{color:var(--moss);}
+
+  .fails{
+    background:var(--coral-soft);
+    border-left:4px solid var(--coral);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .fails b{color:var(--coral);}
+
+  .math{
+    font-family:'Patrick Hand', cursive;
+    background:#fbf8ef;
+    border:1px dashed #b8ac86;
+    padding:10px 16px;
+    font-size:16.5px;
+    margin:10px 0;
+    color:#3a3527;
+  }
+
+  .diagram-wrap{
+    margin:18px 0 6px;
+    text-align:center;
+  }
+  .diagram-wrap svg{ max-width:100%; height:auto; }
+  .diagram-caption{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14.5px;
+    margin-top:4px;
+  }
+
+  .sketch-font{ font-family:'Patrick Hand', cursive; }
+
+  table.recap{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+    margin:12px 0;
+  }
+  table.recap th, table.recap td{
+    border:1px solid var(--paper-line);
+    padding:8px 10px;
+    text-align:left;
+    vertical-align:top;
+  }
+  table.recap th{
+    background:var(--marker-soft);
+    font-family:'Kalam', cursive;
+    color:#1e3c66;
+  }
+
+  .four-q{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin:14px 0;
+  }
+  .qbox{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:12px 14px;
+  }
+  .qbox .qnum{
+    font-family:'Kalam', cursive;
+    color:var(--coral);
+    font-size:17px;
+  }
+  .qbox p{margin:4px 0 0; font-size:14.5px;}
+
+  footer{
+    text-align:center;
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14px;
+    margin-top:28px;
+  }
+  @media (max-width:600px){
+    .cover, section.card{padding:24px 20px;}
+    .four-q{grid-template-columns:1fr;}
+  }
+
+
+  .concept-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin:14px 0;
+  }
+  .concept-box{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:13px 15px;
+  }
+  .concept-box h4{
+    font-family:'Kalam',cursive;
+    color:var(--marker);
+    margin:0 0 5px;
+    font-size:17px;
+  }
+  .concept-box p{font-size:14.8px;margin:0;line-height:1.52;}
+  .chapter-map{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:8px;
+    align-items:stretch;
+    margin:16px 0 8px;
+  }
+  .map-node{
+    position:relative;
+    background:#fffdf8;
+    border:2px solid var(--marker);
+    min-height:72px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:9px 8px;
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .map-node:not(:last-child)::after{
+    content:'→';
+    position:absolute;
+    right:-18px;
+    top:23px;
+    color:var(--coral);
+    font-size:25px;
+    z-index:2;
+  }
+  .spectrum{
+    display:grid;
+    gap:9px;
+    margin:14px 0;
+  }
+  .spectrum-row{
+    display:grid;
+    grid-template-columns:160px 1fr 46px;
+    gap:10px;
+    align-items:center;
+  }
+  .spectrum-label{font-size:14px;color:var(--ink-soft);}
+  .spectrum-track{
+    height:19px;
+    border:1px solid var(--paper-line);
+    background:#efe8d4;
+    position:relative;
+    overflow:hidden;
+  }
+  .spectrum-fill{
+    height:100%;
+    background:var(--marker-soft);
+    border-right:3px solid var(--marker);
+  }
+  .spectrum-value{
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .timeline{
+    border-left:3px solid var(--marker);
+    margin:14px 0 14px 13px;
+    padding-left:20px;
+  }
+  .timeline-item{
+    position:relative;
+    margin:0 0 15px;
+    padding:0 0 0 4px;
+  }
+  .timeline-item::before{
+    content:'';
+    width:11px;height:11px;border-radius:50%;
+    background:var(--coral);
+    position:absolute;left:-31px;top:7px;
+    border:2px solid var(--paper);
+  }
+  .timeline-item b{font-family:'Kalam',cursive;color:var(--marker);}
+  .source-derived{
+    font-family:'Patrick Hand',cursive;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    border-top:1px dashed var(--paper-line);
+    margin-top:12px;
+    padding-top:7px;
+  }
+  .interview{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:14px 16px;
+    margin:10px 0;
+  }
+  .interview b{color:var(--marker);}
+  .why{
+    background:var(--marker-soft);
+    border-left:4px solid var(--marker);
+    padding:10px 16px;
+    margin:14px 0;
+    font-size:15px;
+  }
+  code{
+    background:#eee6d2;
+    padding:1px 4px;
+    border-radius:3px;
+    font-size:.92em;
+  }
+  @media(max-width:650px){
+    .concept-grid{grid-template-columns:1fr;}
+    .map-node:not(:last-child)::after{display:none;}
+    .spectrum-row{grid-template-columns:105px 1fr 38px;}
+  }
+
+    .concept-chart{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;}
+    .concept-chart .concept-step{background:#fbf8ef;border:1px solid var(--paper-line);padding:12px 14px;position:relative;}
+    .concept-chart .concept-step .step-no{font-family:'Kalam',cursive;color:var(--coral);font-size:15px;}
+    .concept-chart .concept-step .step-title{font-family:'Patrick Hand',cursive;color:#1e3c66;font-size:17px;line-height:1.25;margin-top:3px;}
+    @media(max-width:600px){.concept-chart{grid-template-columns:1fr;}}
+    </style></head><body><div class="page">
+    <div class="cover">
+      <div class="eyebrow">Google Site Reliability Engineering Book · Chapter 18</div>
+      <h1 class="title">Software Engineering in SRE</h1>
+      <p class="subtitle">SRE engineering projects are real products for internal users. They arise from firsthand production pain and aim to create reusable leverage—safer rollout, monitoring, capacity planning, automation—rather than one-off scripts. The Auxon capacity-planning case illustrates why production expertise can become software infrastructure.</p>
+      <div class="source-note">📖 Based on the official Google SRE source: <a href="https://sre.google/sre-book/software-engineering-in-sre/" target="_blank">https://sre.google/sre-book/software-engineering-in-sre/</a>. This is a careful paraphrased study summary. Diagrams and charts are original study visuals.</div>
+    </div>
+    <section class="card"><div class="tab">map</div><h2>How the chapter fits together</h2><p>Read this diagram as the chapter’s argument, not just as a list of keywords. Each step creates the need for the next one.</p><div class="diagram-wrap"><svg viewBox="0 0 719 234" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive"><defs><marker id="mapArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#B84B2A"/></marker></defs><rect x="20" y="20" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="52" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Recurring production</tspan><tspan x="122" dy="18">problem</tspan></text><rect x="257" y="20" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="52" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Product-minded SRE</tspan><tspan x="360" dy="18">project</tspan></text><rect x="494" y="20" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="52" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Design for</tspan><tspan x="596" dy="18">scale/failure</tspan></text><rect x="20" y="134" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Internal user feedback</tspan></text><rect x="257" y="134" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Adoption</tspan></text><rect x="494" y="134" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Reduced ops cost</tspan></text><path d="M 229 56 L 249 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 56 L 486 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 596 95 L 596 110 L 122 110 L 122 126" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 229 170 L 249 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 170 L 486 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/></svg><div class="diagram-caption">original study sketch — redraw this flow from memory after reading</div></div></section><section class="card"><div class="tab">chart</div><h2>Chapter structure at a glance</h2><p>This chart mirrors the explanatory sections below. It is useful for navigation first; after reading, use it as a recall checklist.</p><div class="concept-chart"><div class="concept-step"><div class="step-no">01</div><div class="step-title">Production expertise creates a unique product perspective</div></div><div class="concept-step"><div class="step-no">02</div><div class="step-title">Not a home-directory script</div></div><div class="concept-step"><div class="step-no">03</div><div class="step-title">Engineering projects help both production and SRE careers</div></div><div class="concept-step"><div class="step-no">04</div><div class="step-title">Capacity planning as a software problem</div></div><div class="concept-step"><div class="step-no">05</div><div class="step-title">Internal automation still needs product engineering</div></div><div class="concept-step"><div class="step-no">06</div><div class="step-title">The right metric is future operations removed</div></div><div class="concept-step"><div class="step-no">07</div><div class="step-title">Internal reliability software needs users, interfaces, and maintenance</div></div></div></section><section class="card"><div class="tab">01 — why SRE writes software</div><h2>Production expertise creates a unique product perspective</h2><p>SREs operate some of the most complex parts of Google production and therefore understand requirements that may be invisible to a general application developer: fleet scale, graceful degradation, quota/capacity behavior, cross-infrastructure integration, and how tools are used during incidents.</p><p>The direct users of SRE-developed tools are often other SREs, producing high-signal feedback and allowing early versions to focus on functionality even if the user interface is still minimal.</p></section><section class="card"><div class="tab">02 — project quality</div><h2>Not a home-directory script</h2><p>The chapter distinguishes full software-engineering projects from quick hacks. An SRE tool should have a roadmap, ownership, testing, release discipline, observability, and consideration of its users. If it controls production, its failure modes may be as important as the service it manages.</p><p>This is essential to the SRE growth model: services supported by SRE are intended to grow faster than SRE headcount. Persistent automation and tooling are how a roughly linear-size organization can manage superlinear service growth.</p></section><section class="card"><div class="tab">03 — organizational value</div><h2>Engineering projects help both production and SRE careers</h2><p>Long-term projects balance interrupt/on-call work and keep software-development skills active. They also attract engineers with different backgrounds and reduce organizational blind spots.</p><p>The mixed software/systems population is valuable because software projects need deep awareness of operational reality while production response benefits from software-engineering approaches.</p></section><section class="card"><div class="tab">04 — Auxon</div><h2>Capacity planning as a software problem</h2><p>The Auxon case study begins from a recurring difficulty: capacity planning across many services is too complex and too important to perform by repeatedly hand-editing spreadsheets and assumptions. Demand forecasts, resource usage, service topology, and provisioning decisions must be kept consistent.</p><p>Automating that workflow creates not just labor savings but a common model. The tool can validate inputs, expose gaps, make plans reproducible, and help service owners reason about future growth with production data.</p><p>This is representative of high-leverage SRE software: turn repeated operational judgment into a system that retains the best parts of that judgment while making it scalable.</p></section><section class="card"><div class="tab">05 — design</div><h2>Internal automation still needs product engineering</h2><ul><li>Identify the actual user and workflow before choosing an implementation.</li><li>Prefer APIs/data models that can support multiple services rather than hard-coded local assumptions.</li><li>Model partial failure and retries because production control tools rarely operate in an atomic world.</li><li>Make dangerous actions staged, reviewable, observable, and reversible.</li><li>Measure whether the tool actually reduces toil, pages, capacity misses, or change risk.</li></ul></section><section class="card"><div class="tab">06 — leverage</div><h2>The right metric is future operations removed</h2><div class="math">Example leverage estimate:<br>
+capacity plan takes 4 engineer-hours/service/month × 60 services = 240h/month.<br>
+A common tool cuts hands-on time to 45 min/service = 45h/month.<br>
+Gross recurring saving ≈ <strong>195 engineer-hours/month</strong>, before counting fewer planning errors.</div><div class="callout"><b>SRE software mindset:</b> build the thing that makes a class of future operations cheaper, safer, and more consistent.</div></section><section class="card"><div class="tab">07 — product mindset</div><h2>Internal reliability software needs users, interfaces, and maintenance</h2><p>SRE engineering projects often start from a production pain point, but a durable solution should be treated like a software product rather than an elaborate personal script. Identify who will use it, which operations it makes safer, how failures are surfaced, how it is deployed, and who owns it after the original project ends.</p><p>The chapter’s examples illustrate why this matters at Google scale: capacity planning, configuration and fleet-management tooling must work across many services and teams. A generalized system can create far more leverage than repeatedly solving the same operational problem locally.</p><p>The success metric should therefore include future operations removed: hours of toil eliminated, pages prevented, safer changes enabled, or additional service scale handled without proportional staffing.</p></section><section class="card"><div class="tab">interview</div><h2>Questions you should be able to explain aloud</h2><p>These are not trivia questions. A strong answer explains the mechanism, the reason for it, and the trade-off.</p><div class="concept-grid"><div class="concept-box"><h4>Question 1</h4><p>What makes an SRE software project different from a one-off operational script?</p></div><div class="concept-box"><h4>Question 2</h4><p>Why are SREs well positioned to build production tooling?</p></div><div class="concept-box"><h4>Question 3</h4><p>How does software engineering support the sublinear staffing goal?</p></div><div class="concept-box"><h4>Question 4</h4><p>What kind of value would you measure for a capacity-planning tool?</p></div></div></section><section class="card"><div class="tab">recap</div><h2>Chapter recap</h2><p>Use this table only after reading the chapter summary. It is a retrieval aid, not a substitute for the explanation above.</p><table class="recap"><tr><th>Idea</th><th>What to remember</th></tr><tr><td>Why SRE builds</td><td>Production knowledge reveals high-leverage tooling opportunities.</td></tr><tr><td>Quality</td><td>Critical tools are full software products, not permanent hacks.</td></tr><tr><td>Scale</td><td>Automation keeps SRE headcount from tracking service growth directly.</td></tr><tr><td>Users</td><td>Internal SRE/service teams provide fast domain-expert feedback.</td></tr><tr><td>Auxon lesson</td><td>Capacity planning can become a reproducible shared software system.</td></tr><tr><td>Measure</td><td>Evaluate projects by toil/risk/reliability improvement, not code volume.</td></tr></table></section><footer>Study summary · Software Engineering in SRE · source material © Google/O’Reilly under the source site’s stated license</footer></div></body></html>

@@ -1,0 +1,349 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Introduction — Study Notebook</title><style>
+  @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root{
+    --paper:#F6F1E4;
+    --paper-line:#DED4B8;
+    --ink:#242121;
+    --ink-soft:#5B564C;
+    --marker:#2F5FA8;
+    --marker-soft:#DCE6F4;
+    --coral:#B84B2A;
+    --coral-soft:#F4E1D6;
+    --moss:#4C6B4F;
+    --moss-soft:#E1E9DD;
+    --tab:#EFC94C;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#E7DEC7;
+    font-family:'Source Serif 4', Georgia, serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    padding:32px 12px 80px;
+  }
+
+  .page{
+    max-width:860px;
+    width:100%;
+  }
+
+  .cover{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line), 0 18px 40px -20px rgba(0,0,0,.35);
+    padding:44px 40px 36px;
+    margin-bottom:22px;
+    position:relative;
+  }
+  .eyebrow{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:15px;
+    letter-spacing:.04em;
+  }
+  h1.title{
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:clamp(30px,4.4vw,44px);
+    margin:6px 0 4px;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .subtitle{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:60ch;
+    margin:8px 0 18px;
+  }
+  .source-note{
+    font-family:'Patrick Hand', cursive;
+    font-size:14.5px;
+    background:var(--marker-soft);
+    border:1px dashed var(--marker);
+    padding:10px 14px;
+    display:inline-block;
+    color:#1e3c66;
+    transform:rotate(-0.4deg);
+  }
+  .source-note a{color:#1e3c66;}
+
+  section.card{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line);
+    padding:30px 38px;
+    margin-bottom:16px;
+    position:relative;
+  }
+
+  .tab{
+    position:absolute;
+    top:-14px;
+    left:34px;
+    background:var(--tab);
+    color:#3a2c05;
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:13.5px;
+    padding:5px 14px 6px;
+    box-shadow:0 3px 6px rgba(0,0,0,.18);
+    transform:rotate(-1.2deg);
+  }
+
+  h2{
+    font-family:'Kalam', cursive;
+    font-size:25px;
+    margin:10px 0 10px;
+    color:var(--ink);
+  }
+  h3{
+    font-family:'Kalam', cursive;
+    font-size:18.5px;
+    margin:22px 0 6px;
+    color:var(--marker);
+  }
+  p{ line-height:1.62; font-size:16px; margin:10px 0; }
+  ul, ol{ line-height:1.6; font-size:16px; padding-left:22px;}
+  li{margin:4px 0;}
+  strong{color:var(--ink);}
+
+  .callout{
+    background:var(--moss-soft);
+    border-left:4px solid var(--moss);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .callout b{color:var(--moss);}
+
+  .fails{
+    background:var(--coral-soft);
+    border-left:4px solid var(--coral);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .fails b{color:var(--coral);}
+
+  .math{
+    font-family:'Patrick Hand', cursive;
+    background:#fbf8ef;
+    border:1px dashed #b8ac86;
+    padding:10px 16px;
+    font-size:16.5px;
+    margin:10px 0;
+    color:#3a3527;
+  }
+
+  .diagram-wrap{
+    margin:18px 0 6px;
+    text-align:center;
+  }
+  .diagram-wrap svg{ max-width:100%; height:auto; }
+  .diagram-caption{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14.5px;
+    margin-top:4px;
+  }
+
+  .sketch-font{ font-family:'Patrick Hand', cursive; }
+
+  table.recap{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+    margin:12px 0;
+  }
+  table.recap th, table.recap td{
+    border:1px solid var(--paper-line);
+    padding:8px 10px;
+    text-align:left;
+    vertical-align:top;
+  }
+  table.recap th{
+    background:var(--marker-soft);
+    font-family:'Kalam', cursive;
+    color:#1e3c66;
+  }
+
+  .four-q{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin:14px 0;
+  }
+  .qbox{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:12px 14px;
+  }
+  .qbox .qnum{
+    font-family:'Kalam', cursive;
+    color:var(--coral);
+    font-size:17px;
+  }
+  .qbox p{margin:4px 0 0; font-size:14.5px;}
+
+  footer{
+    text-align:center;
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14px;
+    margin-top:28px;
+  }
+  @media (max-width:600px){
+    .cover, section.card{padding:24px 20px;}
+    .four-q{grid-template-columns:1fr;}
+  }
+
+
+  .concept-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin:14px 0;
+  }
+  .concept-box{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:13px 15px;
+  }
+  .concept-box h4{
+    font-family:'Kalam',cursive;
+    color:var(--marker);
+    margin:0 0 5px;
+    font-size:17px;
+  }
+  .concept-box p{font-size:14.8px;margin:0;line-height:1.52;}
+  .chapter-map{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:8px;
+    align-items:stretch;
+    margin:16px 0 8px;
+  }
+  .map-node{
+    position:relative;
+    background:#fffdf8;
+    border:2px solid var(--marker);
+    min-height:72px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:9px 8px;
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .map-node:not(:last-child)::after{
+    content:'→';
+    position:absolute;
+    right:-18px;
+    top:23px;
+    color:var(--coral);
+    font-size:25px;
+    z-index:2;
+  }
+  .spectrum{
+    display:grid;
+    gap:9px;
+    margin:14px 0;
+  }
+  .spectrum-row{
+    display:grid;
+    grid-template-columns:160px 1fr 46px;
+    gap:10px;
+    align-items:center;
+  }
+  .spectrum-label{font-size:14px;color:var(--ink-soft);}
+  .spectrum-track{
+    height:19px;
+    border:1px solid var(--paper-line);
+    background:#efe8d4;
+    position:relative;
+    overflow:hidden;
+  }
+  .spectrum-fill{
+    height:100%;
+    background:var(--marker-soft);
+    border-right:3px solid var(--marker);
+  }
+  .spectrum-value{
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .timeline{
+    border-left:3px solid var(--marker);
+    margin:14px 0 14px 13px;
+    padding-left:20px;
+  }
+  .timeline-item{
+    position:relative;
+    margin:0 0 15px;
+    padding:0 0 0 4px;
+  }
+  .timeline-item::before{
+    content:'';
+    width:11px;height:11px;border-radius:50%;
+    background:var(--coral);
+    position:absolute;left:-31px;top:7px;
+    border:2px solid var(--paper);
+  }
+  .timeline-item b{font-family:'Kalam',cursive;color:var(--marker);}
+  .source-derived{
+    font-family:'Patrick Hand',cursive;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    border-top:1px dashed var(--paper-line);
+    margin-top:12px;
+    padding-top:7px;
+  }
+  .interview{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:14px 16px;
+    margin:10px 0;
+  }
+  .interview b{color:var(--marker);}
+  .why{
+    background:var(--marker-soft);
+    border-left:4px solid var(--marker);
+    padding:10px 16px;
+    margin:14px 0;
+    font-size:15px;
+  }
+  code{
+    background:#eee6d2;
+    padding:1px 4px;
+    border-radius:3px;
+    font-size:.92em;
+  }
+  @media(max-width:650px){
+    .concept-grid{grid-template-columns:1fr;}
+    .map-node:not(:last-child)::after{display:none;}
+    .spectrum-row{grid-template-columns:105px 1fr 38px;}
+  }
+
+    .concept-chart{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;}
+    .concept-chart .concept-step{background:#fbf8ef;border:1px solid var(--paper-line);padding:12px 14px;position:relative;}
+    .concept-chart .concept-step .step-no{font-family:'Kalam',cursive;color:var(--coral);font-size:15px;}
+    .concept-chart .concept-step .step-title{font-family:'Patrick Hand',cursive;color:#1e3c66;font-size:17px;line-height:1.25;margin-top:3px;}
+    @media(max-width:600px){.concept-chart{grid-template-columns:1fr;}}
+    </style></head><body><div class="page">
+    <div class="cover">
+      <div class="eyebrow">Google Site Reliability Engineering Book · Chapter 1</div>
+      <h1 class="title">Introduction</h1>
+      <p class="subtitle">The opening chapter explains why Google created Site Reliability Engineering: traditional operations tends to scale by adding people as operational work grows, while SRE deliberately applies software engineering to production so service growth does not require proportional growth in manual operations.</p>
+      <div class="source-note">📖 Based on the official Google SRE source: <a href="https://sre.google/sre-book/introduction/" target="_blank">https://sre.google/sre-book/introduction/</a>. This is a careful paraphrased study summary. Diagrams and charts are original study visuals.</div>
+    </div>
+    <section class="card"><div class="tab">map</div><h2>How the chapter fits together</h2><p>Read this diagram as the chapter’s argument, not just as a list of keywords. Each step creates the need for the next one.</p><div class="diagram-wrap"><svg viewBox="0 0 719 234" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive"><defs><marker id="mapArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#B84B2A"/></marker></defs><rect x="20" y="20" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Traditional ops model</tspan></text><rect x="257" y="20" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="52" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Scaling/incentive</tspan><tspan x="360" dy="18">problems</tspan></text><rect x="494" y="20" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="52" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">SRE staffing +</tspan><tspan x="596" dy="18">engineering</tspan></text><rect x="20" y="134" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">50% toil boundary</tspan></text><rect x="257" y="134" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">SLO/error budget</tspan></text><rect x="494" y="134" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="166" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Automated reliable</tspan><tspan x="596" dy="18">operations</tspan></text><path d="M 229 56 L 249 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 56 L 486 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 596 95 L 596 110 L 122 110 L 122 126" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 229 170 L 249 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 170 L 486 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/></svg><div class="diagram-caption">original study sketch — redraw this flow from memory after reading</div></div></section><section class="card"><div class="tab">chart</div><h2>Chapter structure at a glance</h2><p>This chart mirrors the explanatory sections below. It is useful for navigation first; after reading, use it as a recall checklist.</p><div class="concept-chart"><div class="concept-step"><div class="step-no">01</div><div class="step-title">Why the traditional development/operations split becomes expensive</div></div><div class="concept-step"><div class="step-no">02</div><div class="step-title">What Google means by SRE</div></div><div class="concept-step"><div class="step-no">03</div><div class="step-title">The 50% rule keeps SRE from degenerating into pure operations</div></div><div class="concept-step"><div class="step-no">04</div><div class="step-title">The recurring responsibilities of SRE</div></div><div class="concept-step"><div class="step-no">05</div><div class="step-title">Resolve the stability-versus-velocity argument with data</div></div><div class="concept-step"><div class="step-no">06</div><div class="step-title">What &#x27;site reliability&#x27; is ultimately optimizing</div></div></div></section><section class="card"><div class="tab">01 — sysadmin model</div><h2>Why the traditional development/operations split becomes expensive</h2><p>The chapter starts from the ordinary sysadmin model: assemble existing components, deploy them, keep them running, and respond to changes and failures. This model is easy to understand and has a large existing tool and talent ecosystem. Its weakness appears as the service grows: if handling changes and incidents remains manual, the operations team must grow roughly with the operational workload.</p><p>The indirect cost can be larger. Development and operations are separated by skills, vocabulary, incentives, and risk assumptions. Developers are rewarded for launching features; operators holding the pager are rewarded for stability. Because change causes many outages, release discussions can become a trench war of gates and workarounds rather than a shared engineering problem.</p></section><section class="card"><div class="tab">02 — definition</div><h2>What Google means by SRE</h2><p>Google’s alternative is to hire engineers to run production who can also write software that replaces manual operations. Ben Treynor Sloss summarizes the idea as the result of asking a software engineer to design an operations function.</p><p>The historical staffing model described in the chapter is intentionally mixed: roughly <strong>50–60% software engineers</strong> and <strong>40–50% engineers with strong systems expertise</strong> who also have enough programming ability to automate. That combination matters because SRE must understand both the code and the operating environment.</p><div class="callout"><b>Core distinction:</b> SRE is not “operations plus some scripts.” The organization reserves real engineering capacity to remove recurring operational work and improve the production system.</div></section><section class="card"><div class="tab">03 — 50%</div><h2>The 50% rule keeps SRE from degenerating into pure operations</h2><p>Google places an upper bound of about <strong>50% of SRE time</strong> on operational work. At least half the time should go to engineering that reduces future toil, improves reliability/performance/utilization, or adds capabilities needed to run the service.</p><p>This is both an organizational control and an employment promise. Toil expands naturally: pages, tickets, deployments, quota changes, and manual fixes all have immediate urgency. Without a protected engineering share, they can consume 100% of the team's capacity and remove the very work needed to make the system scale.</p><div class="math">Simple staffing thought experiment:<br>
+8 SREs × 40h/week = 320h/week.<br>
+If operations consumes 200h, operational share = 200 / 320 = <strong>62.5%</strong>.<br>
+That is not merely a busy week if persistent—it means the SRE model is losing the engineering capacity that should reduce future work.</div></section><section class="card"><div class="tab">04 — tenets</div><h2>The recurring responsibilities of SRE</h2><p>The chapter introduces the themes developed by the rest of the book: availability, latency, performance, efficiency, change management, monitoring, emergency response, and capacity planning. These are connected rather than separate specialties.</p><p>Monitoring should produce three broad outputs: a <strong>page</strong> when a human must act immediately, a <strong>ticket</strong> when action is needed but can wait, and <strong>logging</strong> when information is useful for later diagnosis but does not itself demand action.</p><p>Emergency response focuses strongly on mean time to repair. The chapter notes that a responder following a prepared playbook can have roughly <strong>one-third the MTTR</strong> of a responder improvising without one. Change management matters because changes are a dominant outage trigger; the book cites a rough figure of about <strong>70% of outages</strong> being caused by some kind of change.</p></section><section class="card"><div class="tab">05 — error budgets</div><h2>Resolve the stability-versus-velocity argument with data</h2><p>SRE rejects “maximum possible reliability” as the universal objective. Product owners and SRE define an appropriate service target; the difference between that target and perfection is an <strong>error budget</strong> that can be spent on launches, experiments, and change.</p><p>When reliability is comfortably inside the objective, the organization can move faster. When the budget is exhausted, continued risky change becomes hard to justify and engineering attention shifts toward reliability. This aligns product and operations around a shared number instead of incompatible instincts.</p><div class="chapter-map"><div class="map-node">Product chooses reliability target</div><div class="map-node">Measured service performance</div><div class="map-node">Compute remaining error budget</div><div class="map-node">Budget healthy → accept change risk</div><div class="map-node">Budget exhausted → reliability first</div></div></section><section class="card"><div class="tab">06 — scale</div><h2>What 'site reliability' is ultimately optimizing</h2><p>SRE wants the operational cost of running a service to grow more slowly than the service itself. Automation, self-healing, reliable release processes, good monitoring, capacity planning, and postmortem-driven engineering are all mechanisms toward that goal.</p><p>A service that requires a human to manually intervene for each unit of growth has not achieved that scaling property, even if today's uptime looks excellent.</p></section><section class="card"><div class="tab">interview</div><h2>Questions you should be able to explain aloud</h2><p>These are not trivia questions. A strong answer explains the mechanism, the reason for it, and the trade-off.</p><div class="concept-grid"><div class="concept-box"><h4>Question 1</h4><p>Why does the traditional dev/ops split create conflicting incentives?</p></div><div class="concept-box"><h4>Question 2</h4><p>What is the purpose of the 50% operational-work cap?</p></div><div class="concept-box"><h4>Question 3</h4><p>How do error budgets align feature teams and SRE?</p></div><div class="concept-box"><h4>Question 4</h4><p>Why does SRE care about MTTR as much as preventing every possible incident?</p></div></div></section><section class="card"><div class="tab">recap</div><h2>Chapter recap</h2><p>Use this table only after reading the chapter summary. It is a retrieval aid, not a substitute for the explanation above.</p><table class="recap"><tr><th>Idea</th><th>What to remember</th></tr><tr><td>SRE model</td><td>Software/systems engineers operate production and engineer away recurring work.</td></tr><tr><td>50% boundary</td><td>Protect enough engineering time to make future operation better.</td></tr><tr><td>Error budget</td><td>Use explicit tolerated unreliability to balance stability and change velocity.</td></tr><tr><td>Monitoring</td><td>Page, ticket, or log according to required human action.</td></tr><tr><td>Response</td><td>Preparation/playbooks reduce MTTR.</td></tr><tr><td>Scale</td><td>Operational workload should grow sublinearly with service scale.</td></tr></table></section><footer>Study summary · Introduction · source material © Google/O’Reilly under the source site’s stated license</footer></div></body></html>

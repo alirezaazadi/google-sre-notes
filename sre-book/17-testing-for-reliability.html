@@ -1,0 +1,349 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Testing for Reliability — Study Notebook</title><style>
+  @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root{
+    --paper:#F6F1E4;
+    --paper-line:#DED4B8;
+    --ink:#242121;
+    --ink-soft:#5B564C;
+    --marker:#2F5FA8;
+    --marker-soft:#DCE6F4;
+    --coral:#B84B2A;
+    --coral-soft:#F4E1D6;
+    --moss:#4C6B4F;
+    --moss-soft:#E1E9DD;
+    --tab:#EFC94C;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#E7DEC7;
+    font-family:'Source Serif 4', Georgia, serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    padding:32px 12px 80px;
+  }
+
+  .page{
+    max-width:860px;
+    width:100%;
+  }
+
+  .cover{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line), 0 18px 40px -20px rgba(0,0,0,.35);
+    padding:44px 40px 36px;
+    margin-bottom:22px;
+    position:relative;
+  }
+  .eyebrow{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:15px;
+    letter-spacing:.04em;
+  }
+  h1.title{
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:clamp(30px,4.4vw,44px);
+    margin:6px 0 4px;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .subtitle{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:60ch;
+    margin:8px 0 18px;
+  }
+  .source-note{
+    font-family:'Patrick Hand', cursive;
+    font-size:14.5px;
+    background:var(--marker-soft);
+    border:1px dashed var(--marker);
+    padding:10px 14px;
+    display:inline-block;
+    color:#1e3c66;
+    transform:rotate(-0.4deg);
+  }
+  .source-note a{color:#1e3c66;}
+
+  section.card{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line);
+    padding:30px 38px;
+    margin-bottom:16px;
+    position:relative;
+  }
+
+  .tab{
+    position:absolute;
+    top:-14px;
+    left:34px;
+    background:var(--tab);
+    color:#3a2c05;
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:13.5px;
+    padding:5px 14px 6px;
+    box-shadow:0 3px 6px rgba(0,0,0,.18);
+    transform:rotate(-1.2deg);
+  }
+
+  h2{
+    font-family:'Kalam', cursive;
+    font-size:25px;
+    margin:10px 0 10px;
+    color:var(--ink);
+  }
+  h3{
+    font-family:'Kalam', cursive;
+    font-size:18.5px;
+    margin:22px 0 6px;
+    color:var(--marker);
+  }
+  p{ line-height:1.62; font-size:16px; margin:10px 0; }
+  ul, ol{ line-height:1.6; font-size:16px; padding-left:22px;}
+  li{margin:4px 0;}
+  strong{color:var(--ink);}
+
+  .callout{
+    background:var(--moss-soft);
+    border-left:4px solid var(--moss);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .callout b{color:var(--moss);}
+
+  .fails{
+    background:var(--coral-soft);
+    border-left:4px solid var(--coral);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .fails b{color:var(--coral);}
+
+  .math{
+    font-family:'Patrick Hand', cursive;
+    background:#fbf8ef;
+    border:1px dashed #b8ac86;
+    padding:10px 16px;
+    font-size:16.5px;
+    margin:10px 0;
+    color:#3a3527;
+  }
+
+  .diagram-wrap{
+    margin:18px 0 6px;
+    text-align:center;
+  }
+  .diagram-wrap svg{ max-width:100%; height:auto; }
+  .diagram-caption{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14.5px;
+    margin-top:4px;
+  }
+
+  .sketch-font{ font-family:'Patrick Hand', cursive; }
+
+  table.recap{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+    margin:12px 0;
+  }
+  table.recap th, table.recap td{
+    border:1px solid var(--paper-line);
+    padding:8px 10px;
+    text-align:left;
+    vertical-align:top;
+  }
+  table.recap th{
+    background:var(--marker-soft);
+    font-family:'Kalam', cursive;
+    color:#1e3c66;
+  }
+
+  .four-q{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin:14px 0;
+  }
+  .qbox{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:12px 14px;
+  }
+  .qbox .qnum{
+    font-family:'Kalam', cursive;
+    color:var(--coral);
+    font-size:17px;
+  }
+  .qbox p{margin:4px 0 0; font-size:14.5px;}
+
+  footer{
+    text-align:center;
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14px;
+    margin-top:28px;
+  }
+  @media (max-width:600px){
+    .cover, section.card{padding:24px 20px;}
+    .four-q{grid-template-columns:1fr;}
+  }
+
+
+  .concept-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin:14px 0;
+  }
+  .concept-box{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:13px 15px;
+  }
+  .concept-box h4{
+    font-family:'Kalam',cursive;
+    color:var(--marker);
+    margin:0 0 5px;
+    font-size:17px;
+  }
+  .concept-box p{font-size:14.8px;margin:0;line-height:1.52;}
+  .chapter-map{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:8px;
+    align-items:stretch;
+    margin:16px 0 8px;
+  }
+  .map-node{
+    position:relative;
+    background:#fffdf8;
+    border:2px solid var(--marker);
+    min-height:72px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:9px 8px;
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .map-node:not(:last-child)::after{
+    content:'→';
+    position:absolute;
+    right:-18px;
+    top:23px;
+    color:var(--coral);
+    font-size:25px;
+    z-index:2;
+  }
+  .spectrum{
+    display:grid;
+    gap:9px;
+    margin:14px 0;
+  }
+  .spectrum-row{
+    display:grid;
+    grid-template-columns:160px 1fr 46px;
+    gap:10px;
+    align-items:center;
+  }
+  .spectrum-label{font-size:14px;color:var(--ink-soft);}
+  .spectrum-track{
+    height:19px;
+    border:1px solid var(--paper-line);
+    background:#efe8d4;
+    position:relative;
+    overflow:hidden;
+  }
+  .spectrum-fill{
+    height:100%;
+    background:var(--marker-soft);
+    border-right:3px solid var(--marker);
+  }
+  .spectrum-value{
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .timeline{
+    border-left:3px solid var(--marker);
+    margin:14px 0 14px 13px;
+    padding-left:20px;
+  }
+  .timeline-item{
+    position:relative;
+    margin:0 0 15px;
+    padding:0 0 0 4px;
+  }
+  .timeline-item::before{
+    content:'';
+    width:11px;height:11px;border-radius:50%;
+    background:var(--coral);
+    position:absolute;left:-31px;top:7px;
+    border:2px solid var(--paper);
+  }
+  .timeline-item b{font-family:'Kalam',cursive;color:var(--marker);}
+  .source-derived{
+    font-family:'Patrick Hand',cursive;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    border-top:1px dashed var(--paper-line);
+    margin-top:12px;
+    padding-top:7px;
+  }
+  .interview{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:14px 16px;
+    margin:10px 0;
+  }
+  .interview b{color:var(--marker);}
+  .why{
+    background:var(--marker-soft);
+    border-left:4px solid var(--marker);
+    padding:10px 16px;
+    margin:14px 0;
+    font-size:15px;
+  }
+  code{
+    background:#eee6d2;
+    padding:1px 4px;
+    border-radius:3px;
+    font-size:.92em;
+  }
+  @media(max-width:650px){
+    .concept-grid{grid-template-columns:1fr;}
+    .map-node:not(:last-child)::after{display:none;}
+    .spectrum-row{grid-template-columns:105px 1fr 38px;}
+  }
+
+    .concept-chart{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;}
+    .concept-chart .concept-step{background:#fbf8ef;border:1px solid var(--paper-line);padding:12px 14px;position:relative;}
+    .concept-chart .concept-step .step-no{font-family:'Kalam',cursive;color:var(--coral);font-size:15px;}
+    .concept-chart .concept-step .step-title{font-family:'Patrick Hand',cursive;color:#1e3c66;font-size:17px;line-height:1.25;margin-top:3px;}
+    @media(max-width:600px){.concept-chart{grid-template-columns:1fr;}}
+    </style></head><body><div class="page">
+    <div class="cover">
+      <div class="eyebrow">Google Site Reliability Engineering Book · Chapter 17</div>
+      <h1 class="title">Testing for Reliability</h1>
+      <p class="subtitle">Testing reduces uncertainty introduced by change. The chapter connects traditional software tests with production tests, load/stress testing, canaries, configuration tests, disaster testing, and MTTR: a failure caught before deployment effectively has zero production repair time.</p>
+      <div class="source-note">📖 Based on the official Google SRE source: <a href="https://sre.google/sre-book/testing-reliability/" target="_blank">https://sre.google/sre-book/testing-reliability/</a>. This is a careful paraphrased study summary. Diagrams and charts are original study visuals.</div>
+    </div>
+    <section class="card"><div class="tab">map</div><h2>How the chapter fits together</h2><p>Read this diagram as the chapter’s argument, not just as a list of keywords. Each step creates the need for the next one.</p><div class="diagram-wrap"><svg viewBox="0 0 719 234" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive"><defs><marker id="mapArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#B84B2A"/></marker></defs><rect x="20" y="20" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="52" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Change introduces</tspan><tspan x="122" dy="18">uncertainty</tspan></text><rect x="257" y="20" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Traditional tests</tspan></text><rect x="494" y="20" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">System/load tests</tspan></text><rect x="20" y="134" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="166" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Production/canary</tspan><tspan x="122" dy="18">tests</tspan></text><rect x="257" y="134" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Detect before users</tspan></text><rect x="494" y="134" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Increase confidence</tspan></text><path d="M 229 56 L 249 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 56 L 486 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 596 95 L 596 110 L 122 110 L 122 126" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 229 170 L 249 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 170 L 486 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/></svg><div class="diagram-caption">original study sketch — redraw this flow from memory after reading</div></div></section><section class="card"><div class="tab">chart</div><h2>Chapter structure at a glance</h2><p>This chart mirrors the explanatory sections below. It is useful for navigation first; after reading, use it as a recall checklist.</p><div class="concept-chart"><div class="concept-step"><div class="step-no">01</div><div class="step-title">Past reliability does not automatically predict future reliability after change</div></div><div class="concept-step"><div class="step-no">02</div><div class="step-title">The best production incident is one blocked before production</div></div><div class="concept-step"><div class="step-no">03</div><div class="step-title">Use a hierarchy of tests</div></div><div class="concept-step"><div class="step-no">04</div><div class="step-title">Some properties exist only in a live system</div></div><div class="concept-step"><div class="step-no">05</div><div class="step-title">Find the performance envelope</div></div><div class="concept-step"><div class="step-no">06</div><div class="step-title">Test the recovery mechanisms you plan to rely on</div></div><div class="concept-step"><div class="step-no">07</div><div class="step-title">A test can convert a production repair into a blocked release</div></div><div class="concept-step"><div class="step-no">08</div><div class="step-title">Production is not hermetic, so test deployed reality too</div></div></div></section><section class="card"><div class="tab">01 — confidence</div><h2>Past reliability does not automatically predict future reliability after change</h2><p>If a service never changed, historical behavior might predict future behavior reasonably well. Real systems change code, machines, configuration, traffic, and dependencies. Each change introduces uncertainty.</p><p>Tests demonstrate areas of equivalence: if behavior is verified before and after a change, some uncertainty is removed. More relevant coverage lets the organization make more changes before predicted reliability falls below the acceptable level.</p></section><section class="card"><div class="tab">02 — zero MTTR</div><h2>The best production incident is one blocked before production</h2><p>A monitoring system finds a defect only after the bad code reaches users; the service then has a nonzero mean time to repair. If a system-level test reproduces the same failure in the release pipeline and blocks the push, the user-visible MTTR for that defect is effectively <strong>zero</strong>.</p><p>Better preproduction testing therefore increases user-experienced MTBF while lowering the number of incidents responders need to repair.</p></section><section class="card"><div class="tab">03 — traditional</div><h2>Use a hierarchy of tests</h2><p>Unit tests cheaply verify small components. Integration tests verify interactions. Larger system tests exercise realistic paths. The test pyramid idea is economic: keep many cheap deterministic tests near the bottom and fewer expensive broad tests at higher layers.</p><p>Coverage percentage alone is not sufficient; what matters is whether important semantics and failure paths are exercised. A high line-coverage number can still miss a distributed coordination failure.</p></section><section class="card"><div class="tab">04 — production tests</div><h2>Some properties exist only in a live system</h2><p>Production tests include monitoring validation, canary releases, configuration tests against real infrastructure, and controlled failure/disaster exercises. They answer questions that mocks cannot: does the failover actually work with today's permissions and topology? Does the service hold latency under real workload?</p><p>Production testing must be bounded by blast-radius controls. The purpose is to gain confidence, not to create uncontrolled outages.</p></section><section class="card"><div class="tab">05 — load/stress</div><h2>Find the performance envelope</h2><p>Load testing measures behavior at expected demand and identifies capacity at target latency. Stress testing intentionally goes beyond normal levels to find where the system degrades or fails and whether that failure is graceful.</p><p>A capacity number without a latency/error target is incomplete. “Handles 20k QPS” means little if p99 becomes 30 seconds at 15k.</p><div class="math">Example capacity statement:<br>
+at 12,000 QPS: p99 = 220 ms, errors = 0.05%<br>
+at 15,000 QPS: p99 = 1.8 s, errors = 1.2%<br>
+If SLO is p99 < 500 ms and errors <0.1%, practical capacity is closer to <strong>12,000 QPS</strong>, not the highest load before crash.</div></section><section class="card"><div class="tab">06 — failure testing</div><h2>Test the recovery mechanisms you plan to rely on</h2><p>Inject machine/dependency/site failures where safe, test rollback and restore, validate monitoring, and periodically exercise disaster plans. Backups that have never been restored and failover code that has never run are assumptions, not evidence.</p><p>Test results should update capacity models, runbooks, alerting, and architecture. A failing reliability test is useful because it reveals missing confidence before users pay the cost.</p></section><section class="card"><div class="tab">07 — zero MTTR</div><h2>A test can convert a production repair into a blocked release</h2><p>The chapter makes a useful connection between testing and MTTR. If a system-level test detects exactly the failure that production monitoring would have detected, the release can be blocked before users ever see it. From the user’s perspective, that defect had effectively zero MTTR because it never became a production outage.</p><p>This is why reliability testing should be designed from real failures. After an incident, ask whether the same condition can be expressed as a regression, integration, configuration, stress, or system test. Every production failure converted into a preproduction test raises the effective MTBF users experience.</p></section><section class="card"><div class="tab">08 — production tests</div><h2>Production is not hermetic, so test deployed reality too</h2><p>Staged rollouts mean production may temporarily contain several binary and configuration versions at once. A test that uses the newest configuration from source control against an older live binary can produce a result that is correct for neither real serving path.</p><p>Configuration tests therefore compare checked-in intent with what production is actually running. Stress tests find the resource boundary where graceful operation ends. Canarying exposes a small live population to a new version and observes the less predictable behavior that hermetic tests cannot reproduce.</p><p>These layers complement rather than replace unit/integration/system tests. The cheaper tests catch local defects quickly; the production-facing tests validate assumptions that only exist in the deployed environment.</p></section><section class="card"><div class="tab">interview</div><h2>Questions you should be able to explain aloud</h2><p>These are not trivia questions. A strong answer explains the mechanism, the reason for it, and the trade-off.</p><div class="concept-grid"><div class="concept-box"><h4>Question 1</h4><p>How does the chapter connect testing to future reliability confidence?</p></div><div class="concept-box"><h4>Question 2</h4><p>What does 'zero MTTR' mean in this context?</p></div><div class="concept-box"><h4>Question 3</h4><p>Why is maximum QPS not a sufficient capacity result?</p></div><div class="concept-box"><h4>Question 4</h4><p>Which reliability properties require production or disaster testing?</p></div></div></section><section class="card"><div class="tab">recap</div><h2>Chapter recap</h2><p>Use this table only after reading the chapter summary. It is a retrieval aid, not a substitute for the explanation above.</p><table class="recap"><tr><th>Idea</th><th>What to remember</th></tr><tr><td>Uncertainty</td><td>Every change weakens the predictive value of historical reliability.</td></tr><tr><td>Testing</td><td>Passing relevant tests restores evidence/confidence.</td></tr><tr><td>Zero MTTR</td><td>Catch a production-equivalent bug before rollout.</td></tr><tr><td>Hierarchy</td><td>Unit → integration → system → production tests.</td></tr><tr><td>Performance</td><td>State capacity together with latency/error objectives.</td></tr><tr><td>Recovery</td><td>Exercise failover, rollback, backups, and disaster response.</td></tr></table></section><footer>Study summary · Testing for Reliability · source material © Google/O’Reilly under the source site’s stated license</footer></div></body></html>

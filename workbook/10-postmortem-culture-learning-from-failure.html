@@ -1,0 +1,346 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Postmortem Culture: Learning from Failure — Study Notebook</title><style>
+  @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root{
+    --paper:#F6F1E4;
+    --paper-line:#DED4B8;
+    --ink:#242121;
+    --ink-soft:#5B564C;
+    --marker:#2F5FA8;
+    --marker-soft:#DCE6F4;
+    --coral:#B84B2A;
+    --coral-soft:#F4E1D6;
+    --moss:#4C6B4F;
+    --moss-soft:#E1E9DD;
+    --tab:#EFC94C;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#E7DEC7;
+    font-family:'Source Serif 4', Georgia, serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    padding:32px 12px 80px;
+  }
+
+  .page{
+    max-width:860px;
+    width:100%;
+  }
+
+  .cover{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line), 0 18px 40px -20px rgba(0,0,0,.35);
+    padding:44px 40px 36px;
+    margin-bottom:22px;
+    position:relative;
+  }
+  .eyebrow{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:15px;
+    letter-spacing:.04em;
+  }
+  h1.title{
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:clamp(30px,4.4vw,44px);
+    margin:6px 0 4px;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .subtitle{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:60ch;
+    margin:8px 0 18px;
+  }
+  .source-note{
+    font-family:'Patrick Hand', cursive;
+    font-size:14.5px;
+    background:var(--marker-soft);
+    border:1px dashed var(--marker);
+    padding:10px 14px;
+    display:inline-block;
+    color:#1e3c66;
+    transform:rotate(-0.4deg);
+  }
+  .source-note a{color:#1e3c66;}
+
+  section.card{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line);
+    padding:30px 38px;
+    margin-bottom:16px;
+    position:relative;
+  }
+
+  .tab{
+    position:absolute;
+    top:-14px;
+    left:34px;
+    background:var(--tab);
+    color:#3a2c05;
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:13.5px;
+    padding:5px 14px 6px;
+    box-shadow:0 3px 6px rgba(0,0,0,.18);
+    transform:rotate(-1.2deg);
+  }
+
+  h2{
+    font-family:'Kalam', cursive;
+    font-size:25px;
+    margin:10px 0 10px;
+    color:var(--ink);
+  }
+  h3{
+    font-family:'Kalam', cursive;
+    font-size:18.5px;
+    margin:22px 0 6px;
+    color:var(--marker);
+  }
+  p{ line-height:1.62; font-size:16px; margin:10px 0; }
+  ul, ol{ line-height:1.6; font-size:16px; padding-left:22px;}
+  li{margin:4px 0;}
+  strong{color:var(--ink);}
+
+  .callout{
+    background:var(--moss-soft);
+    border-left:4px solid var(--moss);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .callout b{color:var(--moss);}
+
+  .fails{
+    background:var(--coral-soft);
+    border-left:4px solid var(--coral);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .fails b{color:var(--coral);}
+
+  .math{
+    font-family:'Patrick Hand', cursive;
+    background:#fbf8ef;
+    border:1px dashed #b8ac86;
+    padding:10px 16px;
+    font-size:16.5px;
+    margin:10px 0;
+    color:#3a3527;
+  }
+
+  .diagram-wrap{
+    margin:18px 0 6px;
+    text-align:center;
+  }
+  .diagram-wrap svg{ max-width:100%; height:auto; }
+  .diagram-caption{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14.5px;
+    margin-top:4px;
+  }
+
+  .sketch-font{ font-family:'Patrick Hand', cursive; }
+
+  table.recap{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+    margin:12px 0;
+  }
+  table.recap th, table.recap td{
+    border:1px solid var(--paper-line);
+    padding:8px 10px;
+    text-align:left;
+    vertical-align:top;
+  }
+  table.recap th{
+    background:var(--marker-soft);
+    font-family:'Kalam', cursive;
+    color:#1e3c66;
+  }
+
+  .four-q{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin:14px 0;
+  }
+  .qbox{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:12px 14px;
+  }
+  .qbox .qnum{
+    font-family:'Kalam', cursive;
+    color:var(--coral);
+    font-size:17px;
+  }
+  .qbox p{margin:4px 0 0; font-size:14.5px;}
+
+  footer{
+    text-align:center;
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14px;
+    margin-top:28px;
+  }
+  @media (max-width:600px){
+    .cover, section.card{padding:24px 20px;}
+    .four-q{grid-template-columns:1fr;}
+  }
+
+
+  .concept-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin:14px 0;
+  }
+  .concept-box{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:13px 15px;
+  }
+  .concept-box h4{
+    font-family:'Kalam',cursive;
+    color:var(--marker);
+    margin:0 0 5px;
+    font-size:17px;
+  }
+  .concept-box p{font-size:14.8px;margin:0;line-height:1.52;}
+  .chapter-map{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:8px;
+    align-items:stretch;
+    margin:16px 0 8px;
+  }
+  .map-node{
+    position:relative;
+    background:#fffdf8;
+    border:2px solid var(--marker);
+    min-height:72px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:9px 8px;
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .map-node:not(:last-child)::after{
+    content:'→';
+    position:absolute;
+    right:-18px;
+    top:23px;
+    color:var(--coral);
+    font-size:25px;
+    z-index:2;
+  }
+  .spectrum{
+    display:grid;
+    gap:9px;
+    margin:14px 0;
+  }
+  .spectrum-row{
+    display:grid;
+    grid-template-columns:160px 1fr 46px;
+    gap:10px;
+    align-items:center;
+  }
+  .spectrum-label{font-size:14px;color:var(--ink-soft);}
+  .spectrum-track{
+    height:19px;
+    border:1px solid var(--paper-line);
+    background:#efe8d4;
+    position:relative;
+    overflow:hidden;
+  }
+  .spectrum-fill{
+    height:100%;
+    background:var(--marker-soft);
+    border-right:3px solid var(--marker);
+  }
+  .spectrum-value{
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .timeline{
+    border-left:3px solid var(--marker);
+    margin:14px 0 14px 13px;
+    padding-left:20px;
+  }
+  .timeline-item{
+    position:relative;
+    margin:0 0 15px;
+    padding:0 0 0 4px;
+  }
+  .timeline-item::before{
+    content:'';
+    width:11px;height:11px;border-radius:50%;
+    background:var(--coral);
+    position:absolute;left:-31px;top:7px;
+    border:2px solid var(--paper);
+  }
+  .timeline-item b{font-family:'Kalam',cursive;color:var(--marker);}
+  .source-derived{
+    font-family:'Patrick Hand',cursive;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    border-top:1px dashed var(--paper-line);
+    margin-top:12px;
+    padding-top:7px;
+  }
+  .interview{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:14px 16px;
+    margin:10px 0;
+  }
+  .interview b{color:var(--marker);}
+  .why{
+    background:var(--marker-soft);
+    border-left:4px solid var(--marker);
+    padding:10px 16px;
+    margin:14px 0;
+    font-size:15px;
+  }
+  code{
+    background:#eee6d2;
+    padding:1px 4px;
+    border-radius:3px;
+    font-size:.92em;
+  }
+  @media(max-width:650px){
+    .concept-grid{grid-template-columns:1fr;}
+    .map-node:not(:last-child)::after{display:none;}
+    .spectrum-row{grid-template-columns:105px 1fr 38px;}
+  }
+
+    .concept-chart{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;}
+    .concept-chart .concept-step{background:#fbf8ef;border:1px solid var(--paper-line);padding:12px 14px;position:relative;}
+    .concept-chart .concept-step .step-no{font-family:'Kalam',cursive;color:var(--coral);font-size:15px;}
+    .concept-chart .concept-step .step-title{font-family:'Patrick Hand',cursive;color:#1e3c66;font-size:17px;line-height:1.25;margin-top:3px;}
+    @media(max-width:600px){.concept-chart{grid-template-columns:1fr;}}
+    </style></head><body><div class="page">
+    <div class="cover">
+      <div class="eyebrow">Google SRE Workbook · Chapter 10</div>
+      <h1 class="title">Postmortem Culture: Learning from Failure</h1>
+      <p class="subtitle">A postmortem is not an incident diary and not a search for the person who made a mistake. It is a structured learning mechanism that reconstructs the event, identifies technical and organizational contributing conditions, records where defenses worked or failed, and creates owned changes that make recurrence or impact less likely.</p>
+      <div class="source-note">📖 Based on the official Google SRE source: <a href="https://sre.google/workbook/postmortem-culture/" target="_blank">https://sre.google/workbook/postmortem-culture/</a>. This is a careful paraphrased study summary. Diagrams and charts are original study visuals.</div>
+    </div>
+    <section class="card"><div class="tab">map</div><h2>How the chapter fits together</h2><p>Read this diagram as the chapter’s argument, not just as a list of keywords. Each step creates the need for the next one.</p><div class="diagram-wrap"><svg viewBox="0 0 719 234" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive"><defs><marker id="mapArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#B84B2A"/></marker></defs><rect x="20" y="20" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Select incident</tspan></text><rect x="257" y="20" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Collect evidence</tspan></text><rect x="494" y="20" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Build timeline</tspan></text><rect x="20" y="134" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="166" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Analyze contributing</tspan><tspan x="122" dy="18">factors</tspan></text><rect x="257" y="134" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Create actions</tspan></text><rect x="494" y="134" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Share + track</tspan></text><path d="M 229 56 L 249 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 56 L 486 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 596 95 L 596 110 L 122 110 L 122 126" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 229 170 L 249 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 170 L 486 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/></svg><div class="diagram-caption">original study sketch — redraw this flow from memory after reading</div></div></section><section class="card"><div class="tab">chart</div><h2>Chapter structure at a glance</h2><p>This chart mirrors the explanatory sections below. It is useful for navigation first; after reading, use it as a recall checklist.</p><div class="concept-chart"><div class="concept-step"><div class="step-no">01</div><div class="step-title">Why postmortems are an engineering tool</div></div><div class="concept-step"><div class="step-no">02</div><div class="step-title">Choose incidents worth documenting</div></div><div class="concept-step"><div class="step-no">03</div><div class="step-title">Build the document from evidence</div></div><div class="concept-step"><div class="step-no">04</div><div class="step-title">Go beyond &#x27;human error&#x27; and one root cause</div></div><div class="concept-step"><div class="step-no">05</div><div class="step-title">Action items must change the system</div></div><div class="concept-step"><div class="step-no">06</div><div class="step-title">Create a learning system, not isolated documents</div></div></div></section><section class="card"><div class="tab">visual</div><h2>Postmortem value chain</h2><div class="spectrum"><div class="spectrum-row"><div class="spectrum-label">Evidence quality</div><div class="spectrum-track"><div class="spectrum-fill" style="width:100%"></div></div><div class="spectrum-value">5</div></div><div class="spectrum-row"><div class="spectrum-label">Blameless analysis</div><div class="spectrum-track"><div class="spectrum-fill" style="width:100%"></div></div><div class="spectrum-value">5</div></div><div class="spectrum-row"><div class="spectrum-label">Systemic causality</div><div class="spectrum-track"><div class="spectrum-fill" style="width:100%"></div></div><div class="spectrum-value">5</div></div><div class="spectrum-row"><div class="spectrum-label">Owned actions</div><div class="spectrum-track"><div class="spectrum-fill" style="width:100%"></div></div><div class="spectrum-value">5</div></div><div class="spectrum-row"><div class="spectrum-label">Cross-team sharing</div><div class="spectrum-track"><div class="spectrum-fill" style="width:80%"></div></div><div class="spectrum-value">4</div></div></div><div class="diagram-caption">The document is valuable only if evidence becomes system improvement.</div></section><section class="card"><div class="tab">01 — purpose</div><h2>Why postmortems are an engineering tool</h2><p>Complex systems fail through combinations of software behavior, interface design, monitoring gaps, operational decisions, dependencies, and organizational conditions. A good postmortem turns that combination into reusable knowledge.</p><p>The chapter emphasizes a <strong>blameless</strong> culture. Blameless does not mean nobody is accountable for improving the system. It means the analysis assumes people acted reasonably given the information and tools they had, then asks why the system made the unsafe outcome possible.</p><p>Punitive analysis creates an incentive to hide information. A learning-oriented analysis encourages engineers to disclose uncertainty, near misses, and mistakes—the information you need to build better defenses.</p><div class="callout"><b>Better question:</b> not “Who caused the outage?” but “What conditions made this action a reasonable path, and why did our safeguards allow it to become an outage?”</div></section><section class="card"><div class="tab">02 — when</div><h2>Choose incidents worth documenting</h2><p>Postmortem criteria should be explicit: significant user impact, data loss, unusually long recovery, monitoring gaps, repeated incidents, or a near miss with unusually high learning value.</p><p>Not every five-minute glitch needs a full document, but teams should not skip analysis simply because the incident happened to recover quickly. A near miss can reveal the same dangerous system conditions as a major outage.</p><p>Consistent criteria also remove status and politics from the decision. The question becomes whether the event crosses the learning threshold, not whether someone feels embarrassed by it.</p><table class="recap"><tr><th>Good trigger for a postmortem</th><th>Why</th></tr><tr><td>Large SLO/error-budget impact</td><td>The event materially affected users.</td></tr><tr><td>Data loss/corruption</td><td>Integrity failures require durable understanding.</td></tr><tr><td>Long or confusing recovery</td><td>Response process/diagnostics need improvement.</td></tr><tr><td>Monitoring failed to detect it</td><td>The organization had a visibility gap.</td></tr><tr><td>Serious near miss</td><td>Luck prevented an outage; the unsafe condition still exists.</td></tr></table></section><section class="card"><div class="tab">03 — document</div><h2>Build the document from evidence</h2><p>A useful document normally contains an executive summary, user/business impact, detection details, a timestamped timeline, trigger and contributing causes, recovery/mitigation, what went well, what went poorly, where the team was lucky, and action items.</p><p>Timelines should be factual. They should record what responders saw and did at the time, not rewrite history using knowledge discovered later.</p><p>Provide enough service context and terminology for people outside the immediate team. A postmortem is organizational memory; it should remain useful after current team members move on.</p><div class="timeline"><div class="timeline-item"><b>Detection</b><p>How did the organization first learn there was a problem?</p></div><div class="timeline-item"><b>Escalation</b><p>When did severity/ownership change?</p></div><div class="timeline-item"><b>Mitigation</b><p>Which action first reduced user impact?</p></div><div class="timeline-item"><b>Root cause</b><p>When did evidence identify the underlying mechanism?</p></div><div class="timeline-item"><b>Recovery</b><p>When were SLOs and normal operations restored?</p></div></div></section><section class="card"><div class="tab">04 — causality</div><h2>Go beyond 'human error' and one root cause</h2><p>A person may type the command that triggers an incident, but that description rarely explains why the operation had such a large blast radius. Ask whether the interface was ambiguous, permissions too broad, the operation non-idempotent, validation missing, documentation unclear, or monitoring insufficient.</p><p>Many incidents do not have one meaningful 'root cause.' They have a trigger plus multiple contributing factors. Treating the first technical bug as the sole root cause can miss the organizational or architectural conditions that made it severe.</p><p>The chapter’s bad-postmortem example is useful precisely because it demonstrates how blame language shuts down analysis. Rewriting the event in system terms reveals more actionable improvements.</p><div class="fails"><b>Weak analysis:</b> “Engineer reran the command and deleted data.”<br><b>Stronger analysis:</b> “The operation was not idempotent, repeated execution was not blocked, destructive scope was broader than intended, and no preview/confirmation exposed the blast radius.”</div></section><section class="card"><div class="tab">05 — actions</div><h2>Action items must change the system</h2><p>An action item such as 'be more careful' is not durable. Useful actions add validation, automation, better defaults, improved monitoring, safer rollout, isolation, documentation, or training.</p><p>Every action needs an owner and tracking mechanism. Otherwise the postmortem produces a feeling of closure without actual risk reduction.</p><p>Balance prevention, detection, and mitigation. Some failures cannot be completely prevented, but faster detection or smaller blast radius can still reduce future error-budget cost.</p><p>Prioritize. A postmortem with fifty unowned ideas is less effective than a small set of high-value changes that are actually completed.</p><div class="math"><b>Illustrative prioritization:</b><br>Action A prevents a 4-hour incident expected once/year → ~4 incident-hours/year avoided.<br>Action B cuts 30 minutes from an incident expected 20 times/year → ~10 incident-hours/year avoided.<br>The less dramatic action may have greater expected reliability value.</div></section><section class="card"><div class="tab">06 — culture</div><h2>Create a learning system, not isolated documents</h2><p>Review important postmortems with other teams. A configuration failure pattern in one service may apply to hundreds of services.</p><p>Use consistent metadata so incidents can later be aggregated by trigger and contributing cause. The Workbook appendix demonstrates how this can reveal organization-wide patterns such as binary pushes and configuration pushes.</p><p>Follow up on action completion and look for repeated incidents that indicate earlier corrective work did not address the true mechanism.</p><p>A healthy culture also records what went well. Preserving effective defenses is as important as fixing broken ones.</p><div class="callout"><b>Why “where we got lucky” matters:</b> luck is an unimplemented safeguard. If a second independent condition had been slightly different, impact might have been much worse.</div></section><section class="card"><div class="tab">interview</div><h2>Questions you should be able to explain aloud</h2><p>These are not trivia questions. A strong answer explains the mechanism, the reason for it, and the trade-off.</p><div class="concept-grid"><div class="concept-box"><h4>Question 1</h4><p>How would you rewrite a postmortem that says 'operator error'?</p></div><div class="concept-box"><h4>Question 2</h4><p>What is the difference between a trigger and a contributing factor?</p></div><div class="concept-box"><h4>Question 3</h4><p>Why should a postmortem record what went well and where the team got lucky?</p></div><div class="concept-box"><h4>Question 4</h4><p>How do you stop postmortem action items from becoming an abandoned backlog?</p></div></div></section><section class="card"><div class="tab">recap</div><h2>Chapter recap</h2><p>Use this table only after reading the chapter summary. It is a retrieval aid, not a substitute for the explanation above.</p><table class="recap"><tr><th>Idea</th><th>What to remember</th></tr><tr><td>Blameless</td><td>Assume reasonable actions; analyze the surrounding system.</td></tr><tr><td>Timeline</td><td>Reconstruct what was known and done at each point.</td></tr><tr><td>Contributing factors</td><td>Look beyond the immediate trigger.</td></tr><tr><td>Action items</td><td>Concrete, owned, prioritized, trackable.</td></tr><tr><td>Where lucky</td><td>Identify missing defenses hidden by favorable circumstances.</td></tr><tr><td>Culture</td><td>Share patterns and verify actions actually reduce recurrence.</td></tr></table></section><footer>Study summary · Postmortem Culture: Learning from Failure · source material © Google/O’Reilly under the source site’s stated license</footer></div></body></html>

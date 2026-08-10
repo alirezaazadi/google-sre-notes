@@ -1,0 +1,349 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Practical Alerting from Time-Series Data — Study Notebook</title><style>
+  @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root{
+    --paper:#F6F1E4;
+    --paper-line:#DED4B8;
+    --ink:#242121;
+    --ink-soft:#5B564C;
+    --marker:#2F5FA8;
+    --marker-soft:#DCE6F4;
+    --coral:#B84B2A;
+    --coral-soft:#F4E1D6;
+    --moss:#4C6B4F;
+    --moss-soft:#E1E9DD;
+    --tab:#EFC94C;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#E7DEC7;
+    font-family:'Source Serif 4', Georgia, serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    padding:32px 12px 80px;
+  }
+
+  .page{
+    max-width:860px;
+    width:100%;
+  }
+
+  .cover{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line), 0 18px 40px -20px rgba(0,0,0,.35);
+    padding:44px 40px 36px;
+    margin-bottom:22px;
+    position:relative;
+  }
+  .eyebrow{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:15px;
+    letter-spacing:.04em;
+  }
+  h1.title{
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:clamp(30px,4.4vw,44px);
+    margin:6px 0 4px;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .subtitle{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:60ch;
+    margin:8px 0 18px;
+  }
+  .source-note{
+    font-family:'Patrick Hand', cursive;
+    font-size:14.5px;
+    background:var(--marker-soft);
+    border:1px dashed var(--marker);
+    padding:10px 14px;
+    display:inline-block;
+    color:#1e3c66;
+    transform:rotate(-0.4deg);
+  }
+  .source-note a{color:#1e3c66;}
+
+  section.card{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line);
+    padding:30px 38px;
+    margin-bottom:16px;
+    position:relative;
+  }
+
+  .tab{
+    position:absolute;
+    top:-14px;
+    left:34px;
+    background:var(--tab);
+    color:#3a2c05;
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:13.5px;
+    padding:5px 14px 6px;
+    box-shadow:0 3px 6px rgba(0,0,0,.18);
+    transform:rotate(-1.2deg);
+  }
+
+  h2{
+    font-family:'Kalam', cursive;
+    font-size:25px;
+    margin:10px 0 10px;
+    color:var(--ink);
+  }
+  h3{
+    font-family:'Kalam', cursive;
+    font-size:18.5px;
+    margin:22px 0 6px;
+    color:var(--marker);
+  }
+  p{ line-height:1.62; font-size:16px; margin:10px 0; }
+  ul, ol{ line-height:1.6; font-size:16px; padding-left:22px;}
+  li{margin:4px 0;}
+  strong{color:var(--ink);}
+
+  .callout{
+    background:var(--moss-soft);
+    border-left:4px solid var(--moss);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .callout b{color:var(--moss);}
+
+  .fails{
+    background:var(--coral-soft);
+    border-left:4px solid var(--coral);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .fails b{color:var(--coral);}
+
+  .math{
+    font-family:'Patrick Hand', cursive;
+    background:#fbf8ef;
+    border:1px dashed #b8ac86;
+    padding:10px 16px;
+    font-size:16.5px;
+    margin:10px 0;
+    color:#3a3527;
+  }
+
+  .diagram-wrap{
+    margin:18px 0 6px;
+    text-align:center;
+  }
+  .diagram-wrap svg{ max-width:100%; height:auto; }
+  .diagram-caption{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14.5px;
+    margin-top:4px;
+  }
+
+  .sketch-font{ font-family:'Patrick Hand', cursive; }
+
+  table.recap{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+    margin:12px 0;
+  }
+  table.recap th, table.recap td{
+    border:1px solid var(--paper-line);
+    padding:8px 10px;
+    text-align:left;
+    vertical-align:top;
+  }
+  table.recap th{
+    background:var(--marker-soft);
+    font-family:'Kalam', cursive;
+    color:#1e3c66;
+  }
+
+  .four-q{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin:14px 0;
+  }
+  .qbox{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:12px 14px;
+  }
+  .qbox .qnum{
+    font-family:'Kalam', cursive;
+    color:var(--coral);
+    font-size:17px;
+  }
+  .qbox p{margin:4px 0 0; font-size:14.5px;}
+
+  footer{
+    text-align:center;
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14px;
+    margin-top:28px;
+  }
+  @media (max-width:600px){
+    .cover, section.card{padding:24px 20px;}
+    .four-q{grid-template-columns:1fr;}
+  }
+
+
+  .concept-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin:14px 0;
+  }
+  .concept-box{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:13px 15px;
+  }
+  .concept-box h4{
+    font-family:'Kalam',cursive;
+    color:var(--marker);
+    margin:0 0 5px;
+    font-size:17px;
+  }
+  .concept-box p{font-size:14.8px;margin:0;line-height:1.52;}
+  .chapter-map{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:8px;
+    align-items:stretch;
+    margin:16px 0 8px;
+  }
+  .map-node{
+    position:relative;
+    background:#fffdf8;
+    border:2px solid var(--marker);
+    min-height:72px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:9px 8px;
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .map-node:not(:last-child)::after{
+    content:'→';
+    position:absolute;
+    right:-18px;
+    top:23px;
+    color:var(--coral);
+    font-size:25px;
+    z-index:2;
+  }
+  .spectrum{
+    display:grid;
+    gap:9px;
+    margin:14px 0;
+  }
+  .spectrum-row{
+    display:grid;
+    grid-template-columns:160px 1fr 46px;
+    gap:10px;
+    align-items:center;
+  }
+  .spectrum-label{font-size:14px;color:var(--ink-soft);}
+  .spectrum-track{
+    height:19px;
+    border:1px solid var(--paper-line);
+    background:#efe8d4;
+    position:relative;
+    overflow:hidden;
+  }
+  .spectrum-fill{
+    height:100%;
+    background:var(--marker-soft);
+    border-right:3px solid var(--marker);
+  }
+  .spectrum-value{
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .timeline{
+    border-left:3px solid var(--marker);
+    margin:14px 0 14px 13px;
+    padding-left:20px;
+  }
+  .timeline-item{
+    position:relative;
+    margin:0 0 15px;
+    padding:0 0 0 4px;
+  }
+  .timeline-item::before{
+    content:'';
+    width:11px;height:11px;border-radius:50%;
+    background:var(--coral);
+    position:absolute;left:-31px;top:7px;
+    border:2px solid var(--paper);
+  }
+  .timeline-item b{font-family:'Kalam',cursive;color:var(--marker);}
+  .source-derived{
+    font-family:'Patrick Hand',cursive;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    border-top:1px dashed var(--paper-line);
+    margin-top:12px;
+    padding-top:7px;
+  }
+  .interview{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:14px 16px;
+    margin:10px 0;
+  }
+  .interview b{color:var(--marker);}
+  .why{
+    background:var(--marker-soft);
+    border-left:4px solid var(--marker);
+    padding:10px 16px;
+    margin:14px 0;
+    font-size:15px;
+  }
+  code{
+    background:#eee6d2;
+    padding:1px 4px;
+    border-radius:3px;
+    font-size:.92em;
+  }
+  @media(max-width:650px){
+    .concept-grid{grid-template-columns:1fr;}
+    .map-node:not(:last-child)::after{display:none;}
+    .spectrum-row{grid-template-columns:105px 1fr 38px;}
+  }
+
+    .concept-chart{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;}
+    .concept-chart .concept-step{background:#fbf8ef;border:1px solid var(--paper-line);padding:12px 14px;position:relative;}
+    .concept-chart .concept-step .step-no{font-family:'Kalam',cursive;color:var(--coral);font-size:15px;}
+    .concept-chart .concept-step .step-title{font-family:'Patrick Hand',cursive;color:#1e3c66;font-size:17px;line-height:1.25;margin-top:3px;}
+    @media(max-width:600px){.concept-chart{grid-template-columns:1fr;}}
+    </style></head><body><div class="page">
+    <div class="cover">
+      <div class="eyebrow">Google Site Reliability Engineering Book · Chapter 10</div>
+      <h1 class="title">Practical Alerting from Time-Series Data</h1>
+      <p class="subtitle">This chapter moves from monitoring principles to a concrete time-series architecture. Borgmon collects standardized white-box metrics, stores history, evaluates rules over time, produces charts and alerts from the same data, and aggregates hierarchically so large services can be monitored without paging on every component.</p>
+      <div class="source-note">📖 Based on the official Google SRE source: <a href="https://sre.google/sre-book/practical-alerting/" target="_blank">https://sre.google/sre-book/practical-alerting/</a>. This is a careful paraphrased study summary. Diagrams and charts are original study visuals.</div>
+    </div>
+    <section class="card"><div class="tab">map</div><h2>How the chapter fits together</h2><p>Read this diagram as the chapter’s argument, not just as a list of keywords. Each step creates the need for the next one.</p><div class="diagram-wrap"><svg viewBox="0 0 719 234" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive"><defs><marker id="mapArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#B84B2A"/></marker></defs><rect x="20" y="20" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Instrument target</tspan></text><rect x="257" y="20" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Scrape time series</tspan></text><rect x="494" y="20" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Aggregate hierarchy</tspan></text><rect x="20" y="134" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Evaluate rules</tspan></text><rect x="257" y="134" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Chart + alert</tspan></text><rect x="494" y="134" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Human action / tune</tspan></text><path d="M 229 56 L 249 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 56 L 486 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 596 95 L 596 110 L 122 110 L 122 126" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 229 170 L 249 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 170 L 486 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/></svg><div class="diagram-caption">original study sketch — redraw this flow from memory after reading</div></div></section><section class="card"><div class="tab">chart</div><h2>Chapter structure at a glance</h2><p>This chart mirrors the explanatory sections below. It is useful for navigation first; after reading, use it as a recall checklist.</p><div class="concept-chart"><div class="concept-step"><div class="step-no">01</div><div class="step-title">Monitoring at scale needs common data, not one script per check</div></div><div class="concept-step"><div class="step-no">02</div><div class="step-title">Expose machine-readable state</div></div><div class="concept-step"><div class="step-no">03</div><div class="step-title">Aggregate monitoring like the service topology</div></div><div class="concept-step"><div class="step-no">04</div><div class="step-title">Turn data into derived signals</div></div><div class="concept-step"><div class="step-no">05</div><div class="step-title">Do not page on individual component failure</div></div><div class="concept-step"><div class="step-no">06</div><div class="step-title">Monitoring is production software</div></div><div class="concept-step"><div class="step-no">07</div><div class="step-title">Why standardized time series changed monitoring</div></div><div class="concept-step"><div class="step-no">08</div><div class="step-title">Monitoring infrastructure has capacity math too</div></div></div></section><section class="card"><div class="tab">01 — why time series</div><h2>Monitoring at scale needs common data, not one script per check</h2><p>Early monitoring often consists of custom scripts that run a check and page. Borgmon instead makes <strong>time-series collection</strong> the central primitive. Applications expose metrics in a common format; monitoring stores history; rules derive rates, ratios, distributions, dashboards, and alerts.</p><p>That separation matters because the same data can answer a real-time alert and a retrospective debugging question. The monitoring system no longer has to spawn a special-purpose process and network request for every check.</p></section><section class="card"><div class="tab">02 — instrumentation</div><h2>Expose machine-readable state</h2><p>The chapter shows the old `/varz` style endpoint: one fetch can expose counters such as total HTTP requests and errors. Mapped variables add labels and histograms—for example, response counts by status code.</p><p>Instrumentation should make the service's meaningful internal state cheap to collect. A monitoring platform cannot recover semantics that the application never exported.</p><div class="math">Example exposed counters:<br>
+HTTP 200 = 25, HTTP 500 = 12<br>
+observed explicit error fraction = 12 / (25 + 12) ≈ <strong>32.4%</strong>.<br>
+A rule language can compute that ratio from counters instead of requiring a custom check script.</div></section><section class="card"><div class="tab">03 — hierarchy</div><h2>Aggregate monitoring like the service topology</h2><p>A Borgmon can scrape another Borgmon. Teams commonly operate cluster-level collectors and global collectors, and very large services can shard below the cluster. Each layer can aggregate/summarize and intentionally discard detail that is no longer useful at the next level.</p><p>The architecture keeps global monitoring feasible while preserving a path to drill into finer-grained data when debugging.</p><div class="chapter-map"><div class="map-node">Application /varz metrics</div><div class="map-node">Scraper Borgmon</div><div class="map-node">Cluster Borgmon</div><div class="map-node">Global Borgmon</div><div class="map-node">Dashboards + alert rules</div></div></section><section class="card"><div class="tab">04 — rules</div><h2>Turn data into derived signals</h2><p>Rules perform arithmetic over time series to create higher-level metrics: request rates from counters, error fractions, availability, percentiles, and conditions that generate alerts. Because history is available, rules can compare time windows rather than inspecting one instantaneous value.</p><p>Simple, readable rules are a reliability feature. If the on-caller cannot understand why an alert fired, the monitoring system itself becomes part of the incident.</p></section><section class="card"><div class="tab">05 — scale</div><h2>Do not page on individual component failure</h2><p>At Google's scale, one machine failing is normal. The service architecture should absorb it, and monitoring should aggregate enough to detect user/service impact rather than wake humans for each expected component churn event.</p><p>At the same time, retain component-level data for diagnosis. The right monitoring system is high-level enough for alerting and granular enough for troubleshooting.</p></section><section class="card"><div class="tab">06 — maintenance</div><h2>Monitoring is production software</h2><p>Rules, dashboards, data retention, cardinality, and aggregation all create maintenance cost. The chapter's architecture aims to keep the system simple enough that engineers can adapt it as services evolve.</p><p>After incidents, update alert rules and instrumentation based on what was actually useful. Monitoring is not finished when the first dashboard exists.</p></section><section class="card"><div class="tab">07 — data model</div><h2>Why standardized time series changed monitoring</h2><p>Borgmon replaced fleets of one-off check scripts with a common way for programs to export metrics and a common engine that collected, stored, queried, charted, and alerted on those measurements. That separation matters: application code exposes state; monitoring rules decide how to aggregate and interpret it.</p><p>Targets expose simple machine-readable variables. A Borgmon periodically scrapes those targets, attaches labels such as job, service, instance, and zone, and stores timestamp/value pairs as time series. Because the same data feeds both charts and alerts, an engineer can inspect the history behind an alert instead of treating the check as a black box.</p><p>Monitoring instances can also aggregate other monitoring instances, mirroring the service topology: task-level data rolls into cluster summaries and then global summaries. This lets the alerting layer reason about service health instead of paging for every failed machine.</p></section><section class="card"><div class="tab">08 — capacity math</div><h2>Monitoring infrastructure has capacity math too</h2><p>The chapter gives a useful concrete estimate for Borgmon’s in-memory arena. A single time-series sample uses about <strong>24 bytes</strong>. With one million distinct time series, sampled once per minute, keeping roughly 12 hours of data means about 720 samples per series.</p><p>That is 1,000,000 × 720 × 24 bytes ≈ 17.28 GB, which is why the chapter states that one million series for 12 hours at one-minute resolution fits in under roughly 17 GB of RAM after implementation details/rounding. Older data can be archived to a larger, cheaper time-series database.</p><p>This calculation illustrates an important monitoring principle: label cardinality and sampling frequency are resource decisions. Adding a high-cardinality label can multiply the number of series dramatically.</p><div class="math">1,000,000 series × 720 samples/series × 24 B/sample ≈ 17.3 GB of raw sample memory.</div></section><section class="card"><div class="tab">interview</div><h2>Questions you should be able to explain aloud</h2><p>These are not trivia questions. A strong answer explains the mechanism, the reason for it, and the trade-off.</p><div class="concept-grid"><div class="concept-box"><h4>Question 1</h4><p>Why is time-series collection better than one custom script per alert?</p></div><div class="concept-box"><h4>Question 2</h4><p>How does hierarchical Borgmon aggregation help scale?</p></div><div class="concept-box"><h4>Question 3</h4><p>What should an application expose for useful white-box monitoring?</p></div><div class="concept-box"><h4>Question 4</h4><p>Why should global alerting aggregate failures while debugging preserves granularity?</p></div></div></section><section class="card"><div class="tab">recap</div><h2>Chapter recap</h2><p>Use this table only after reading the chapter summary. It is a retrieval aid, not a substitute for the explanation above.</p><table class="recap"><tr><th>Idea</th><th>What to remember</th></tr><tr><td>Time series</td><td>Collect metrics continuously so one dataset supports charts and alerts.</td></tr><tr><td>Instrumentation</td><td>Standardized exposition makes broad collection cheap.</td></tr><tr><td>Hierarchy</td><td>Aggregate from task/cluster toward global views.</td></tr><tr><td>Rules</td><td>Compute rates/ratios/alerts as transparent expressions.</td></tr><tr><td>Scale</td><td>Page on service impact, not routine single-machine churn.</td></tr><tr><td>Drill-down</td><td>Keep enough granular data for root-cause analysis.</td></tr></table></section><footer>Study summary · Practical Alerting from Time-Series Data · source material © Google/O’Reilly under the source site’s stated license</footer></div></body></html>

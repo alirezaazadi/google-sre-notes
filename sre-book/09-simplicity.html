@@ -1,0 +1,346 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Simplicity — Study Notebook</title><style>
+  @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root{
+    --paper:#F6F1E4;
+    --paper-line:#DED4B8;
+    --ink:#242121;
+    --ink-soft:#5B564C;
+    --marker:#2F5FA8;
+    --marker-soft:#DCE6F4;
+    --coral:#B84B2A;
+    --coral-soft:#F4E1D6;
+    --moss:#4C6B4F;
+    --moss-soft:#E1E9DD;
+    --tab:#EFC94C;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#E7DEC7;
+    font-family:'Source Serif 4', Georgia, serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    padding:32px 12px 80px;
+  }
+
+  .page{
+    max-width:860px;
+    width:100%;
+  }
+
+  .cover{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line), 0 18px 40px -20px rgba(0,0,0,.35);
+    padding:44px 40px 36px;
+    margin-bottom:22px;
+    position:relative;
+  }
+  .eyebrow{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:15px;
+    letter-spacing:.04em;
+  }
+  h1.title{
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:clamp(30px,4.4vw,44px);
+    margin:6px 0 4px;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .subtitle{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:60ch;
+    margin:8px 0 18px;
+  }
+  .source-note{
+    font-family:'Patrick Hand', cursive;
+    font-size:14.5px;
+    background:var(--marker-soft);
+    border:1px dashed var(--marker);
+    padding:10px 14px;
+    display:inline-block;
+    color:#1e3c66;
+    transform:rotate(-0.4deg);
+  }
+  .source-note a{color:#1e3c66;}
+
+  section.card{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line);
+    padding:30px 38px;
+    margin-bottom:16px;
+    position:relative;
+  }
+
+  .tab{
+    position:absolute;
+    top:-14px;
+    left:34px;
+    background:var(--tab);
+    color:#3a2c05;
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:13.5px;
+    padding:5px 14px 6px;
+    box-shadow:0 3px 6px rgba(0,0,0,.18);
+    transform:rotate(-1.2deg);
+  }
+
+  h2{
+    font-family:'Kalam', cursive;
+    font-size:25px;
+    margin:10px 0 10px;
+    color:var(--ink);
+  }
+  h3{
+    font-family:'Kalam', cursive;
+    font-size:18.5px;
+    margin:22px 0 6px;
+    color:var(--marker);
+  }
+  p{ line-height:1.62; font-size:16px; margin:10px 0; }
+  ul, ol{ line-height:1.6; font-size:16px; padding-left:22px;}
+  li{margin:4px 0;}
+  strong{color:var(--ink);}
+
+  .callout{
+    background:var(--moss-soft);
+    border-left:4px solid var(--moss);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .callout b{color:var(--moss);}
+
+  .fails{
+    background:var(--coral-soft);
+    border-left:4px solid var(--coral);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .fails b{color:var(--coral);}
+
+  .math{
+    font-family:'Patrick Hand', cursive;
+    background:#fbf8ef;
+    border:1px dashed #b8ac86;
+    padding:10px 16px;
+    font-size:16.5px;
+    margin:10px 0;
+    color:#3a3527;
+  }
+
+  .diagram-wrap{
+    margin:18px 0 6px;
+    text-align:center;
+  }
+  .diagram-wrap svg{ max-width:100%; height:auto; }
+  .diagram-caption{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14.5px;
+    margin-top:4px;
+  }
+
+  .sketch-font{ font-family:'Patrick Hand', cursive; }
+
+  table.recap{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+    margin:12px 0;
+  }
+  table.recap th, table.recap td{
+    border:1px solid var(--paper-line);
+    padding:8px 10px;
+    text-align:left;
+    vertical-align:top;
+  }
+  table.recap th{
+    background:var(--marker-soft);
+    font-family:'Kalam', cursive;
+    color:#1e3c66;
+  }
+
+  .four-q{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin:14px 0;
+  }
+  .qbox{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:12px 14px;
+  }
+  .qbox .qnum{
+    font-family:'Kalam', cursive;
+    color:var(--coral);
+    font-size:17px;
+  }
+  .qbox p{margin:4px 0 0; font-size:14.5px;}
+
+  footer{
+    text-align:center;
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14px;
+    margin-top:28px;
+  }
+  @media (max-width:600px){
+    .cover, section.card{padding:24px 20px;}
+    .four-q{grid-template-columns:1fr;}
+  }
+
+
+  .concept-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin:14px 0;
+  }
+  .concept-box{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:13px 15px;
+  }
+  .concept-box h4{
+    font-family:'Kalam',cursive;
+    color:var(--marker);
+    margin:0 0 5px;
+    font-size:17px;
+  }
+  .concept-box p{font-size:14.8px;margin:0;line-height:1.52;}
+  .chapter-map{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:8px;
+    align-items:stretch;
+    margin:16px 0 8px;
+  }
+  .map-node{
+    position:relative;
+    background:#fffdf8;
+    border:2px solid var(--marker);
+    min-height:72px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:9px 8px;
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .map-node:not(:last-child)::after{
+    content:'→';
+    position:absolute;
+    right:-18px;
+    top:23px;
+    color:var(--coral);
+    font-size:25px;
+    z-index:2;
+  }
+  .spectrum{
+    display:grid;
+    gap:9px;
+    margin:14px 0;
+  }
+  .spectrum-row{
+    display:grid;
+    grid-template-columns:160px 1fr 46px;
+    gap:10px;
+    align-items:center;
+  }
+  .spectrum-label{font-size:14px;color:var(--ink-soft);}
+  .spectrum-track{
+    height:19px;
+    border:1px solid var(--paper-line);
+    background:#efe8d4;
+    position:relative;
+    overflow:hidden;
+  }
+  .spectrum-fill{
+    height:100%;
+    background:var(--marker-soft);
+    border-right:3px solid var(--marker);
+  }
+  .spectrum-value{
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .timeline{
+    border-left:3px solid var(--marker);
+    margin:14px 0 14px 13px;
+    padding-left:20px;
+  }
+  .timeline-item{
+    position:relative;
+    margin:0 0 15px;
+    padding:0 0 0 4px;
+  }
+  .timeline-item::before{
+    content:'';
+    width:11px;height:11px;border-radius:50%;
+    background:var(--coral);
+    position:absolute;left:-31px;top:7px;
+    border:2px solid var(--paper);
+  }
+  .timeline-item b{font-family:'Kalam',cursive;color:var(--marker);}
+  .source-derived{
+    font-family:'Patrick Hand',cursive;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    border-top:1px dashed var(--paper-line);
+    margin-top:12px;
+    padding-top:7px;
+  }
+  .interview{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:14px 16px;
+    margin:10px 0;
+  }
+  .interview b{color:var(--marker);}
+  .why{
+    background:var(--marker-soft);
+    border-left:4px solid var(--marker);
+    padding:10px 16px;
+    margin:14px 0;
+    font-size:15px;
+  }
+  code{
+    background:#eee6d2;
+    padding:1px 4px;
+    border-radius:3px;
+    font-size:.92em;
+  }
+  @media(max-width:650px){
+    .concept-grid{grid-template-columns:1fr;}
+    .map-node:not(:last-child)::after{display:none;}
+    .spectrum-row{grid-template-columns:105px 1fr 38px;}
+  }
+
+    .concept-chart{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;}
+    .concept-chart .concept-step{background:#fbf8ef;border:1px solid var(--paper-line);padding:12px 14px;position:relative;}
+    .concept-chart .concept-step .step-no{font-family:'Kalam',cursive;color:var(--coral);font-size:15px;}
+    .concept-chart .concept-step .step-title{font-family:'Patrick Hand',cursive;color:#1e3c66;font-size:17px;line-height:1.25;margin-top:3px;}
+    @media(max-width:600px){.concept-chart{grid-template-columns:1fr;}}
+    </style></head><body><div class="page">
+    <div class="cover">
+      <div class="eyebrow">Google Site Reliability Engineering Book · Chapter 9</div>
+      <h1 class="title">Simplicity</h1>
+      <p class="subtitle">SRE treats simplicity as a reliability property. Production systems must change, so the objective is not frozen stability; it is enough simplicity that engineers can change, test, understand, and recover the system without surprises.</p>
+      <div class="source-note">📖 Based on the official Google SRE source: <a href="https://sre.google/sre-book/simplicity/" target="_blank">https://sre.google/sre-book/simplicity/</a>. This is a careful paraphrased study summary. Diagrams and charts are original study visuals.</div>
+    </div>
+    <section class="card"><div class="tab">map</div><h2>How the chapter fits together</h2><p>Read this diagram as the chapter’s argument, not just as a list of keywords. Each step creates the need for the next one.</p><div class="diagram-wrap"><svg viewBox="0 0 719 234" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive"><defs><marker id="mapArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#B84B2A"/></marker></defs><rect x="20" y="20" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Essential requirement</tspan></text><rect x="257" y="20" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="52" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Remove accidental</tspan><tspan x="360" dy="18">complexity</tspan></text><rect x="494" y="20" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Prefer boring behavior</tspan></text><rect x="20" y="134" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Delete dead code</tspan></text><rect x="257" y="134" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Make APIs explicit</tspan></text><rect x="494" y="134" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="166" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Balance agility +</tspan><tspan x="596" dy="18">stability</tspan></text><path d="M 229 56 L 249 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 56 L 486 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 596 95 L 596 110 L 122 110 L 122 126" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 229 170 L 249 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 170 L 486 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/></svg><div class="diagram-caption">original study sketch — redraw this flow from memory after reading</div></div></section><section class="card"><div class="tab">chart</div><h2>Chapter structure at a glance</h2><p>This chart mirrors the explanatory sections below. It is useful for navigation first; after reading, use it as a recall checklist.</p><div class="concept-chart"><div class="concept-step"><div class="step-no">01</div><div class="step-title">Stability without change is not a useful production strategy</div></div><div class="concept-step"><div class="step-no">02</div><div class="step-title">Predictability is a feature</div></div><div class="concept-step"><div class="step-no">03</div><div class="step-title">Every unnecessary line is future risk</div></div><div class="concept-step"><div class="step-no">04</div><div class="step-title">Complexity can be moved, not removed</div></div><div class="concept-step"><div class="step-no">05</div><div class="step-title">SRE should push back on accidental complexity</div></div><div class="concept-step"><div class="step-no">06</div><div class="step-title">Not all complexity is removable, but accidental complexity should be attacked</div></div><div class="concept-step"><div class="step-no">07</div><div class="step-title">Minimal APIs and modularity make change safer</div></div></div></section><section class="card"><div class="tab">01 — balance</div><h2>Stability without change is not a useful production strategy</h2><p>A software system could become more stable by never changing code, hardware, dependencies, or user load—but then it would stop being a useful evolving product. SRE's job is to balance <strong>agility and stability</strong>, using reliable engineering processes so changes remain possible without making production chaotic.</p><p>Exploratory code can legitimately trade stability for learning when it has an explicit short shelf life. Production code has a different contract because it must remain understandable and operable for years.</p></section><section class="card"><div class="tab">02 — boring</div><h2>Predictability is a feature</h2><p>The chapter celebrates “boring” software: code should follow the script and accomplish its intended business behavior without surprising operators. Surprise increases debugging time and failure risk.</p><p>Fred Brooks's distinction between <strong>essential complexity</strong> and <strong>accidental complexity</strong> is central. Essential complexity belongs to the problem itself; accidental complexity is introduced by our implementation and can often be engineered away.</p></section><section class="card"><div class="tab">03 — delete</div><h2>Every unnecessary line is future risk</h2><p>Engineers often resist deleting code “in case we need it later,” preferring commented blocks or permanently disabled flags. Source control already preserves history; leaving dead paths in the active system increases distraction and can create dormant failure modes.</p><p>The chapter points to incidents such as Knight Capital as a warning about obsolete code paths. A smaller codebase is easier to understand, test, and reason about. “Negative lines of code” can therefore be a meaningful engineering win.</p></section><section class="card"><div class="tab">04 — APIs</div><h2>Complexity can be moved, not removed</h2><p>A generic central abstraction may look small while forcing every caller to implement conventions, validation, and edge cases. Evaluate simplicity across the whole interaction, including users, clients, operators, deployment, and failure recovery.</p><p>Narrow, explicit interfaces make illegal or surprising behaviors harder to express and help teams evolve components independently.</p></section><section class="card"><div class="tab">05 — operational</div><h2>SRE should push back on accidental complexity</h2><p>When onboarding a service or reviewing a design, SRE has a responsibility to challenge extra modes, unnecessary dependencies, flags, special cases, and overly clever machinery. Those costs are paid later by the on-caller who must reason under pressure.</p><p>Simplicity is not minimal feature count. It is the smallest understandable system that satisfies the real requirements, including reliability and evolvability.</p><table class="recap"><tr><th>Complexity type</th><th>Example</th><th>Response</th></tr><tr><td>Essential</td><td>distributed replicas must coordinate for a strong-consistency requirement</td><td>design/test the mechanism carefully</td></tr><tr><td>Accidental</td><td>three overlapping rollout systems with different semantics</td><td>consolidate/remove</td></tr><tr><td>Dormant</td><td>dead code behind an always-off flag</td><td>delete; rely on source control</td></tr><tr><td>Transferred</td><td>generic API requiring undocumented client conventions</td><td>make contract explicit</td></tr></table></section><section class="card"><div class="tab">06 — essential vs accidental</div><h2>Not all complexity is removable, but accidental complexity should be attacked</h2><p>The chapter borrows the distinction between <strong>essential complexity</strong>—complexity inherent in the problem—and <strong>accidental complexity</strong> introduced by our implementation choices. Serving web pages quickly has inherent complexity; dealing with avoidable interactions created by an unnecessary framework, mode, or layer is accidental complexity.</p><p>SRE should actively push back when new accidental complexity is introduced and should simplify systems it inherits. This is not aesthetic minimalism. Every additional state and dependency becomes something an on-caller may have to understand under pressure.</p></section><section class="card"><div class="tab">07 — minimal interfaces</div><h2>Minimal APIs and modularity make change safer</h2><p>A minimal API offers fewer methods and arguments, so its semantics can be understood and tested more thoroughly. Refusing to support unrelated use cases can make the supported core substantially more reliable.</p><p>Modularity applies the same idea at distributed-system scale: binaries should have clear responsibilities and loose coupling. API versioning allows components to change on different release cadences instead of forcing a synchronized whole-system push.</p><p>The chapter applies simplicity to releases too. If 100 unrelated changes ship together and performance regresses, attribution is difficult. Smaller release batches make each change easier to measure, reason about, and reverse.</p><div class="callout"><b>Useful mental model:</b> source control is the archive. Keeping dead code commented out or permanently disabled behind flags adds cognitive and operational surface without providing a real recovery benefit.</div></section><section class="card"><div class="tab">interview</div><h2>Questions you should be able to explain aloud</h2><p>These are not trivia questions. A strong answer explains the mechanism, the reason for it, and the trade-off.</p><div class="concept-grid"><div class="concept-box"><h4>Question 1</h4><p>Why does SRE value 'boring' software?</p></div><div class="concept-box"><h4>Question 2</h4><p>Explain essential versus accidental complexity.</p></div><div class="concept-box"><h4>Question 3</h4><p>Why can commented/disabled dead code still be dangerous?</p></div><div class="concept-box"><h4>Question 4</h4><p>How can an API be locally simple but systemically complex?</p></div></div></section><section class="card"><div class="tab">recap</div><h2>Chapter recap</h2><p>Use this table only after reading the chapter summary. It is a retrieval aid, not a substitute for the explanation above.</p><table class="recap"><tr><th>Idea</th><th>What to remember</th></tr><tr><td>Goal</td><td>Balance agility with stability rather than freezing change.</td></tr><tr><td>Boring</td><td>Predictable software is easier to operate.</td></tr><tr><td>Complexity</td><td>Distinguish essential problem complexity from accidental implementation complexity.</td></tr><tr><td>Deletion</td><td>Dead/unused code is risk and cognitive load.</td></tr><tr><td>Whole system</td><td>Do not call an abstraction simple if callers absorb all complexity.</td></tr><tr><td>SRE role</td><td>Continuously remove accidental operational complexity.</td></tr></table></section><footer>Study summary · Simplicity · source material © Google/O’Reilly under the source site’s stated license</footer></div></body></html>

@@ -1,0 +1,346 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Monitoring — Study Notebook</title><style>
+  @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root{
+    --paper:#F6F1E4;
+    --paper-line:#DED4B8;
+    --ink:#242121;
+    --ink-soft:#5B564C;
+    --marker:#2F5FA8;
+    --marker-soft:#DCE6F4;
+    --coral:#B84B2A;
+    --coral-soft:#F4E1D6;
+    --moss:#4C6B4F;
+    --moss-soft:#E1E9DD;
+    --tab:#EFC94C;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#E7DEC7;
+    font-family:'Source Serif 4', Georgia, serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    padding:32px 12px 80px;
+  }
+
+  .page{
+    max-width:860px;
+    width:100%;
+  }
+
+  .cover{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line), 0 18px 40px -20px rgba(0,0,0,.35);
+    padding:44px 40px 36px;
+    margin-bottom:22px;
+    position:relative;
+  }
+  .eyebrow{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:15px;
+    letter-spacing:.04em;
+  }
+  h1.title{
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:clamp(30px,4.4vw,44px);
+    margin:6px 0 4px;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .subtitle{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:60ch;
+    margin:8px 0 18px;
+  }
+  .source-note{
+    font-family:'Patrick Hand', cursive;
+    font-size:14.5px;
+    background:var(--marker-soft);
+    border:1px dashed var(--marker);
+    padding:10px 14px;
+    display:inline-block;
+    color:#1e3c66;
+    transform:rotate(-0.4deg);
+  }
+  .source-note a{color:#1e3c66;}
+
+  section.card{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line);
+    padding:30px 38px;
+    margin-bottom:16px;
+    position:relative;
+  }
+
+  .tab{
+    position:absolute;
+    top:-14px;
+    left:34px;
+    background:var(--tab);
+    color:#3a2c05;
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:13.5px;
+    padding:5px 14px 6px;
+    box-shadow:0 3px 6px rgba(0,0,0,.18);
+    transform:rotate(-1.2deg);
+  }
+
+  h2{
+    font-family:'Kalam', cursive;
+    font-size:25px;
+    margin:10px 0 10px;
+    color:var(--ink);
+  }
+  h3{
+    font-family:'Kalam', cursive;
+    font-size:18.5px;
+    margin:22px 0 6px;
+    color:var(--marker);
+  }
+  p{ line-height:1.62; font-size:16px; margin:10px 0; }
+  ul, ol{ line-height:1.6; font-size:16px; padding-left:22px;}
+  li{margin:4px 0;}
+  strong{color:var(--ink);}
+
+  .callout{
+    background:var(--moss-soft);
+    border-left:4px solid var(--moss);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .callout b{color:var(--moss);}
+
+  .fails{
+    background:var(--coral-soft);
+    border-left:4px solid var(--coral);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .fails b{color:var(--coral);}
+
+  .math{
+    font-family:'Patrick Hand', cursive;
+    background:#fbf8ef;
+    border:1px dashed #b8ac86;
+    padding:10px 16px;
+    font-size:16.5px;
+    margin:10px 0;
+    color:#3a3527;
+  }
+
+  .diagram-wrap{
+    margin:18px 0 6px;
+    text-align:center;
+  }
+  .diagram-wrap svg{ max-width:100%; height:auto; }
+  .diagram-caption{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14.5px;
+    margin-top:4px;
+  }
+
+  .sketch-font{ font-family:'Patrick Hand', cursive; }
+
+  table.recap{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+    margin:12px 0;
+  }
+  table.recap th, table.recap td{
+    border:1px solid var(--paper-line);
+    padding:8px 10px;
+    text-align:left;
+    vertical-align:top;
+  }
+  table.recap th{
+    background:var(--marker-soft);
+    font-family:'Kalam', cursive;
+    color:#1e3c66;
+  }
+
+  .four-q{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin:14px 0;
+  }
+  .qbox{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:12px 14px;
+  }
+  .qbox .qnum{
+    font-family:'Kalam', cursive;
+    color:var(--coral);
+    font-size:17px;
+  }
+  .qbox p{margin:4px 0 0; font-size:14.5px;}
+
+  footer{
+    text-align:center;
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14px;
+    margin-top:28px;
+  }
+  @media (max-width:600px){
+    .cover, section.card{padding:24px 20px;}
+    .four-q{grid-template-columns:1fr;}
+  }
+
+
+  .concept-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin:14px 0;
+  }
+  .concept-box{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:13px 15px;
+  }
+  .concept-box h4{
+    font-family:'Kalam',cursive;
+    color:var(--marker);
+    margin:0 0 5px;
+    font-size:17px;
+  }
+  .concept-box p{font-size:14.8px;margin:0;line-height:1.52;}
+  .chapter-map{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:8px;
+    align-items:stretch;
+    margin:16px 0 8px;
+  }
+  .map-node{
+    position:relative;
+    background:#fffdf8;
+    border:2px solid var(--marker);
+    min-height:72px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:9px 8px;
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .map-node:not(:last-child)::after{
+    content:'→';
+    position:absolute;
+    right:-18px;
+    top:23px;
+    color:var(--coral);
+    font-size:25px;
+    z-index:2;
+  }
+  .spectrum{
+    display:grid;
+    gap:9px;
+    margin:14px 0;
+  }
+  .spectrum-row{
+    display:grid;
+    grid-template-columns:160px 1fr 46px;
+    gap:10px;
+    align-items:center;
+  }
+  .spectrum-label{font-size:14px;color:var(--ink-soft);}
+  .spectrum-track{
+    height:19px;
+    border:1px solid var(--paper-line);
+    background:#efe8d4;
+    position:relative;
+    overflow:hidden;
+  }
+  .spectrum-fill{
+    height:100%;
+    background:var(--marker-soft);
+    border-right:3px solid var(--marker);
+  }
+  .spectrum-value{
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .timeline{
+    border-left:3px solid var(--marker);
+    margin:14px 0 14px 13px;
+    padding-left:20px;
+  }
+  .timeline-item{
+    position:relative;
+    margin:0 0 15px;
+    padding:0 0 0 4px;
+  }
+  .timeline-item::before{
+    content:'';
+    width:11px;height:11px;border-radius:50%;
+    background:var(--coral);
+    position:absolute;left:-31px;top:7px;
+    border:2px solid var(--paper);
+  }
+  .timeline-item b{font-family:'Kalam',cursive;color:var(--marker);}
+  .source-derived{
+    font-family:'Patrick Hand',cursive;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    border-top:1px dashed var(--paper-line);
+    margin-top:12px;
+    padding-top:7px;
+  }
+  .interview{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:14px 16px;
+    margin:10px 0;
+  }
+  .interview b{color:var(--marker);}
+  .why{
+    background:var(--marker-soft);
+    border-left:4px solid var(--marker);
+    padding:10px 16px;
+    margin:14px 0;
+    font-size:15px;
+  }
+  code{
+    background:#eee6d2;
+    padding:1px 4px;
+    border-radius:3px;
+    font-size:.92em;
+  }
+  @media(max-width:650px){
+    .concept-grid{grid-template-columns:1fr;}
+    .map-node:not(:last-child)::after{display:none;}
+    .spectrum-row{grid-template-columns:105px 1fr 38px;}
+  }
+
+    .concept-chart{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;}
+    .concept-chart .concept-step{background:#fbf8ef;border:1px solid var(--paper-line);padding:12px 14px;position:relative;}
+    .concept-chart .concept-step .step-no{font-family:'Kalam',cursive;color:var(--coral);font-size:15px;}
+    .concept-chart .concept-step .step-title{font-family:'Patrick Hand',cursive;color:#1e3c66;font-size:17px;line-height:1.25;margin-top:3px;}
+    @media(max-width:600px){.concept-chart{grid-template-columns:1fr;}}
+    </style></head><body><div class="page">
+    <div class="cover">
+      <div class="eyebrow">Google SRE Workbook · Chapter 4</div>
+      <h1 class="title">Monitoring</h1>
+      <p class="subtitle">Monitoring is an engineering system for alerting, diagnosis, visualization, planning, and experimentation. The chapter focuses on choosing the right data and architecture—not collecting everything—and on making service-level signals the entry point into deeper diagnostic telemetry.</p>
+      <div class="source-note">📖 Based on the official Google SRE source: <a href="https://sre.google/workbook/monitoring/" target="_blank">https://sre.google/workbook/monitoring/</a>. This is a careful paraphrased study summary. Diagrams and charts are original study visuals.</div>
+    </div>
+    <section class="card"><div class="tab">map</div><h2>How the chapter fits together</h2><p>Read this diagram as the chapter’s argument, not just as a list of keywords. Each step creates the need for the next one.</p><div class="diagram-wrap"><svg viewBox="0 0 719 234" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive"><defs><marker id="mapArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#B84B2A"/></marker></defs><rect x="20" y="20" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Operational question</tspan></text><rect x="257" y="20" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Choose telemetry</tspan></text><rect x="494" y="20" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="52" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Aggregate</tspan><tspan x="596" dy="18">appropriately</tspan></text><rect x="138" y="134" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="241" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="241" dy="0">Alert / diagnose</tspan></text><rect x="376" y="134" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="478" y="166" text-anchor="middle" font-size="16" fill="#242121"><tspan x="478" dy="0">Manage monitoring</tspan><tspan x="478" dy="18">system</tspan></text><path d="M 229 56 L 249 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 56 L 486 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 596 95 L 596 110 L 241 110 L 241 126" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 348 170 L 368 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/></svg><div class="diagram-caption">original study sketch — redraw this flow from memory after reading</div></div></section><section class="card"><div class="tab">chart</div><h2>Chapter structure at a glance</h2><p>This chart mirrors the explanatory sections below. It is useful for navigation first; after reading, use it as a recall checklist.</p><div class="concept-chart"><div class="concept-step"><div class="step-no">01</div><div class="step-title">Monitoring has several different jobs</div></div><div class="concept-step"><div class="step-no">02</div><div class="step-title">Metrics and logs solve different parts of the problem</div></div><div class="concept-step"><div class="step-no">03</div><div class="step-title">Think about the monitoring system itself as a distributed system</div></div><div class="concept-step"><div class="step-no">04</div><div class="step-title">Put SLI metrics first, then diagnostic metrics</div></div><div class="concept-step"><div class="step-no">05</div><div class="step-title">Operate the monitoring configuration like software</div></div></div></section><section class="card"><div class="tab">visual</div><h2>Monitoring hierarchy</h2><div class="spectrum"><div class="spectrum-row"><div class="spectrum-label">User-visible SLI</div><div class="spectrum-track"><div class="spectrum-fill" style="width:100%"></div></div><div class="spectrum-value">5</div></div><div class="spectrum-row"><div class="spectrum-label">Change visibility</div><div class="spectrum-track"><div class="spectrum-fill" style="width:80%"></div></div><div class="spectrum-value">4</div></div><div class="spectrum-row"><div class="spectrum-label">Dependency signals</div><div class="spectrum-track"><div class="spectrum-fill" style="width:80%"></div></div><div class="spectrum-value">4</div></div><div class="spectrum-row"><div class="spectrum-label">Resource saturation</div><div class="spectrum-track"><div class="spectrum-fill" style="width:80%"></div></div><div class="spectrum-value">4</div></div><div class="spectrum-row"><div class="spectrum-label">High-cardinality forensic detail</div><div class="spectrum-track"><div class="spectrum-fill" style="width:60%"></div></div><div class="spectrum-value">3</div></div></div><div class="diagram-caption">Start with service outcome and progressively move inward for diagnosis.</div></section><section class="card"><div class="tab">01 — purposes</div><h2>Monitoring has several different jobs</h2><p>The chapter lists multiple monitoring use cases: alert on conditions that require attention, investigate and diagnose incidents, visualize service state, understand long-term trends, and compare behavior before/after a change or between experimental groups.</p><p>These use cases impose different requirements. Alerting needs low latency and high reliability; forensic analysis benefits from detailed logs; long-term planning may tolerate slower aggregation but needs retention. One monitoring backend may not optimize every use case equally well.</p><p>Start by naming the question you need the monitoring system to answer. A monitoring architecture chosen because it is fashionable often becomes expensive and still fails to answer the operational question.</p><div class="callout"><b>Core principle:</b> collect telemetry with purpose. Observability is not the number of metrics you have; it is your ability to answer important questions.</div></section><section class="card"><div class="tab">02 — metrics-logs</div><h2>Metrics and logs solve different parts of the problem</h2><p>Metrics are compact, structured, and efficient for aggregation. They make it easy to see the scale of a problem: how many errors, how much traffic, which status codes, which percentile, which region.</p><p>Logs preserve high-cardinality details that would be expensive or impossible to attach to every metric. They are strong for request-level context and root-cause investigation.</p><p>The chapter recommends keeping alerting primarily metric-based even when a single special event matters. If a log condition should alert, increment a metric counter for the event and alert on the metric. That keeps alert logic centralized.</p><p>One example moves HTTP status-code information from logs into metrics. Previously, an operator had to find a time range in a global error graph, search logs for failures, then guess whether one log entry represented a broad problem. Adding the status code as an appropriate metric dimension gave both scale and diagnosis context.</p><table class="recap"><tr><th>Tool</th><th>Best at</th><th>Weakness</th></tr><tr><td>Metrics</td><td>Rates, ratios, trends, alerting, dashboards</td><td>High-cardinality dimensions can explode cost.</td></tr><tr><td>Logs</td><td>Detailed request/event evidence</td><td>Harder to see scale; expensive to query continuously.</td></tr><tr><td>Traces</td><td>Following work through distributed calls</td><td>Sampling and instrumentation complexity.</td></tr><tr><td>Profiles</td><td>CPU/memory execution behavior</td><td>Not primarily a user-impact signal.</td></tr></table></section><section class="card"><div class="tab">03 — architecture</div><h2>Think about the monitoring system itself as a distributed system</h2><p>Monitoring systems need reliability, scalability, query performance, retention, and migration strategies. The chapter discusses Google’s evolution from Borgmon to Monarch and the use of Viceroy dashboards as a compatibility layer during migration.</p><p>A useful architectural lesson is <strong>decoupling visualization from the metric storage system</strong>. If dashboards can query both old and new backends, teams can migrate gradually instead of rewriting every console at once.</p><p>Monitoring infrastructure should not become an opaque dependency whose failure blinds the operators. Understand its availability and failure behavior, especially for paging paths.</p><div class="callout"><b>Migration lesson:</b> compatibility layers can reduce the risk of replacing foundational operational infrastructure.</div></section><section class="card"><div class="tab">04 — purpose</div><h2>Put SLI metrics first, then diagnostic metrics</h2><p>When an SLO alert fires, the first dashboard should show the SLI and user impact prominently. That tells responders whether the service is violating an objective, but it usually does not explain why.</p><p>The chapter recommends diagnostic monitoring for <strong>intended changes</strong>, dependencies, served traffic, and resource saturation. If you cannot quickly correlate a regression with a release/config change, you lose valuable incident time.</p><p>Dependency metrics should include volume, latency, and response/error behavior. Saturation monitoring should cover whatever bounded resources can limit work: CPU, memory, disk, queues, thread pools, file descriptors, quotas, and garbage-collection behavior.</p><p>High-cardinality information such as arbitrary user IDs generally belongs in logs rather than metric labels unless cardinality is strictly controlled.</p><div class="chapter-map"><div class="map-node">SLO symptom</div><div class="map-node">Recent changes</div><div class="map-node">Dependencies</div><div class="map-node">Resource saturation</div><div class="map-node">Request-level logs/traces</div></div></section><section class="card"><div class="tab">05 — management</div><h2>Operate the monitoring configuration like software</h2><p>Monitoring configuration grows, accumulates stale dashboards, and can generate operational debt. Keep ownership clear, version rules, test changes where practical, and periodically delete unactionable alerts.</p><p>Prefer reusable libraries and conventions so services expose common metrics consistently. This reduces cognitive load for responders who move between systems.</p><p>The strongest monitoring strategy therefore has two layers: simple service-level signals that answer 'are users hurting?' and richer internal signals that answer 'why?'.</p><div class="math"><b>Small diagnostic example:</b><br>250,000 requests / 10 min, 1,250 failures → error rate = 1,250 ÷ 250,000 = <strong>0.5%</strong>.<br>If the allowed error rate is 0.1%, the current error rate is <strong>5×</strong> that threshold. That tells you severity; change/dependency/resource metrics help explain cause.</div><div class="fails"><b>Anti-pattern:</b> page directly on every internal anomaly. CPU at 90% is a diagnostic clue; user-visible failure or an imminent SLO threat is a paging reason.</div></section><section class="card"><div class="tab">interview</div><h2>Questions you should be able to explain aloud</h2><p>These are not trivia questions. A strong answer explains the mechanism, the reason for it, and the trade-off.</p><div class="concept-grid"><div class="concept-box"><h4>Question 1</h4><p>Would you alert from logs or metrics, and why?</p></div><div class="concept-box"><h4>Question 2</h4><p>What would be on the first screen of an API service dashboard?</p></div><div class="concept-box"><h4>Question 3</h4><p>How do you avoid cardinality explosions?</p></div><div class="concept-box"><h4>Question 4</h4><p>If the SLO dashboard says the service is bad, what diagnostic categories do you check next?</p></div></div></section><section class="card"><div class="tab">recap</div><h2>Chapter recap</h2><p>Use this table only after reading the chapter summary. It is a retrieval aid, not a substitute for the explanation above.</p><table class="recap"><tr><th>Idea</th><th>What to remember</th></tr><tr><td>Metrics</td><td>Cheap aggregation and alerting.</td></tr><tr><td>Logs</td><td>Detailed, high-cardinality evidence.</td></tr><tr><td>SLI dashboard</td><td>Shows whether users are being harmed.</td></tr><tr><td>Diagnostic dashboard</td><td>Explains likely trigger/cause: changes, dependencies, saturation.</td></tr><tr><td>Monitoring hygiene</td><td>Version, review, and delete stale alerts/configuration.</td></tr></table></section><footer>Study summary · Monitoring · source material © Google/O’Reilly under the source site’s stated license</footer></div></body></html>

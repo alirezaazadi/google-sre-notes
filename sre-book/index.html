@@ -1,0 +1,345 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Google SRE Book — Detailed Readable Summaries</title><style>
+  @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root{
+    --paper:#F6F1E4;
+    --paper-line:#DED4B8;
+    --ink:#242121;
+    --ink-soft:#5B564C;
+    --marker:#2F5FA8;
+    --marker-soft:#DCE6F4;
+    --coral:#B84B2A;
+    --coral-soft:#F4E1D6;
+    --moss:#4C6B4F;
+    --moss-soft:#E1E9DD;
+    --tab:#EFC94C;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#E7DEC7;
+    font-family:'Source Serif 4', Georgia, serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    padding:32px 12px 80px;
+  }
+
+  .page{
+    max-width:860px;
+    width:100%;
+  }
+
+  .cover{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line), 0 18px 40px -20px rgba(0,0,0,.35);
+    padding:44px 40px 36px;
+    margin-bottom:22px;
+    position:relative;
+  }
+  .eyebrow{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:15px;
+    letter-spacing:.04em;
+  }
+  h1.title{
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:clamp(30px,4.4vw,44px);
+    margin:6px 0 4px;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .subtitle{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:60ch;
+    margin:8px 0 18px;
+  }
+  .source-note{
+    font-family:'Patrick Hand', cursive;
+    font-size:14.5px;
+    background:var(--marker-soft);
+    border:1px dashed var(--marker);
+    padding:10px 14px;
+    display:inline-block;
+    color:#1e3c66;
+    transform:rotate(-0.4deg);
+  }
+  .source-note a{color:#1e3c66;}
+
+  section.card{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line);
+    padding:30px 38px;
+    margin-bottom:16px;
+    position:relative;
+  }
+
+  .tab{
+    position:absolute;
+    top:-14px;
+    left:34px;
+    background:var(--tab);
+    color:#3a2c05;
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:13.5px;
+    padding:5px 14px 6px;
+    box-shadow:0 3px 6px rgba(0,0,0,.18);
+    transform:rotate(-1.2deg);
+  }
+
+  h2{
+    font-family:'Kalam', cursive;
+    font-size:25px;
+    margin:10px 0 10px;
+    color:var(--ink);
+  }
+  h3{
+    font-family:'Kalam', cursive;
+    font-size:18.5px;
+    margin:22px 0 6px;
+    color:var(--marker);
+  }
+  p{ line-height:1.62; font-size:16px; margin:10px 0; }
+  ul, ol{ line-height:1.6; font-size:16px; padding-left:22px;}
+  li{margin:4px 0;}
+  strong{color:var(--ink);}
+
+  .callout{
+    background:var(--moss-soft);
+    border-left:4px solid var(--moss);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .callout b{color:var(--moss);}
+
+  .fails{
+    background:var(--coral-soft);
+    border-left:4px solid var(--coral);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .fails b{color:var(--coral);}
+
+  .math{
+    font-family:'Patrick Hand', cursive;
+    background:#fbf8ef;
+    border:1px dashed #b8ac86;
+    padding:10px 16px;
+    font-size:16.5px;
+    margin:10px 0;
+    color:#3a3527;
+  }
+
+  .diagram-wrap{
+    margin:18px 0 6px;
+    text-align:center;
+  }
+  .diagram-wrap svg{ max-width:100%; height:auto; }
+  .diagram-caption{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14.5px;
+    margin-top:4px;
+  }
+
+  .sketch-font{ font-family:'Patrick Hand', cursive; }
+
+  table.recap{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+    margin:12px 0;
+  }
+  table.recap th, table.recap td{
+    border:1px solid var(--paper-line);
+    padding:8px 10px;
+    text-align:left;
+    vertical-align:top;
+  }
+  table.recap th{
+    background:var(--marker-soft);
+    font-family:'Kalam', cursive;
+    color:#1e3c66;
+  }
+
+  .four-q{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin:14px 0;
+  }
+  .qbox{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:12px 14px;
+  }
+  .qbox .qnum{
+    font-family:'Kalam', cursive;
+    color:var(--coral);
+    font-size:17px;
+  }
+  .qbox p{margin:4px 0 0; font-size:14.5px;}
+
+  footer{
+    text-align:center;
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14px;
+    margin-top:28px;
+  }
+  @media (max-width:600px){
+    .cover, section.card{padding:24px 20px;}
+    .four-q{grid-template-columns:1fr;}
+  }
+
+
+  .concept-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin:14px 0;
+  }
+  .concept-box{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:13px 15px;
+  }
+  .concept-box h4{
+    font-family:'Kalam',cursive;
+    color:var(--marker);
+    margin:0 0 5px;
+    font-size:17px;
+  }
+  .concept-box p{font-size:14.8px;margin:0;line-height:1.52;}
+  .chapter-map{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:8px;
+    align-items:stretch;
+    margin:16px 0 8px;
+  }
+  .map-node{
+    position:relative;
+    background:#fffdf8;
+    border:2px solid var(--marker);
+    min-height:72px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:9px 8px;
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .map-node:not(:last-child)::after{
+    content:'→';
+    position:absolute;
+    right:-18px;
+    top:23px;
+    color:var(--coral);
+    font-size:25px;
+    z-index:2;
+  }
+  .spectrum{
+    display:grid;
+    gap:9px;
+    margin:14px 0;
+  }
+  .spectrum-row{
+    display:grid;
+    grid-template-columns:160px 1fr 46px;
+    gap:10px;
+    align-items:center;
+  }
+  .spectrum-label{font-size:14px;color:var(--ink-soft);}
+  .spectrum-track{
+    height:19px;
+    border:1px solid var(--paper-line);
+    background:#efe8d4;
+    position:relative;
+    overflow:hidden;
+  }
+  .spectrum-fill{
+    height:100%;
+    background:var(--marker-soft);
+    border-right:3px solid var(--marker);
+  }
+  .spectrum-value{
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .timeline{
+    border-left:3px solid var(--marker);
+    margin:14px 0 14px 13px;
+    padding-left:20px;
+  }
+  .timeline-item{
+    position:relative;
+    margin:0 0 15px;
+    padding:0 0 0 4px;
+  }
+  .timeline-item::before{
+    content:'';
+    width:11px;height:11px;border-radius:50%;
+    background:var(--coral);
+    position:absolute;left:-31px;top:7px;
+    border:2px solid var(--paper);
+  }
+  .timeline-item b{font-family:'Kalam',cursive;color:var(--marker);}
+  .source-derived{
+    font-family:'Patrick Hand',cursive;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    border-top:1px dashed var(--paper-line);
+    margin-top:12px;
+    padding-top:7px;
+  }
+  .interview{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:14px 16px;
+    margin:10px 0;
+  }
+  .interview b{color:var(--marker);}
+  .why{
+    background:var(--marker-soft);
+    border-left:4px solid var(--marker);
+    padding:10px 16px;
+    margin:14px 0;
+    font-size:15px;
+  }
+  code{
+    background:#eee6d2;
+    padding:1px 4px;
+    border-radius:3px;
+    font-size:.92em;
+  }
+  @media(max-width:650px){
+    .concept-grid{grid-template-columns:1fr;}
+    .map-node:not(:last-child)::after{display:none;}
+    .spectrum-row{grid-template-columns:105px 1fr 38px;}
+  }
+
+    .concept-chart{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;}
+    .concept-chart .concept-step{background:#fbf8ef;border:1px solid var(--paper-line);padding:12px 14px;position:relative;}
+    .concept-chart .concept-step .step-no{font-family:'Kalam',cursive;color:var(--coral);font-size:15px;}
+    .concept-chart .concept-step .step-title{font-family:'Patrick Hand',cursive;color:#1e3c66;font-size:17px;line-height:1.25;margin-top:3px;}
+    @media(max-width:600px){.concept-chart{grid-template-columns:1fr;}}
+    </style></head>
+<body><div class="page"><div class="cover"><div class="eyebrow">detailed visual study pack</div>
+<h1 class="title">Google SRE Book — Detailed Readable Summaries</h1><p class="subtitle">40 substantive notebooks: 34 numbered chapters and Appendices A–F. Technical chapters retain mechanisms, failure modes, examples, and quantitative reasoning rather than collapsing to flash-card notes.</p>
+<div class="source-note">Every notebook is intended to be read as a condensed chapter: explanatory prose first, then diagrams/charts, source calculations where useful, interview questions, and recap.</div></div>
+<section class="card"><div class="tab">contents</div><h2>Chapter files</h2>
+<table class="recap"><tr><th>#</th><th>Topic</th><th>Approx. words</th></tr><tr><td>1</td><td><a href="01-introduction.html">Introduction</a></td><td>1,086</td></tr><tr><td>2</td><td><a href="02-the-production-environment-at-google-from-the-viewpoint-of-an-sre.html">The Production Environment at Google, from the Viewpoint of an SRE</a></td><td>1,228</td></tr><tr><td>3</td><td><a href="03-embracing-risk.html">Embracing Risk</a></td><td>1,208</td></tr><tr><td>4</td><td><a href="04-service-level-objectives.html">Service Level Objectives</a></td><td>1,166</td></tr><tr><td>5</td><td><a href="05-eliminating-toil.html">Eliminating Toil</a></td><td>1,207</td></tr><tr><td>6</td><td><a href="06-monitoring-distributed-systems.html">Monitoring Distributed Systems</a></td><td>1,209</td></tr><tr><td>7</td><td><a href="07-the-evolution-of-automation-at-google.html">The Evolution of Automation at Google</a></td><td>1,188</td></tr><tr><td>8</td><td><a href="08-release-engineering.html">Release Engineering</a></td><td>1,156</td></tr><tr><td>9</td><td><a href="09-simplicity.html">Simplicity</a></td><td>1,018</td></tr><tr><td>10</td><td><a href="10-practical-alerting-from-time-series-data.html">Practical Alerting from Time-Series Data</a></td><td>1,149</td></tr><tr><td>11</td><td><a href="11-being-on-call.html">Being On-Call</a></td><td>966</td></tr><tr><td>12</td><td><a href="12-effective-troubleshooting.html">Effective Troubleshooting</a></td><td>991</td></tr><tr><td>13</td><td><a href="13-emergency-response.html">Emergency Response</a></td><td>976</td></tr><tr><td>14</td><td><a href="14-managing-incidents.html">Managing Incidents</a></td><td>1,025</td></tr><tr><td>15</td><td><a href="15-postmortem-culture-learning-from-failure.html">Postmortem Culture: Learning from Failure</a></td><td>927</td></tr><tr><td>16</td><td><a href="16-tracking-outages.html">Tracking Outages</a></td><td>998</td></tr><tr><td>17</td><td><a href="17-testing-for-reliability.html">Testing for Reliability</a></td><td>1,107</td></tr><tr><td>18</td><td><a href="18-software-engineering-in-sre.html">Software Engineering in SRE</a></td><td>993</td></tr><tr><td>19</td><td><a href="19-load-balancing-at-the-frontend.html">Load Balancing at the Frontend</a></td><td>978</td></tr><tr><td>20</td><td><a href="20-load-balancing-in-the-datacenter.html">Load Balancing in the Datacenter</a></td><td>958</td></tr><tr><td>21</td><td><a href="21-handling-overload.html">Handling Overload</a></td><td>1,810</td></tr><tr><td>22</td><td><a href="22-addressing-cascading-failures.html">Addressing Cascading Failures</a></td><td>1,408</td></tr><tr><td>23</td><td><a href="23-managing-critical-state-distributed-consensus-for-reliability.html">Managing Critical State: Distributed Consensus for Reliability</a></td><td>1,167</td></tr><tr><td>24</td><td><a href="24-distributed-periodic-scheduling-with-cron.html">Distributed Periodic Scheduling with Cron</a></td><td>1,016</td></tr><tr><td>25</td><td><a href="25-data-processing-pipelines.html">Data Processing Pipelines</a></td><td>1,178</td></tr><tr><td>26</td><td><a href="26-data-integrity-what-you-read-is-what-you-wrote.html">Data Integrity: What You Read Is What You Wrote</a></td><td>1,216</td></tr><tr><td>27</td><td><a href="27-reliable-product-launches-at-scale.html">Reliable Product Launches at Scale</a></td><td>1,034</td></tr><tr><td>28</td><td><a href="28-accelerating-sres-to-on-call-and-beyond.html">Accelerating SREs to On-Call and Beyond</a></td><td>935</td></tr><tr><td>29</td><td><a href="29-dealing-with-interrupts.html">Dealing with Interrupts</a></td><td>1,015</td></tr><tr><td>30</td><td><a href="30-embedding-an-sre-to-recover-from-operational-overload.html">Embedding an SRE to Recover from Operational Overload</a></td><td>921</td></tr><tr><td>31</td><td><a href="31-communication-and-collaboration-in-sre.html">Communication and Collaboration in SRE</a></td><td>981</td></tr><tr><td>32</td><td><a href="32-the-evolving-sre-engagement-model.html">The Evolving SRE Engagement Model</a></td><td>1,053</td></tr><tr><td>33</td><td><a href="33-lessons-learned-from-other-industries.html">Lessons Learned from Other Industries</a></td><td>1,045</td></tr><tr><td>34</td><td><a href="34-conclusion.html">Conclusion</a></td><td>775</td></tr><tr><td>35</td><td><a href="35-appendix-a-availability-table.html">Appendix A — Availability Table</a></td><td>596</td></tr><tr><td>36</td><td><a href="36-appendix-b-a-collection-of-best-practices-for-production-services.html">Appendix B — A Collection of Best Practices for Production Services</a></td><td>840</td></tr><tr><td>37</td><td><a href="37-appendix-c-example-incident-state-document.html">Appendix C — Example Incident State Document</a></td><td>637</td></tr><tr><td>38</td><td><a href="38-appendix-d-example-postmortem.html">Appendix D — Example Postmortem</a></td><td>772</td></tr><tr><td>39</td><td><a href="39-appendix-e-launch-coordination-checklist.html">Appendix E — Launch Coordination Checklist</a></td><td>715</td></tr><tr><td>40</td><td><a href="40-appendix-f-example-production-meeting-minutes.html">Appendix F — Example Production Meeting Minutes</a></td><td>706</td></tr></table></section>
+<footer>Google SRE Book — Detailed Readable Summaries</footer></div></body></html>

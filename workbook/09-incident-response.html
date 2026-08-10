@@ -1,0 +1,346 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Incident Response — Study Notebook</title><style>
+  @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root{
+    --paper:#F6F1E4;
+    --paper-line:#DED4B8;
+    --ink:#242121;
+    --ink-soft:#5B564C;
+    --marker:#2F5FA8;
+    --marker-soft:#DCE6F4;
+    --coral:#B84B2A;
+    --coral-soft:#F4E1D6;
+    --moss:#4C6B4F;
+    --moss-soft:#E1E9DD;
+    --tab:#EFC94C;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#E7DEC7;
+    font-family:'Source Serif 4', Georgia, serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    padding:32px 12px 80px;
+  }
+
+  .page{
+    max-width:860px;
+    width:100%;
+  }
+
+  .cover{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line), 0 18px 40px -20px rgba(0,0,0,.35);
+    padding:44px 40px 36px;
+    margin-bottom:22px;
+    position:relative;
+  }
+  .eyebrow{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:15px;
+    letter-spacing:.04em;
+  }
+  h1.title{
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:clamp(30px,4.4vw,44px);
+    margin:6px 0 4px;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .subtitle{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:60ch;
+    margin:8px 0 18px;
+  }
+  .source-note{
+    font-family:'Patrick Hand', cursive;
+    font-size:14.5px;
+    background:var(--marker-soft);
+    border:1px dashed var(--marker);
+    padding:10px 14px;
+    display:inline-block;
+    color:#1e3c66;
+    transform:rotate(-0.4deg);
+  }
+  .source-note a{color:#1e3c66;}
+
+  section.card{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line);
+    padding:30px 38px;
+    margin-bottom:16px;
+    position:relative;
+  }
+
+  .tab{
+    position:absolute;
+    top:-14px;
+    left:34px;
+    background:var(--tab);
+    color:#3a2c05;
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:13.5px;
+    padding:5px 14px 6px;
+    box-shadow:0 3px 6px rgba(0,0,0,.18);
+    transform:rotate(-1.2deg);
+  }
+
+  h2{
+    font-family:'Kalam', cursive;
+    font-size:25px;
+    margin:10px 0 10px;
+    color:var(--ink);
+  }
+  h3{
+    font-family:'Kalam', cursive;
+    font-size:18.5px;
+    margin:22px 0 6px;
+    color:var(--marker);
+  }
+  p{ line-height:1.62; font-size:16px; margin:10px 0; }
+  ul, ol{ line-height:1.6; font-size:16px; padding-left:22px;}
+  li{margin:4px 0;}
+  strong{color:var(--ink);}
+
+  .callout{
+    background:var(--moss-soft);
+    border-left:4px solid var(--moss);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .callout b{color:var(--moss);}
+
+  .fails{
+    background:var(--coral-soft);
+    border-left:4px solid var(--coral);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .fails b{color:var(--coral);}
+
+  .math{
+    font-family:'Patrick Hand', cursive;
+    background:#fbf8ef;
+    border:1px dashed #b8ac86;
+    padding:10px 16px;
+    font-size:16.5px;
+    margin:10px 0;
+    color:#3a3527;
+  }
+
+  .diagram-wrap{
+    margin:18px 0 6px;
+    text-align:center;
+  }
+  .diagram-wrap svg{ max-width:100%; height:auto; }
+  .diagram-caption{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14.5px;
+    margin-top:4px;
+  }
+
+  .sketch-font{ font-family:'Patrick Hand', cursive; }
+
+  table.recap{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+    margin:12px 0;
+  }
+  table.recap th, table.recap td{
+    border:1px solid var(--paper-line);
+    padding:8px 10px;
+    text-align:left;
+    vertical-align:top;
+  }
+  table.recap th{
+    background:var(--marker-soft);
+    font-family:'Kalam', cursive;
+    color:#1e3c66;
+  }
+
+  .four-q{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin:14px 0;
+  }
+  .qbox{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:12px 14px;
+  }
+  .qbox .qnum{
+    font-family:'Kalam', cursive;
+    color:var(--coral);
+    font-size:17px;
+  }
+  .qbox p{margin:4px 0 0; font-size:14.5px;}
+
+  footer{
+    text-align:center;
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14px;
+    margin-top:28px;
+  }
+  @media (max-width:600px){
+    .cover, section.card{padding:24px 20px;}
+    .four-q{grid-template-columns:1fr;}
+  }
+
+
+  .concept-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin:14px 0;
+  }
+  .concept-box{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:13px 15px;
+  }
+  .concept-box h4{
+    font-family:'Kalam',cursive;
+    color:var(--marker);
+    margin:0 0 5px;
+    font-size:17px;
+  }
+  .concept-box p{font-size:14.8px;margin:0;line-height:1.52;}
+  .chapter-map{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:8px;
+    align-items:stretch;
+    margin:16px 0 8px;
+  }
+  .map-node{
+    position:relative;
+    background:#fffdf8;
+    border:2px solid var(--marker);
+    min-height:72px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:9px 8px;
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .map-node:not(:last-child)::after{
+    content:'→';
+    position:absolute;
+    right:-18px;
+    top:23px;
+    color:var(--coral);
+    font-size:25px;
+    z-index:2;
+  }
+  .spectrum{
+    display:grid;
+    gap:9px;
+    margin:14px 0;
+  }
+  .spectrum-row{
+    display:grid;
+    grid-template-columns:160px 1fr 46px;
+    gap:10px;
+    align-items:center;
+  }
+  .spectrum-label{font-size:14px;color:var(--ink-soft);}
+  .spectrum-track{
+    height:19px;
+    border:1px solid var(--paper-line);
+    background:#efe8d4;
+    position:relative;
+    overflow:hidden;
+  }
+  .spectrum-fill{
+    height:100%;
+    background:var(--marker-soft);
+    border-right:3px solid var(--marker);
+  }
+  .spectrum-value{
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .timeline{
+    border-left:3px solid var(--marker);
+    margin:14px 0 14px 13px;
+    padding-left:20px;
+  }
+  .timeline-item{
+    position:relative;
+    margin:0 0 15px;
+    padding:0 0 0 4px;
+  }
+  .timeline-item::before{
+    content:'';
+    width:11px;height:11px;border-radius:50%;
+    background:var(--coral);
+    position:absolute;left:-31px;top:7px;
+    border:2px solid var(--paper);
+  }
+  .timeline-item b{font-family:'Kalam',cursive;color:var(--marker);}
+  .source-derived{
+    font-family:'Patrick Hand',cursive;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    border-top:1px dashed var(--paper-line);
+    margin-top:12px;
+    padding-top:7px;
+  }
+  .interview{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:14px 16px;
+    margin:10px 0;
+  }
+  .interview b{color:var(--marker);}
+  .why{
+    background:var(--marker-soft);
+    border-left:4px solid var(--marker);
+    padding:10px 16px;
+    margin:14px 0;
+    font-size:15px;
+  }
+  code{
+    background:#eee6d2;
+    padding:1px 4px;
+    border-radius:3px;
+    font-size:.92em;
+  }
+  @media(max-width:650px){
+    .concept-grid{grid-template-columns:1fr;}
+    .map-node:not(:last-child)::after{display:none;}
+    .spectrum-row{grid-template-columns:105px 1fr 38px;}
+  }
+
+    .concept-chart{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;}
+    .concept-chart .concept-step{background:#fbf8ef;border:1px solid var(--paper-line);padding:12px 14px;position:relative;}
+    .concept-chart .concept-step .step-no{font-family:'Kalam',cursive;color:var(--coral);font-size:15px;}
+    .concept-chart .concept-step .step-title{font-family:'Patrick Hand',cursive;color:#1e3c66;font-size:17px;line-height:1.25;margin-top:3px;}
+    @media(max-width:600px){.concept-chart{grid-template-columns:1fr;}}
+    </style></head><body><div class="page">
+    <div class="cover">
+      <div class="eyebrow">Google SRE Workbook · Chapter 9</div>
+      <h1 class="title">Incident Response</h1>
+      <p class="subtitle">Incident response separates two simultaneous problems: restoring the service and coordinating the people restoring it. The chapter adapts Incident Command System ideas into Google/PagerDuty practice, emphasizing early declaration, explicit roles, centralized communication, generic mitigation, and mitigation before root-cause perfection.</p>
+      <div class="source-note">📖 Based on the official Google SRE source: <a href="https://sre.google/workbook/incident-response/" target="_blank">https://sre.google/workbook/incident-response/</a>. This is a careful paraphrased study summary. Diagrams and charts are original study visuals.</div>
+    </div>
+    <section class="card"><div class="tab">map</div><h2>How the chapter fits together</h2><p>Read this diagram as the chapter’s argument, not just as a list of keywords. Each step creates the need for the next one.</p><div class="diagram-wrap"><svg viewBox="0 0 719 234" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive"><defs><marker id="mapArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#B84B2A"/></marker></defs><rect x="20" y="20" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Detect impact</tspan></text><rect x="257" y="20" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Declare incident</tspan></text><rect x="494" y="20" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Assign IC/Ops/Comms</tspan></text><rect x="20" y="134" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Mitigate</tspan></text><rect x="257" y="134" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="166" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Coordinate</tspan><tspan x="360" dy="18">investigations</tspan></text><rect x="494" y="134" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="166" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Root cause +</tspan><tspan x="596" dy="18">postmortem</tspan></text><path d="M 229 56 L 249 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 56 L 486 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 596 95 L 596 110 L 122 110 L 122 126" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 229 170 L 249 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 170 L 486 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/></svg><div class="diagram-caption">original study sketch — redraw this flow from memory after reading</div></div></section><section class="card"><div class="tab">chart</div><h2>Chapter structure at a glance</h2><p>This chart mirrors the explanatory sections below. It is useful for navigation first; after reading, use it as a recall checklist.</p><div class="concept-chart"><div class="concept-step"><div class="step-no">01</div><div class="step-title">Why incident management exists</div></div><div class="concept-step"><div class="step-no">02</div><div class="step-title">Incident Commander, Operations Lead, Communications Lead</div></div><div class="concept-step"><div class="step-no">03</div><div class="step-title">Case study: Google Home and the cost of not declaring early</div></div><div class="concept-step"><div class="step-no">04</div><div class="step-title">Case study: GKE and the value of formal structure</div></div><div class="concept-step"><div class="step-no">05</div><div class="step-title">Mitigate first; root cause second</div></div><div class="concept-step"><div class="step-no">06</div><div class="step-title">What a mature incident process looks like</div></div></div></section><section class="card"><div class="tab">visual</div><h2>Incident maturity</h2><div class="spectrum"><div class="spectrum-row"><div class="spectrum-label">Early declaration</div><div class="spectrum-track"><div class="spectrum-fill" style="width:100%"></div></div><div class="spectrum-value">5</div></div><div class="spectrum-row"><div class="spectrum-label">Role clarity</div><div class="spectrum-track"><div class="spectrum-fill" style="width:100%"></div></div><div class="spectrum-value">5</div></div><div class="spectrum-row"><div class="spectrum-label">Centralized communication</div><div class="spectrum-track"><div class="spectrum-fill" style="width:100%"></div></div><div class="spectrum-value">5</div></div><div class="spectrum-row"><div class="spectrum-label">Generic mitigation</div><div class="spectrum-track"><div class="spectrum-fill" style="width:100%"></div></div><div class="spectrum-value">5</div></div><div class="spectrum-row"><div class="spectrum-label">Root-cause depth</div><div class="spectrum-track"><div class="spectrum-fill" style="width:80%"></div></div><div class="spectrum-value">4</div></div></div><div class="diagram-caption">Root cause matters, but during active user impact, mitigation and coordination dominate.</div></section><section class="card"><div class="tab">01 — structure</div><h2>Why incident management exists</h2><p>An outage involving several people or teams creates a second failure mode: coordination itself can break. Engineers duplicate work, apply conflicting changes, repeatedly explain the situation to new arrivals, or fail to communicate externally.</p><p>The chapter distinguishes <strong>resolving</strong> an incident—mitigating impact and restoring service—from <strong>managing</strong> an incident—coordinating responders and information flow.</p><p>Google’s approach derives from Incident Command System practices. The framework is useful because teams agree on roles and communication before the emergency, leaving more cognitive capacity for the technical problem.</p><div class="callout"><b>The 3 Cs:</b> coordinate the response, communicate clearly, and maintain control.</div></section><section class="card"><div class="tab">02 — roles</div><h2>Incident Commander, Operations Lead, Communications Lead</h2><p>The <strong>Incident Commander (IC)</strong> owns the high-level response. The IC coordinates work, delegates roles, keeps the response controlled, and ensures communication happens. The IC is not required to be the most technically knowledgeable person or the person typing commands.</p><p>The <strong>Operations Lead</strong> directs technical mitigation and investigation. Multiple technical task forces can report through this role.</p><p>The <strong>Communications Lead</strong> maintains updates for responders and stakeholders and absorbs requests for status that would otherwise interrupt technical responders.</p><p>Roles can expand, contract, or be handed off as the incident changes. Explicit handoff matters because ambiguity over who is in command is itself operational risk.</p><table class="recap"><tr><th>Role</th><th>Primary job</th><th>Should avoid</th></tr><tr><td>Incident Commander</td><td>Priorities, coordination, overall control</td><td>Being trapped in one debugging thread.</td></tr><tr><td>Operations Lead</td><td>Technical mitigation and investigations</td><td>Owning all communication.</td></tr><tr><td>Communications Lead</td><td>Internal/external status and inquiries</td><td>Making uncoordinated technical changes.</td></tr></table></section><section class="card"><div class="tab">03 — home</div><h2>Case study: Google Home and the cost of not declaring early</h2><p>A Google Assistant release caused speaker-recognition data to be fetched far more often than intended—roughly every 30 minutes instead of once per day. Quota increases temporarily reduced symptoms, but the release continued even though the real cause had not been identified.</p><p>As rollout reached more users, errors returned. The problem crossed a weekend while developers were not readily available, and customer reports grew. The team still treated the issue as ordinary bug-tracker troubleshooting rather than a managed incident.</p><p>This produced fragmented communication between client and server developers and repeated mitigations without a coordinated decision to stop rollout until the cause was understood.</p><p>The review concludes that early incident declaration would have centralized communication, brought relevant teams together sooner, and likely shortened the event.</p><div class="math"><b>Traffic amplification:</b><br>Expected fetch ≈ 1/day.<br>Actual fetch ≈ every 30 min = 48/day.<br>That is roughly a <strong>48× increase</strong> in this activity before considering user growth or retry effects.</div><div class="fails"><b>Operational lesson:</b> a mitigation that makes graphs green is not proof that the underlying incident is over.</div></section><section class="card"><div class="tab">04 — gke</div><h2>Case study: GKE and the value of formal structure</h2><p>A GKE incident prevented new clusters from being created in Europe. The initial on-call quickly verified user impact and declared an incident, but the response grew to many teams and specialists. At first, investigations still happened somewhat independently.</p><p>When a more experienced responder took incident command, the team formalized roles: IC, Ops Lead, Communications Lead, external communications, and multiple task forces. A shared working document became the place for detailed debugging while the chat channel became the decision hub.</p><p>The apparent clue was a corrupted container image, but the deeper issue involved a cached copy in Google Container Registry. This is a useful reminder that the most visible upstream dependency can be a distraction.</p><p>The outage lasted 6 hours and 40 minutes, involved 41 people appearing in the incident channel, six on-call teams plus additional specialists, and produced 28 action items. Structure was necessary because no single engineer could hold the complete system in their head.</p><div class="callout"><b>Scaling rule:</b> as the number of responders grows, coordination overhead grows faster than linearly unless the work is partitioned and information is centralized.</div></section><section class="card"><div class="tab">05 — mitigation</div><h2>Mitigate first; root cause second</h2><p>The chapter explicitly orders active incident work: assess impact, mitigate impact, perform root-cause analysis, then after recovery fix the underlying problem and write the postmortem.</p><p>Generic mitigations are prebuilt blunt tools that reduce user pain without requiring a precise diagnosis: rollback a recent release, drain a region, disable a feature, fail over, or add safe capacity. They can have side effects, but they are valuable because they are available early.</p><p>In the GKE case, a generic rollback to a known-good image path could have reduced user impact before the exact cache behavior was fully understood. The right time to build those tools is before the emergency.</p><p>Customers care first that errors stop. SRE should not keep users in an outage merely because engineers want intellectual certainty.</p><div class="chapter-map"><div class="map-node">Assess impact</div><div class="map-node">Apply safe generic mitigation</div><div class="map-node">Stabilize service</div><div class="map-node">Deep diagnosis</div><div class="map-node">Permanent fix</div><div class="map-node">Postmortem / drill</div></div></section><section class="card"><div class="tab">06 — prepared</div><h2>What a mature incident process looks like</h2><p>Declare early and downgrade later if necessary. Use one communication hub and one shared state document. Assign owners to independent work streams. Keep a timeline of observations, decisions, mitigations, and results.</p><p>Perform risky rollouts during times when the people needed to respond are actually available, or provide explicit on-call coverage.</p><p>After the incident, build the generic mitigations and diagnostics that would have shortened it, then exercise them in drills. Incident response is therefore not only a process; it is a source of engineering requirements.</p><div class="fails"><b>Anti-pattern:</b> dozens of experts join a chat, each investigates a plausible cause, and nobody owns the overall decision about what to do next.</div></section><section class="card"><div class="tab">interview</div><h2>Questions you should be able to explain aloud</h2><p>These are not trivia questions. A strong answer explains the mechanism, the reason for it, and the trade-off.</p><div class="concept-grid"><div class="concept-box"><h4>Question 1</h4><p>When should you declare an incident rather than keep using normal bug tracking?</p></div><div class="concept-box"><h4>Question 2</h4><p>What is the Incident Commander doing while engineers debug?</p></div><div class="concept-box"><h4>Question 3</h4><p>Why can a generic mitigation be better than a precise fix during an active outage?</p></div><div class="concept-box"><h4>Question 4</h4><p>What did the Google Home and GKE cases teach differently?</p></div></div></section><section class="card"><div class="tab">recap</div><h2>Chapter recap</h2><p>Use this table only after reading the chapter summary. It is a retrieval aid, not a substitute for the explanation above.</p><table class="recap"><tr><th>Idea</th><th>What to remember</th></tr><tr><td>3 Cs</td><td>Coordinate, communicate, maintain control.</td></tr><tr><td>IC</td><td>Owns priorities and coordination.</td></tr><tr><td>Ops Lead</td><td>Owns technical response.</td></tr><tr><td>Comms Lead</td><td>Owns status flow.</td></tr><tr><td>Generic mitigation</td><td>Fast, prebuilt action that reduces impact before exact diagnosis.</td></tr><tr><td>Order</td><td>Assess → mitigate → root cause → permanent fix/postmortem.</td></tr></table></section><footer>Study summary · Incident Response · source material © Google/O’Reilly under the source site’s stated license</footer></div></body></html>

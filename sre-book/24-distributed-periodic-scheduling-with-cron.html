@@ -1,0 +1,346 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Distributed Periodic Scheduling with Cron — Study Notebook</title><style>
+  @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root{
+    --paper:#F6F1E4;
+    --paper-line:#DED4B8;
+    --ink:#242121;
+    --ink-soft:#5B564C;
+    --marker:#2F5FA8;
+    --marker-soft:#DCE6F4;
+    --coral:#B84B2A;
+    --coral-soft:#F4E1D6;
+    --moss:#4C6B4F;
+    --moss-soft:#E1E9DD;
+    --tab:#EFC94C;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#E7DEC7;
+    font-family:'Source Serif 4', Georgia, serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    padding:32px 12px 80px;
+  }
+
+  .page{
+    max-width:860px;
+    width:100%;
+  }
+
+  .cover{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line), 0 18px 40px -20px rgba(0,0,0,.35);
+    padding:44px 40px 36px;
+    margin-bottom:22px;
+    position:relative;
+  }
+  .eyebrow{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:15px;
+    letter-spacing:.04em;
+  }
+  h1.title{
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:clamp(30px,4.4vw,44px);
+    margin:6px 0 4px;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .subtitle{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:60ch;
+    margin:8px 0 18px;
+  }
+  .source-note{
+    font-family:'Patrick Hand', cursive;
+    font-size:14.5px;
+    background:var(--marker-soft);
+    border:1px dashed var(--marker);
+    padding:10px 14px;
+    display:inline-block;
+    color:#1e3c66;
+    transform:rotate(-0.4deg);
+  }
+  .source-note a{color:#1e3c66;}
+
+  section.card{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line);
+    padding:30px 38px;
+    margin-bottom:16px;
+    position:relative;
+  }
+
+  .tab{
+    position:absolute;
+    top:-14px;
+    left:34px;
+    background:var(--tab);
+    color:#3a2c05;
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:13.5px;
+    padding:5px 14px 6px;
+    box-shadow:0 3px 6px rgba(0,0,0,.18);
+    transform:rotate(-1.2deg);
+  }
+
+  h2{
+    font-family:'Kalam', cursive;
+    font-size:25px;
+    margin:10px 0 10px;
+    color:var(--ink);
+  }
+  h3{
+    font-family:'Kalam', cursive;
+    font-size:18.5px;
+    margin:22px 0 6px;
+    color:var(--marker);
+  }
+  p{ line-height:1.62; font-size:16px; margin:10px 0; }
+  ul, ol{ line-height:1.6; font-size:16px; padding-left:22px;}
+  li{margin:4px 0;}
+  strong{color:var(--ink);}
+
+  .callout{
+    background:var(--moss-soft);
+    border-left:4px solid var(--moss);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .callout b{color:var(--moss);}
+
+  .fails{
+    background:var(--coral-soft);
+    border-left:4px solid var(--coral);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .fails b{color:var(--coral);}
+
+  .math{
+    font-family:'Patrick Hand', cursive;
+    background:#fbf8ef;
+    border:1px dashed #b8ac86;
+    padding:10px 16px;
+    font-size:16.5px;
+    margin:10px 0;
+    color:#3a3527;
+  }
+
+  .diagram-wrap{
+    margin:18px 0 6px;
+    text-align:center;
+  }
+  .diagram-wrap svg{ max-width:100%; height:auto; }
+  .diagram-caption{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14.5px;
+    margin-top:4px;
+  }
+
+  .sketch-font{ font-family:'Patrick Hand', cursive; }
+
+  table.recap{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+    margin:12px 0;
+  }
+  table.recap th, table.recap td{
+    border:1px solid var(--paper-line);
+    padding:8px 10px;
+    text-align:left;
+    vertical-align:top;
+  }
+  table.recap th{
+    background:var(--marker-soft);
+    font-family:'Kalam', cursive;
+    color:#1e3c66;
+  }
+
+  .four-q{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin:14px 0;
+  }
+  .qbox{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:12px 14px;
+  }
+  .qbox .qnum{
+    font-family:'Kalam', cursive;
+    color:var(--coral);
+    font-size:17px;
+  }
+  .qbox p{margin:4px 0 0; font-size:14.5px;}
+
+  footer{
+    text-align:center;
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14px;
+    margin-top:28px;
+  }
+  @media (max-width:600px){
+    .cover, section.card{padding:24px 20px;}
+    .four-q{grid-template-columns:1fr;}
+  }
+
+
+  .concept-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin:14px 0;
+  }
+  .concept-box{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:13px 15px;
+  }
+  .concept-box h4{
+    font-family:'Kalam',cursive;
+    color:var(--marker);
+    margin:0 0 5px;
+    font-size:17px;
+  }
+  .concept-box p{font-size:14.8px;margin:0;line-height:1.52;}
+  .chapter-map{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:8px;
+    align-items:stretch;
+    margin:16px 0 8px;
+  }
+  .map-node{
+    position:relative;
+    background:#fffdf8;
+    border:2px solid var(--marker);
+    min-height:72px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:9px 8px;
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .map-node:not(:last-child)::after{
+    content:'→';
+    position:absolute;
+    right:-18px;
+    top:23px;
+    color:var(--coral);
+    font-size:25px;
+    z-index:2;
+  }
+  .spectrum{
+    display:grid;
+    gap:9px;
+    margin:14px 0;
+  }
+  .spectrum-row{
+    display:grid;
+    grid-template-columns:160px 1fr 46px;
+    gap:10px;
+    align-items:center;
+  }
+  .spectrum-label{font-size:14px;color:var(--ink-soft);}
+  .spectrum-track{
+    height:19px;
+    border:1px solid var(--paper-line);
+    background:#efe8d4;
+    position:relative;
+    overflow:hidden;
+  }
+  .spectrum-fill{
+    height:100%;
+    background:var(--marker-soft);
+    border-right:3px solid var(--marker);
+  }
+  .spectrum-value{
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .timeline{
+    border-left:3px solid var(--marker);
+    margin:14px 0 14px 13px;
+    padding-left:20px;
+  }
+  .timeline-item{
+    position:relative;
+    margin:0 0 15px;
+    padding:0 0 0 4px;
+  }
+  .timeline-item::before{
+    content:'';
+    width:11px;height:11px;border-radius:50%;
+    background:var(--coral);
+    position:absolute;left:-31px;top:7px;
+    border:2px solid var(--paper);
+  }
+  .timeline-item b{font-family:'Kalam',cursive;color:var(--marker);}
+  .source-derived{
+    font-family:'Patrick Hand',cursive;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    border-top:1px dashed var(--paper-line);
+    margin-top:12px;
+    padding-top:7px;
+  }
+  .interview{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:14px 16px;
+    margin:10px 0;
+  }
+  .interview b{color:var(--marker);}
+  .why{
+    background:var(--marker-soft);
+    border-left:4px solid var(--marker);
+    padding:10px 16px;
+    margin:14px 0;
+    font-size:15px;
+  }
+  code{
+    background:#eee6d2;
+    padding:1px 4px;
+    border-radius:3px;
+    font-size:.92em;
+  }
+  @media(max-width:650px){
+    .concept-grid{grid-template-columns:1fr;}
+    .map-node:not(:last-child)::after{display:none;}
+    .spectrum-row{grid-template-columns:105px 1fr 38px;}
+  }
+
+    .concept-chart{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;}
+    .concept-chart .concept-step{background:#fbf8ef;border:1px solid var(--paper-line);padding:12px 14px;position:relative;}
+    .concept-chart .concept-step .step-no{font-family:'Kalam',cursive;color:var(--coral);font-size:15px;}
+    .concept-chart .concept-step .step-title{font-family:'Patrick Hand',cursive;color:#1e3c66;font-size:17px;line-height:1.25;margin-top:3px;}
+    @media(max-width:600px){.concept-chart{grid-template-columns:1fr;}}
+    </style></head><body><div class="page">
+    <div class="cover">
+      <div class="eyebrow">Google Site Reliability Engineering Book · Chapter 24</div>
+      <h1 class="title">Distributed Periodic Scheduling with Cron</h1>
+      <p class="subtitle">Cron looks trivial on one machine but becomes a distributed-systems problem when schedules must survive machine failure and launching a logical job requires multiple remote operations. The chapter focuses on durable schedule state, leader election, partial launches, idempotency, ownership, and the semantics of duplicate versus missed executions.</p>
+      <div class="source-note">📖 Based on the official Google SRE source: <a href="https://sre.google/sre-book/distributed-periodic-scheduling/" target="_blank">https://sre.google/sre-book/distributed-periodic-scheduling/</a>. This is a careful paraphrased study summary. Diagrams and charts are original study visuals.</div>
+    </div>
+    <section class="card"><div class="tab">map</div><h2>How the chapter fits together</h2><p>Read this diagram as the chapter’s argument, not just as a list of keywords. Each step creates the need for the next one.</p><div class="diagram-wrap"><svg viewBox="0 0 719 234" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive"><defs><marker id="mapArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#B84B2A"/></marker></defs><rect x="20" y="20" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">schedule definition</tspan></text><rect x="257" y="20" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">replicated cron state</tspan></text><rect x="494" y="20" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">leader chooses due job</tspan></text><rect x="20" y="134" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">launch via scheduler</tspan></text><rect x="257" y="134" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="166" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">record open/completed</tspan><tspan x="360" dy="18">launch</tspan></text><rect x="494" y="134" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="166" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">recover partial</tspan><tspan x="596" dy="18">failure</tspan></text><path d="M 229 56 L 249 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 56 L 486 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 596 95 L 596 110 L 122 110 L 122 126" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 229 170 L 249 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 170 L 486 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/></svg><div class="diagram-caption">original study sketch — redraw this flow from memory after reading</div></div></section><section class="card"><div class="tab">chart</div><h2>Chapter structure at a glance</h2><p>This chart mirrors the explanatory sections below. It is useful for navigation first; after reading, use it as a recall checklist.</p><div class="concept-chart"><div class="concept-step"><div class="step-no">01</div><div class="step-title">Why ordinary cron is deceptively simple</div></div><div class="concept-step"><div class="step-no">02</div><div class="step-title">Missing a run and running twice are different kinds of failure</div></div><div class="concept-step"><div class="step-no">03</div><div class="step-title">Keep a foundational scheduler&#x27;s dependency set small</div></div><div class="concept-step"><div class="step-no">04</div><div class="step-title">One leader decides launches; followers synchronously learn the decision</div></div><div class="concept-step"><div class="step-no">05</div><div class="step-title">Two synchronization points delimit a logical launch</div></div><div class="concept-step"><div class="step-no">06</div><div class="step-title">Scheduling itself can create synchronized demand</div></div></div></section><section class="card"><div class="tab">01 — single host</div><h2>Why ordinary cron is deceptively simple</h2><p>Traditional <code>crond</code> runs on one machine, reads a crontab, and launches commands at specified times or intervals.</p><p>On a single machine, its state and failure semantics are relatively easy to understand: if the host is down, jobs may be delayed or missed; if the daemon restarts, it can reload the schedule.</p><p>At datacenter scale, the scheduler must remain available when individual machines fail and must launch jobs through another distributed system such as Borg.</p></section><section class="card"><div class="tab">02 — semantics</div><h2>Missing a run and running twice are different kinds of failure</h2><p>Many cron jobs have side effects. Sending a newsletter, performing payroll, deleting expired data, or moving money is not automatically safe to repeat.</p><p>After a crash, a distributed scheduler may know that it <em>started</em> a launch but not whether all external RPCs completed. Retrying can duplicate work; not retrying can miss work.</p><p>Therefore the design must make explicit whether a job is idempotent, whether duplicate execution is acceptable, and whether the external scheduler exposes enough state to determine what actually happened.</p></section><section class="card"><div class="tab">03 — dependencies</div><h2>Keep a foundational scheduler's dependency set small</h2><p>The Google cron service stores only a small amount of schedule/launch state. The chapter argues that putting this state in a large general distributed filesystem can add high-latency small writes and creates a dependency on infrastructure whose failure may already be affecting the datacenter.</p><p>Base infrastructure such as cron should have few critical dependencies so it remains useful during partial datacenter failure.</p><p>Replicas should also be placed in diverse physical locations so a single power distribution failure cannot remove the whole cron service.</p></section><section class="card"><div class="tab">04 — leader</div><h2>One leader decides launches; followers synchronously learn the decision</h2><p>A leader replica initiates due launches. Before or during the launch, followers synchronously update the next scheduled launch time and track the launch as open.</p><p>If the leader disappears, a follower is elected. The chapter notes that election should converge faster than about one minute so scheduled work is not missed or unreasonably delayed.</p><p>The new leader then inspects all open launches and resolves any that were left halfway through.</p><div class="callout"><b>Important:</b> leader election alone is not enough. The difficult state is the set of operations the old leader may have partially performed before it died.</div></section><section class="card"><div class="tab">05 — partial failure</div><h2>Two synchronization points delimit a logical launch</h2><p>Google's design records when a launch is about to begin and when it has finished. If the leader dies between those points, the new leader knows that the launch is ambiguous and must reconcile it.</p><p>To recover correctly, at least one property is needed: external operations are idempotent and can safely be repeated, or their state can be queried unambiguously.</p><p>The chapter describes precomputing stable names for datacenter jobs and distributing those names to all cron replicas. After leader failure, the new leader can look up each expected job name and launch only the missing ones.</p></section><section class="card"><div class="tab">06 — practical load</div><h2>Scheduling itself can create synchronized demand</h2><p>Cron naturally aligns jobs on human-friendly boundaries such as the top of the hour. At scale, thousands of jobs starting together can create a thundering herd against schedulers, storage and downstream services.</p><p>Distributed scheduling therefore needs concurrency controls, distribution/jitter of work where semantics allow it, and monitoring of job lateness and launch success.</p><p>The deeper lesson is that time-based coordination is a source of correlated load.</p><div class="math">Scheduling intuition: 12,000 jobs all starting at 00:00 create 12,000 near-simultaneous launch operations. Spreading the same jobs uniformly across a 10-minute window averages only 20 launches/s. This is an illustrative smoothing calculation; whether you may jitter a job depends on its scheduling contract.</div></section><section class="card"><div class="tab">interview</div><h2>Questions you should be able to explain aloud</h2><p>These are not trivia questions. A strong answer explains the mechanism, the reason for it, and the trade-off.</p><div class="concept-grid"><div class="concept-box"><h4>Question 1</h4><p>Why is exactly-once cron difficult?</p></div><div class="concept-box"><h4>Question 2</h4><p>What should happen if the leader dies halfway through launching a job?</p></div><div class="concept-box"><h4>Question 3</h4><p>Why keep cron dependencies small?</p></div><div class="concept-box"><h4>Question 4</h4><p>How do stable job names help recovery?</p></div><div class="concept-box"><h4>Question 5</h4><p>When is idempotency sufficient?</p></div><div class="concept-box"><h4>Question 6</h4><p>Why can top-of-hour scheduling overload unrelated infrastructure?</p></div></div></section><section class="card"><div class="tab">recap</div><h2>Chapter recap</h2><p>Use this table only after reading the chapter summary. It is a retrieval aid, not a substitute for the explanation above.</p><table class="recap"><tr><th>Idea</th><th>What to remember</th></tr><tr><td>1</td><td>Distributed cron needs durable, consistent schedule state.</td></tr><tr><td>2</td><td>Duplicate and missed launches are semantic failures, not just availability failures.</td></tr><tr><td>3</td><td>Use one elected leader but replicate the launch state.</td></tr><tr><td>4</td><td>Record begin/end synchronization points.</td></tr><tr><td>5</td><td>Recovery requires idempotency or queryable external state.</td></tr><tr><td>6</td><td>Precomputed stable job identities make reconciliation possible.</td></tr><tr><td>7</td><td>Avoid synchronized launch herds.</td></tr></table></section><footer>Study summary · Distributed Periodic Scheduling with Cron · source material © Google/O’Reilly under the source site’s stated license</footer></div></body></html>

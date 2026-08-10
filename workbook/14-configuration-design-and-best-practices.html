@@ -1,0 +1,348 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Configuration Design and Best Practices — Study Notebook</title><style>
+  @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
+
+  :root{
+    --paper:#F6F1E4;
+    --paper-line:#DED4B8;
+    --ink:#242121;
+    --ink-soft:#5B564C;
+    --marker:#2F5FA8;
+    --marker-soft:#DCE6F4;
+    --coral:#B84B2A;
+    --coral-soft:#F4E1D6;
+    --moss:#4C6B4F;
+    --moss-soft:#E1E9DD;
+    --tab:#EFC94C;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#E7DEC7;
+    font-family:'Source Serif 4', Georgia, serif;
+    color:var(--ink);
+    display:flex;
+    justify-content:center;
+    padding:32px 12px 80px;
+  }
+
+  .page{
+    max-width:860px;
+    width:100%;
+  }
+
+  .cover{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line), 0 18px 40px -20px rgba(0,0,0,.35);
+    padding:44px 40px 36px;
+    margin-bottom:22px;
+    position:relative;
+  }
+  .eyebrow{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:15px;
+    letter-spacing:.04em;
+  }
+  h1.title{
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:clamp(30px,4.4vw,44px);
+    margin:6px 0 4px;
+    line-height:1.1;
+    color:var(--ink);
+  }
+  .subtitle{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:60ch;
+    margin:8px 0 18px;
+  }
+  .source-note{
+    font-family:'Patrick Hand', cursive;
+    font-size:14.5px;
+    background:var(--marker-soft);
+    border:1px dashed var(--marker);
+    padding:10px 14px;
+    display:inline-block;
+    color:#1e3c66;
+    transform:rotate(-0.4deg);
+  }
+  .source-note a{color:#1e3c66;}
+
+  section.card{
+    background:var(--paper);
+    border:1px solid var(--paper-line);
+    box-shadow:0 2px 0 var(--paper-line);
+    padding:30px 38px;
+    margin-bottom:16px;
+    position:relative;
+  }
+
+  .tab{
+    position:absolute;
+    top:-14px;
+    left:34px;
+    background:var(--tab);
+    color:#3a2c05;
+    font-family:'Kalam', cursive;
+    font-weight:700;
+    font-size:13.5px;
+    padding:5px 14px 6px;
+    box-shadow:0 3px 6px rgba(0,0,0,.18);
+    transform:rotate(-1.2deg);
+  }
+
+  h2{
+    font-family:'Kalam', cursive;
+    font-size:25px;
+    margin:10px 0 10px;
+    color:var(--ink);
+  }
+  h3{
+    font-family:'Kalam', cursive;
+    font-size:18.5px;
+    margin:22px 0 6px;
+    color:var(--marker);
+  }
+  p{ line-height:1.62; font-size:16px; margin:10px 0; }
+  ul, ol{ line-height:1.6; font-size:16px; padding-left:22px;}
+  li{margin:4px 0;}
+  strong{color:var(--ink);}
+
+  .callout{
+    background:var(--moss-soft);
+    border-left:4px solid var(--moss);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .callout b{color:var(--moss);}
+
+  .fails{
+    background:var(--coral-soft);
+    border-left:4px solid var(--coral);
+    padding:10px 16px;
+    font-size:15px;
+    margin:14px 0;
+  }
+  .fails b{color:var(--coral);}
+
+  .math{
+    font-family:'Patrick Hand', cursive;
+    background:#fbf8ef;
+    border:1px dashed #b8ac86;
+    padding:10px 16px;
+    font-size:16.5px;
+    margin:10px 0;
+    color:#3a3527;
+  }
+
+  .diagram-wrap{
+    margin:18px 0 6px;
+    text-align:center;
+  }
+  .diagram-wrap svg{ max-width:100%; height:auto; }
+  .diagram-caption{
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14.5px;
+    margin-top:4px;
+  }
+
+  .sketch-font{ font-family:'Patrick Hand', cursive; }
+
+  table.recap{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+    margin:12px 0;
+  }
+  table.recap th, table.recap td{
+    border:1px solid var(--paper-line);
+    padding:8px 10px;
+    text-align:left;
+    vertical-align:top;
+  }
+  table.recap th{
+    background:var(--marker-soft);
+    font-family:'Kalam', cursive;
+    color:#1e3c66;
+  }
+
+  .four-q{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin:14px 0;
+  }
+  .qbox{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:12px 14px;
+  }
+  .qbox .qnum{
+    font-family:'Kalam', cursive;
+    color:var(--coral);
+    font-size:17px;
+  }
+  .qbox p{margin:4px 0 0; font-size:14.5px;}
+
+  footer{
+    text-align:center;
+    font-family:'Patrick Hand', cursive;
+    color:var(--ink-soft);
+    font-size:14px;
+    margin-top:28px;
+  }
+  @media (max-width:600px){
+    .cover, section.card{padding:24px 20px;}
+    .four-q{grid-template-columns:1fr;}
+  }
+
+
+  .concept-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin:14px 0;
+  }
+  .concept-box{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:13px 15px;
+  }
+  .concept-box h4{
+    font-family:'Kalam',cursive;
+    color:var(--marker);
+    margin:0 0 5px;
+    font-size:17px;
+  }
+  .concept-box p{font-size:14.8px;margin:0;line-height:1.52;}
+  .chapter-map{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+    gap:8px;
+    align-items:stretch;
+    margin:16px 0 8px;
+  }
+  .map-node{
+    position:relative;
+    background:#fffdf8;
+    border:2px solid var(--marker);
+    min-height:72px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    padding:9px 8px;
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .map-node:not(:last-child)::after{
+    content:'→';
+    position:absolute;
+    right:-18px;
+    top:23px;
+    color:var(--coral);
+    font-size:25px;
+    z-index:2;
+  }
+  .spectrum{
+    display:grid;
+    gap:9px;
+    margin:14px 0;
+  }
+  .spectrum-row{
+    display:grid;
+    grid-template-columns:160px 1fr 46px;
+    gap:10px;
+    align-items:center;
+  }
+  .spectrum-label{font-size:14px;color:var(--ink-soft);}
+  .spectrum-track{
+    height:19px;
+    border:1px solid var(--paper-line);
+    background:#efe8d4;
+    position:relative;
+    overflow:hidden;
+  }
+  .spectrum-fill{
+    height:100%;
+    background:var(--marker-soft);
+    border-right:3px solid var(--marker);
+  }
+  .spectrum-value{
+    font-family:'Patrick Hand',cursive;
+    color:#1e3c66;
+    font-size:16px;
+  }
+  .timeline{
+    border-left:3px solid var(--marker);
+    margin:14px 0 14px 13px;
+    padding-left:20px;
+  }
+  .timeline-item{
+    position:relative;
+    margin:0 0 15px;
+    padding:0 0 0 4px;
+  }
+  .timeline-item::before{
+    content:'';
+    width:11px;height:11px;border-radius:50%;
+    background:var(--coral);
+    position:absolute;left:-31px;top:7px;
+    border:2px solid var(--paper);
+  }
+  .timeline-item b{font-family:'Kalam',cursive;color:var(--marker);}
+  .source-derived{
+    font-family:'Patrick Hand',cursive;
+    font-size:13.5px;
+    color:var(--ink-soft);
+    border-top:1px dashed var(--paper-line);
+    margin-top:12px;
+    padding-top:7px;
+  }
+  .interview{
+    background:#fbf8ef;
+    border:1px solid var(--paper-line);
+    padding:14px 16px;
+    margin:10px 0;
+  }
+  .interview b{color:var(--marker);}
+  .why{
+    background:var(--marker-soft);
+    border-left:4px solid var(--marker);
+    padding:10px 16px;
+    margin:14px 0;
+    font-size:15px;
+  }
+  code{
+    background:#eee6d2;
+    padding:1px 4px;
+    border-radius:3px;
+    font-size:.92em;
+  }
+  @media(max-width:650px){
+    .concept-grid{grid-template-columns:1fr;}
+    .map-node:not(:last-child)::after{display:none;}
+    .spectrum-row{grid-template-columns:105px 1fr 38px;}
+  }
+
+    .concept-chart{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0;}
+    .concept-chart .concept-step{background:#fbf8ef;border:1px solid var(--paper-line);padding:12px 14px;position:relative;}
+    .concept-chart .concept-step .step-no{font-family:'Kalam',cursive;color:var(--coral);font-size:15px;}
+    .concept-chart .concept-step .step-title{font-family:'Patrick Hand',cursive;color:#1e3c66;font-size:17px;line-height:1.25;margin-top:3px;}
+    @media(max-width:600px){.concept-chart{grid-template-columns:1fr;}}
+    </style></head><body><div class="page">
+    <div class="cover">
+      <div class="eyebrow">Google SRE Workbook · Chapter 14</div>
+      <h1 class="title">Configuration Design and Best Practices</h1>
+      <p class="subtitle">Configuration is a human–computer interface. A configuration system is reliable when it asks users only the decisions they can meaningfully make, provides safe defaults, prevents invalid states, and keeps low-level implementation details from leaking unnecessarily into every service owner’s workflow.</p>
+      <div class="source-note">📖 Based on the official Google SRE source: <a href="https://sre.google/workbook/configuration-design/" target="_blank">https://sre.google/workbook/configuration-design/</a>. This is a careful paraphrased study summary. Diagrams and charts are original study visuals.</div>
+    </div>
+    <section class="card"><div class="tab">map</div><h2>How the chapter fits together</h2><p>Read this diagram as the chapter’s argument, not just as a list of keywords. Each step creates the need for the next one.</p><div class="diagram-wrap"><svg viewBox="0 0 719 234" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive"><defs><marker id="mapArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#B84B2A"/></marker></defs><rect x="20" y="20" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">User goal</tspan></text><rect x="257" y="20" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="52" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Choose decisions worth</tspan><tspan x="360" dy="18">exposing</tspan></text><rect x="494" y="20" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="61" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Safe defaults</tspan></text><rect x="20" y="134" width="205" height="72" rx="7" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.2"/><text x="122" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="122" dy="0">Validate semantics</tspan></text><rect x="257" y="134" width="205" height="72" rx="7" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.2"/><text x="360" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="360" dy="0">Generate/apply config</tspan></text><rect x="494" y="134" width="205" height="72" rx="7" fill="#FBF8EF" stroke="#B84B2A" stroke-width="2.2"/><text x="596" y="175" text-anchor="middle" font-size="16" fill="#242121"><tspan x="596" dy="0">Operate safely</tspan></text><path d="M 229 56 L 249 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 56 L 486 56" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 596 95 L 596 110 L 122 110 L 122 126" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 229 170 L 249 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/><path d="M 466 170 L 486 170" stroke="#B84B2A" stroke-width="2.5" fill="none" marker-end="url(#mapArrow)"/></svg><div class="diagram-caption">original study sketch — redraw this flow from memory after reading</div></div></section><section class="card"><div class="tab">chart</div><h2>Chapter structure at a glance</h2><p>This chart mirrors the explanatory sections below. It is useful for navigation first; after reading, use it as a recall checklist.</p><div class="concept-chart"><div class="concept-step"><div class="step-no">01</div><div class="step-title">Configuration is part of your product interface</div></div><div class="concept-step"><div class="step-no">02</div><div class="step-title">Ask questions close to user intent</div></div><div class="concept-step"><div class="step-no">03</div><div class="step-title">Defaults are engineering decisions</div></div><div class="concept-step"><div class="step-no">04</div><div class="step-title">Make bad configurations hard to express</div></div><div class="concept-step"><div class="step-no">05</div><div class="step-title">Configuration is a change to production</div></div><div class="concept-step"><div class="step-no">06</div><div class="step-title">Design the question before choosing the syntax</div></div><div class="concept-step"><div class="step-no">07</div><div class="step-title">A valid configuration can still be an unsafe production change</div></div></div></section><section class="card"><div class="tab">01 — perspective</div><h2>Configuration is part of your product interface</h2><p>Infrastructure engineers often think of configuration as a bag of knobs: expose internal parameters and let an expert choose values. The chapter argues for a user-centric view instead. Each knob is a question the user must answer before accomplishing the real goal. Too many questions create cognitive load, copy/paste conventions, and production mistakes.</p><p>The right design question is therefore not “what internals can we make configurable?” but “what information does the system genuinely need from the user?” If the platform can derive an implementation choice safely, it should often do so.</p></section><section class="card"><div class="tab">02 — abstraction</div><h2>Ask questions close to user intent</h2><p>A user usually understands a business or service objective better than the implementation details of a distributed system. Configuration should capture that intent where feasible. For example, an operator may understand desired redundancy, request class, or workload size more reliably than a low-level tuning constant whose correct value depends on hidden internals.</p><p>This also creates evolvability. If configuration says what the user wants rather than exactly how version 1 of the system achieves it, the implementation can improve without forcing every customer to rewrite configuration.</p><div class="callout"><b>Rule of thumb:</b> expose policy/intent when users own the decision; derive mechanism when the platform has better information.</div></section><section class="card"><div class="tab">03 — defaults</div><h2>Defaults are engineering decisions</h2><p>A default does more than save typing. It defines the behavior of users who do not understand or do not care about a particular dimension. Defaults should therefore be <strong>safe and production-appropriate</strong>, not merely convenient for the component author.</p><p>If nearly every correct configuration uses the same value, question whether the knob should exist. Removing a choice can be a reliability improvement.</p><p>Conversely, do not hide a choice that materially changes user-visible semantics. The goal is not minimum configuration at any cost; it is minimum <em>unnecessary</em> configuration.</p><table class="recap"><tr><th>Question</th><th>Good configuration behavior</th><th>Risky behavior</th></tr><tr><td>Can platform derive this safely?</td><td>Derive it or provide a strong default</td><td>Force every team to cargo-cult a magic number</td></tr><tr><td>Does the value change semantics?</td><td>Expose clearly with meaningful names</td><td>Hide a user-owned policy choice</td></tr><tr><td>Can combinations be invalid?</td><td>Express/validate constraints early</td><td>Accept anything and fail in production</td></tr><tr><td>Will implementation evolve?</td><td>Capture stable intent</td><td>Expose internal layout/algorithm details</td></tr></table></section><section class="card"><div class="tab">04 — validity</div><h2>Make bad configurations hard to express</h2><p>Syntax validation is necessary but not sufficient. A file can parse correctly while specifying an impossible or dangerous state. Validate ranges, required relationships, mutual exclusion, dependency availability, resource limits, and domain-specific rules as early as possible.</p><p>When tooling is available, improve the editing experience with schema-aware validation, linting, formatting, syntax highlighting, generated documentation, and useful error messages. Those are not cosmetic features: they move mistakes from production time to authoring time.</p></section><section class="card"><div class="tab">05 — lifecycle</div><h2>Configuration is a change to production</h2><p>A good configuration design is compatible with review, versioning, automated tests, staged rollout, observability, and rollback. A runtime knob can change the service as dramatically as a new binary.</p><p>Configuration ownership should also be clear. A central platform may own the schema while an application team owns values. The interface between those responsibilities should be explicit so failures do not turn into arguments about who understood an undocumented field.</p><div class="math">A simple way to think about configuration risk:<br>
+risk exposure grows with <strong>scope × change frequency × semantic power</strong>.<br>
+A setting changed daily across 1,000 services deserves much stronger validation and rollout controls than a local development-only option.</div></section><section class="card"><div class="tab">06 — philosophy vs mechanics</div><h2>Design the question before choosing the syntax</h2><p>The chapter separates <strong>configuration philosophy</strong> from <strong>configuration mechanics</strong>. Philosophy asks what users should have to decide, at what level of abstraction, and how common versus exceptional use cases should be represented. Mechanics asks how the answers are encoded, validated, stored, distributed, and applied.</p><p>This separation prevents teams from debating YAML versus JSON while the actual interface still asks fifty infrastructure-specific questions that users do not understand. A beautiful language cannot rescue a bad conceptual model.</p><p>The ideal direction is 'no configuration' for things the system can infer safely. Dynamic defaults—such as choosing worker count from available CPU or heap size from container memory—can remove mandatory user decisions while retaining overrides for unusual cases.</p><div class="callout"><b>Optimization target:</b> minimize total organizational time spent configuring, including reading docs, decision paralysis, mistakes, recovery, and support—not merely the number of characters in a config file.</div></section><section class="card"><div class="tab">07 — safe application</div><h2>A valid configuration can still be an unsafe production change</h2><p>Tooling should catch both syntax errors and semantic errors. A path may parse correctly but point to a nonexistent directory; a memory value may be syntactically valid but request a thousand times more RAM than exists. The best time to detect these problems is when the configuration is committed, not after rollout.</p><p>Configuration ownership and history matter during incident response. You should be able to determine who changed a setting, which exact edits were applied together, what version was previously active, and how to roll back.</p><p>For production safety, configuration changes should support gradual rollout, rollback, and automatic stopping or rollback when a change risks loss of operator control. The chapter uses examples like accidentally firewalling yourself out: if the change can destroy the control path used to revert it, the system needs an automatic escape mechanism.</p></section><section class="card"><div class="tab">interview</div><h2>Questions you should be able to explain aloud</h2><p>These are not trivia questions. A strong answer explains the mechanism, the reason for it, and the trade-off.</p><div class="concept-grid"><div class="concept-box"><h4>Question 1</h4><p>Why does the chapter call configuration a human–computer interface?</p></div><div class="concept-box"><h4>Question 2</h4><p>When should you delete a configuration knob?</p></div><div class="concept-box"><h4>Question 3</h4><p>What makes a default 'safe' rather than merely convenient?</p></div><div class="concept-box"><h4>Question 4</h4><p>How would you validate a configuration beyond checking that YAML parses?</p></div></div></section><section class="card"><div class="tab">recap</div><h2>Chapter recap</h2><p>Use this table only after reading the chapter summary. It is a retrieval aid, not a substitute for the explanation above.</p><table class="recap"><tr><th>Idea</th><th>What to remember</th></tr><tr><td>Interface</td><td>Treat configuration as a user-facing API.</td></tr><tr><td>Questions</td><td>Ask only for information the user is well positioned to provide.</td></tr><tr><td>Defaults</td><td>Use safe, common-case defaults; delete knobs that do not earn their cognitive cost.</td></tr><tr><td>Validation</td><td>Check semantic constraints before rollout, not only syntax.</td></tr><tr><td>Evolution</td><td>Prefer stable intent over low-level mechanism.</td></tr><tr><td>Operations</td><td>Version, review, test, stage, observe, and roll back configuration.</td></tr></table></section><footer>Study summary · Configuration Design and Best Practices · source material © Google/O’Reilly under the source site’s stated license</footer></div></body></html>
