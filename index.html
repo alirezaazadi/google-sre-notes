@@ -11,7 +11,7 @@
 </style>
   <link rel="stylesheet" href="assets/site.css" data-site-controls>
   <script src="assets/site.js" data-site-controls></script>
-  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+  <link rel="icon" href="assets/favicon.png" type="image/png" data-site-favicon>
 </head>
 <body>
 <div class="page">
@@ -25,7 +25,7 @@
 <section class="card">
   <div class="tab">the library</div>
   <h2>Choose a book</h2>
-  <p>Start with either collection. Each book has its own chapter index, so this root page remains stable even when individual chapter files are updated later.</p>
+ <p>Start with either collection. Each book has its own chapter index, so this root page remains stable even when individual chapter files are updated later. Every chapter has GPT and Claude versions, and you can switch between them directly from the chapter toolbar.</p>
   <div class="library-grid">
     <article class="book workbook">
       <div class="book-title">The Site Reliability Workbook</div>
@@ -63,9 +63,9 @@
 </section>
 
 <section class="card">
-  <div class="tab">deployment</div>
-  <h2>Expected folder layout</h2>
-  <div class="deploy"><strong>Put this file at the repository/site root:</strong><br><br><code>index.html</code><br><code>workbook/index.html</code><br><code>workbook/...</code><br><code>sre-book/index.html</code><br><code>sre-book/...</code><br><br>Then publish that root folder with GitHub Pages, Netlify, Cloudflare Pages, or another static-site host.</div>
+<div class="tab">project structure</div>
+<h2>Repository map</h2>
+  <div class="deploy"><strong>The index mirrors the repository root:</strong><br><br><code>index.html</code> — library landing page<br><code>sre-book/</code> — 40 Site Reliability Engineering notebooks<br><code>workbook/</code> — 25 Site Reliability Workbook notebooks<br><code>versions/claude/</code> — alternate chapter editions<br><code>assets/</code> — shared styles, controls, and favicon<br><code>scripts/</code> — integration and validation utilities</div>
 </section>
 
 <footer>Personal study interface for Google SRE materials · chapter summaries are separate from the official books</footer>

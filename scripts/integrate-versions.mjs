@@ -25,7 +25,7 @@ function injectAssets(file, assetPrefix, version = "", counterpart = "") {
   const assets = [];
 
   if (!html.includes("data-site-favicon")) {
-    assets.push(`  <link rel="icon" href="${assetPrefix}/favicon.svg" type="image/svg+xml" data-site-favicon>`);
+    assets.push(`  <link rel="icon" href="${assetPrefix}/favicon.png" type="image/png" data-site-favicon>`);
   }
 
   if (!html.includes("data-site-controls")) {
