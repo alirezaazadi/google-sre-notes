@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.13 — Emergency Response</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/13-emergency-response.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 13: Emergency Response</h1>
+    <p class="subtitle">Three real Google outages — one self-inflicted by a test, one by a config push, one by "zero means all" — and what each taught the responders.</p>
+    <div class="source-note">📖 Based on <em>Chapter 13</em> of Google's SRE book — <a href="https://sre.google/sre-book/emergency-response/" target="_blank">sre.google/sre-book/emergency-response</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="12-effective-troubleshooting.html">← Ch.12 Troubleshooting</a><a href="14-managing-incidents.html">next: Ch.14 Managing Incidents →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">first principles</div>
+    <h2>Don't panic — you're trained for exactly this</h2>
+    <p>The chapter opens with almost comically blunt reassurance: nobody is in physical danger, at worst "half the internet" is down, and you are a trained professional facing a situation you've prepared for. That's not filler — it's the emotional starting point the rest of the chapter builds on, directly connecting to Chapter 11's point about stress hormones degrading deliberate thinking. If you're overwhelmed, the correct move is simply to pull in more people — up to and including paging the entire company, if that's what the situation genuinely calls for.</p>
+    <p>Rather than more abstract theory, the chapter makes its case with three real, detailed incident case studies — each triggered a completely different way, and each yielding different lessons.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 1</div>
+    <h2>Test-induced: a "safe" experiment that wasn't</h2>
+    <p>The plan was narrowly scoped: block access to just one test database, out of a hundred, to flush out hidden dependencies nobody had documented. Within minutes, numerous unrelated services — both external and internal — started failing, some completely, some intermittently.</p>
+    <p>SRE correctly diagnosed the test as the cause and aborted immediately — but the rollback itself failed. The team pivoted in parallel: restoring permissions directly on replicas and failovers using an already-proven method, while simultaneously looping in developers to fix the actual flaw in the database client library causing the over-broad dependency. Full access was restored within an hour.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 170" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="640" height="170" fill="#FBF8EF"/>
+        <text x="20" y="24" font-size="13" font-weight="bold">what actually fixed it: two parallel tracks, not one sequential fix</text>
+        <rect x="30" y="45" width="270" height="55" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+        <text x="165" y="68" text-anchor="middle" font-size="12.5">restore permissions on</text>
+        <text x="165" y="86" text-anchor="middle" font-size="12.5">replicas + failovers (proven method)</text>
+        <rect x="330" y="45" width="270" height="55" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+        <text x="465" y="68" text-anchor="middle" font-size="12.5">devs fix the flawed</text>
+        <text x="465" y="86" text-anchor="middle" font-size="12.5">client library dependency</text>
+        <text x="320" y="135" text-anchor="middle" font-size="12.5" fill="var(--ink-soft)">recovered inside an hour, because these ran simultaneously</text>
+      </svg>
+      <div class="diagram-caption">sketch — parallel recovery tracks in the test-induced incident (original diagram)</div>
+    </div>
+    <div class="fails"><b>What actually went wrong, honestly assessed afterward:</b> the team hadn't followed their own incident response process — which existed but had only been introduced a few weeks earlier and wasn't yet well disseminated. And critically, the rollback procedure itself had never been tested ahead of time, which is precisely why it failed when actually needed and lengthened the outage. The fix wasn't "be more careful" — it was a concrete process change: <strong>rollback procedures now get tested in advance, before any large-scale test is run</strong>, not discovered to be broken in the middle of an actual emergency.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 2</div>
+    <h2>Change-induced: a routine Friday push, an untested keyword combination</h2>
+    <p>A global configuration change to Google's abuse-protection infrastructure triggered a crash-loop bug across essentially every externally-facing system simultaneously — and because Google's own internal tools depend on Google's own infrastructure, internal corporate access broke too, including for some of the very engineers who needed to respond.</p>
+    <p>The recovery timeline is worth walking through because timing is the whole story here: within 5 minutes, the engineer who made the push — noticing complaints about corporate access, still unaware of the full scope — rolled the change back on their own initiative, and services began recovering almost immediately. Only <em>after</em> that, at the 10-minute mark, did on-call formally declare an incident and begin the standard notification process.</p>
+    <div class="callout"><b>The chapter is candid about the role of luck here:</b> the push engineer happened to be watching real-time communication channels — not a formal part of the release process — and noticed the complaints fast purely by attentiveness, not by any designed safeguard. Had that not happened, the outage could have run considerably longer and been much harder to diagnose, precisely because so many of Google's own debugging and communication tools were themselves crash-looping.</div>
+    <p>Several structural safeguards did work as intended and are worth naming: reliable low-overhead out-of-band communication tools kept people connected even while primary software stacks were unusable; alternative command-line access paths let engineers push the rollback even with normal interfaces down; and the affected system's own client rate-limiting inadvertently throttled the crash-loop just enough to let jobs serve a few requests between crashes, softening what could have been a complete blackout.</p>
+    <h3>The root cause: risk-tiering the canary process itself failed</h3>
+    <p>An earlier canary of the same feature had passed cleanly — but it never happened to exercise one very specific, rare configuration keyword combined with the new feature. Because the specific change being pushed globally wasn't <em>flagged</em> as risky, it went through a lighter canary process than a "risky" change would have — and that lighter process was exactly what let the untested keyword combination slip through to a global push. The organizational lesson: work on improving canarying and automation had already been planned for the following quarter — this incident simply forced that work to become urgent immediately, rather than waiting on its prior schedule.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 3</div>
+    <h2>Process-induced: "sometimes zero does mean all"</h2>
+    <p>This is a direct callback to the Diskerase incident introduced in Chapter 7 — told here from the responders' side, not the automation-design side. Two consecutive decommission requests were submitted for the same server installation. On the second request, a subtle automation bug queried for the remaining machines, got back an <em>empty</em> result (correctly — there was nothing left to decommission from the first request), and then passed that empty result downstream as an unfiltered wildcard. The machine database interpreted "empty filter" as "everything" and began wiping every machine at every such installation, globally.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 190" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="190" fill="#FBF8EF"/>
+        <g font-size="12">
+          <rect x="20" y="40" width="180" height="55" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="110" y="63" text-anchor="middle">query: "machines</text>
+          <text x="110" y="81" text-anchor="middle">left to decommission"</text>
+          <path d="M200 67 L 230 67" stroke="#242121" stroke-width="2" marker-end="url(#a15)"/>
+          <rect x="230" y="40" width="140" height="55" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="300" y="63" text-anchor="middle" font-weight="bold">result: empty</text>
+          <text x="300" y="81" text-anchor="middle" font-size="10.5">(correctly — none left)</text>
+          <path d="M370 67 L 400 67" stroke="#242121" stroke-width="2" marker-end="url(#a15)"/>
+          <rect x="400" y="40" width="240" height="55" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2.5"/>
+          <text x="520" y="63" text-anchor="middle" font-weight="bold">passed downstream</text>
+          <text x="520" y="81" text-anchor="middle" font-size="10.5">as "no filter" = everything</text>
+        </g>
+        <text x="330" y="140" text-anchor="middle" font-size="13" fill="#B84B2A">every machine at every such installation, globally, sent to Diskerase</text>
+      </svg>
+      <div class="diagram-caption">sketch — how "empty" became "everything" (original diagram, same root cause as Ch.7's Diskerase story)</div>
+    </div>
+    <p>On-call engineers first noticed via a page when one small installation went offline — reasonable at first, since that looked like normal, expected decommission behavior. As pages started firing globally for every such installation, engineers correctly inferred the true scope and disabled team automation entirely to stop the bleeding, then drained traffic away from the affected installations toward larger sites that could absorb the load.</p>
+    <div class="callout"><b>What made this recoverable rather than catastrophic:</b> large server installations use a fundamentally different, unaffected reverse-proxy management approach than the small installations that were hit — so large sites weren't touched at all and could absorb the diverted traffic. Within an hour, all traffic was successfully redirected (with some elevated latency, but no failed requests); full physical recovery — rebuilding wiped installations from scratch — took three days for the bulk of capacity, with stragglers trickling back over the following month or two.</div>
+    <p>The chapter is specific about a second-order failure that compounded the recovery itself: reinstallation used TFTP at the lowest network priority tier, and machine BIOS handled the resulting transfer failures poorly — some halted, some entered endless reboot loops. Separately, the reinstall infrastructure had an unrelated regression limiting it to two setup tasks per worker machine, using improperly tuned QoS and timeouts, and forcing full kernel reinstalls even on some machines that didn't actually need one. Fixing <em>both</em> of those (reprioritizing installation traffic, escalating to retune the reinstall infrastructure for the unusual load) was necessary before recovery could actually proceed at a workable pace — the incident wasn't "one bug," it was one triggering bug plus two latent ones that only became visible once large-scale reinstallation was actually attempted.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the throughline</div>
+    <h2>What all three incidents share, despite completely different triggers</h2>
+    <p>The chapter deliberately picked three incidents with unrelated root causes — a test, a config push, an automation bug — specifically to show that the effective response pattern is the same regardless of cause:</p>
+    <ul>
+      <li><strong>Responders didn't panic</strong> and pulled in more people the moment the scope exceeded what they could individually handle.</li>
+      <li><strong>They leaned on whoever had the most relevant state</strong> — often, tellingly, the very person whose action triggered the incident (the push engineer who rolled back their own change within 5 minutes is the clearest example of this working well).</li>
+      <li><strong>Every incident produced a documented, concrete follow-up</strong> — untested rollback procedures got tested going forward, canary risk-tiering got revisited, automation gained sanity checks against exactly this class of "empty means everything" bug.</li>
+      <li><strong>The system got measurably harder to break the same way twice</strong> — this is the chapter's real thesis: emergency response isn't just about the hours during the incident, it's a feedback loop that makes each subsequent incident either less likely or less severe.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">looking forward</div>
+    <h2>Three concrete habits for staying ahead of the next one</h2>
+    <ul>
+      <li><strong>Keep an honest, thorough history of outages.</strong> Ask hard questions of past incidents, look for both tactical and strategic prevention — not just "how do we stop this exact bug" but "what class of bug is this, and where else might it exist" — and make sure postmortems are actually published and organized somewhere the whole company can learn from, not siloed with the team that experienced them.</li>
+      <li><strong>Ask the big, uncomfortable "what if" questions before they happen for real.</strong> What if the building loses power? What if the primary datacenter goes fully dark? What if a web server is compromised? Who do you call, who has authority to act, do you actually have a plan — and could the person sitting next to you execute that same plan without you?</li>
+      <li><strong>Test proactively, on your own schedule — not on the failure's schedule.</strong> The chapter's framing is memorable: would you rather a failure happen at 2am on a Saturday when most of the company is unreachable, or during a planned test window when your most experienced people are already watching closely and ready to respond? Theory and reality reliably diverge — you don't actually know how a system, its dependents, or your users will behave under a given failure until you've watched it happen for real.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Don't panic, pull in help early</td><td>Escalating scope is a sign of good judgment, not failure — even paging the whole company if warranted</td></tr>
+      <tr><td>Test rollback procedures in advance</td><td>An untested rollback is a second incident waiting inside the first one (case study 1)</td></tr>
+      <tr><td>Risk-tiering itself needs scrutiny</td><td>A change judged "not risky" skipped the canary rigor that would have caught it (case study 2)</td></tr>
+      <tr><td>"Empty" is not a safe default for "everything"</td><td>Automation needs explicit sanity checks against exactly this failure shape (case study 3)</td></tr>
+      <tr><td>Use whoever has the most state</td><td>Often the person who triggered the incident is best positioned to fix it fastest</td></tr>
+      <tr><td>Test proactively, on your terms</td><td>Failures found during a planned drill are cheaper than the same failure found at 2am</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 13, CC BY-NC-ND 4.0 · sre.google/sre-book/emergency-response</footer>
+</div>
+</body>
+</html>

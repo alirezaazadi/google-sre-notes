@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.3 — SLO Engineering Case Studies</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/03-slo-engineering-case-studies.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part I — Foundations</div>
+    <h1 class="title">Chapter 3: SLO Engineering Case Studies</h1>
+    <p class="subtitle">Evernote and Home Depot, two very different companies, prove SLOs aren't a Google-only idea — VALET, TPS Reports, and going from 0 to 800 SLO-tracked services in under a year.</p>
+    <div class="source-note">📖 Based on <em>Chapter 3</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/slo-engineering-case-studies/" target="_blank">sre.google/workbook/slo-engineering-case-studies</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="02-implementing-slos.html">← Ch.2 Implementing SLOs</a><a href="04-monitoring.html">next: Ch.4 Monitoring →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the premise</div>
+    <h2>Real companies, told in their own words, via Google's Customer Reliability Engineering team</h2>
+    <p>This chapter breaks from the book's usual voice — it's two first-person accounts, written directly by engineers at Evernote and The Home Depot, both of whom worked with Google's Customer Reliability Engineering (CRE) team to adopt SLOs from scratch. The chapter's framing is direct: SRE principles didn't stay confined to Google — they've been independently discovered or deliberately adopted across the industry, and these two very different companies (a 220-million-user consumer note-taking app; the world's largest home-improvement retailer with 2,200+ physical stores) reached the same underlying philosophy through genuinely different paths.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">evernote</div>
+    <h2>Evernote: from ops-vs-dev friction to a shared, calm language</h2>
+    <p>Evernote's starting point was a classic, strained ops/dev split: operations protected production, development shipped features, and the two teams' goals collided constantly — dev felt slowed by operational gates, ops got frustrated cleaning up after new code. Over five-plus years, Evernote tried both extremes — a "you wrote it, you run it" developer-owns-everything model, and a "you wrote it, we run it" pure-ops model — before landing on an SLO-centric SRE approach.</p>
+    <div class="callout"><b>The chapter's key insight about why SRE specifically appealed to them:</b> the SRE model doesn't try to turn operations engineers into developers or vice versa — it gives both a shared, objective frame of reference. An error-budget/SLO approach measurably led both teams to reach the *same* conclusions when shown the same facts, because it strips a great deal of subjectivity out of the conversation entirely.</div>
+
+    <h3>Starting simple: uptime, and nothing more</h3>
+    <p>After first migrating off physical datacenters onto Google Cloud Platform, Evernote's actual SLO journey began — and deliberately started with just one thing: <strong>availability of the core sync/access experience</strong>, since that's the single most universal need across their genuinely varied feature set. Their first SLO: <strong>99.95% uptime, measured over a calendar month</strong> — chosen deliberately over a rolling window specifically to keep monthly service reviews focused and organized.</p>
+    <p>Measurement used a status page endpoint exercising most of the real stack, probed externally and independently (via a third-party service, Pingdom) specifically so the load-balancing layer itself was included in what got tested — and specifically to avoid random internet flakiness producing false positives, a node had to fail <em>two</em> geographically separate probe checks in a row before being marked down for SLO purposes. A genuinely important documented decision: maintenance windows counted as downtime in the SLO calculation, on the reasoning that most of Evernote's hundreds of millions of users would never actually know a maintenance window was scheduled — to them, it's just unexplained downtime, so the SLO should reflect that reality rather than a technicality.</p>
+    <p>Evernote's guiding maxim through all of this: <strong>"perfect is the enemy of good."</strong> A truly comprehensive SLO covering every possible interaction and edge case would have taken months to build — time better spent actually improving the service. Their first SLO covered most, not all, user interactions, and was revised twice as real signal came in from service reviews and actual customer-impacting outages — settling into a six-month formal review cadence, balancing "too often to be stable" against "stale and irrelevant."</p>
+
+    <h3>A genuinely concrete payoff</h3>
+    <p>In 2017, while chasing a complex bug, product development needed to spread what was normally one weekly release window across multiple separate windows — each one a potential customer-impact event. Applying the SLO calculation directly to the tradeoff let the team quantify actual customer impact per option, cutting the number of release windows from five down to two — a real decision made with data instead of gut feeling.</p>
+
+    <h3>Breaking down the customer/cloud-provider wall — deliberately</h3>
+    <p>Evernote could have simply engineered against GCP's own published SLOs and stopped there — treating Google as a black box. They deliberately didn't. The problem the chapter names directly: <strong>Evernote's virtual machine footprint is a tiny fraction of GCP's global fleet</strong> — so an outage isolated specifically to Evernote's region or configuration can get statistically "lost" inside GCP's own healthy-looking global rollup number, even while Evernote's real users are actively suffering.</p>
+    <div class="callout"><b>The fix: share dashboards, not just contract terms.</b> Evernote and the Google CRE team work off the *same* live performance data. Instead of a generic "GCP load balancing is running slow today" notice, Google can tell Evernote specifically "this is causing a 5% impact to your SLO" — turning a vague platform-wide signal into something directly actionable for Evernote, and giving Google's own engineers real visibility into how their decisions actually land on this specific customer.</div>
+    <p>This shared visibility became the backbone of a genuinely powerful incident-response relationship: beyond the standard P1–P5 ticket system, both sides agreed in advance that sufficiently high SLO impact automatically triggers shared, elevated handling — a joint conference bridge, Google's CRE team actively monitoring the same jointly-defined SLO in real time, so both organizations stay synchronized on prioritization without needing to negotiate that from scratch mid-incident.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">home depot</div>
+    <h2>The Home Depot: VALET, and scaling SLO culture to 800 services</h2>
+    <p>The Home Depot's (THD) starting context was different but the underlying pain was familiar: a shift to Agile and microservices (from centralized teams supporting large monoliths) paired with a new "freedom and responsibility" culture — developers could push code whenever they wanted, but also became jointly responsible for operating what they shipped. That model only works if every team can answer basic, consistent questions about their service's reliability characteristics for whoever depends on them: how reliable are you, what latency should I expect, can you handle my traffic, how do you behave under overload?</p>
+    <p>Before this project, THD genuinely had no SLO culture at all — plentiful monitoring dashboards, but scattered, inconsistent, and not tracked over time. Troubleshooting routinely started at the user-facing layer and worked backward hop by hop, wasting real hours. Planned downtime for one service would blindside its dependents with zero warning, because nobody had a systematic way to communicate reliability expectations between teams.</p>
+
+    <h3>A four-pronged strategy: vernacular, evangelism, automation, incentive</h3>
+    <p>THD deliberately treated this as a genuine organizational change effort, not just a technical rollout — covering people, process, <em>and</em> technology together:</p>
+    <ul>
+      <li><strong>Common vernacular</strong> — define SLOs consistently in THD's own specific context before trying to spread the idea.</li>
+      <li><strong>Evangelism</strong> — training materials, internal road shows, blog posts, even branded stickers and t-shirts; enlist early-adopter teams as visible proof points; and a formal training program (FiRE Academy — Fundamentals in Reliability Engineering) ranging from a one-hour primer to an intensive four-week immersion complete with its own graduation ceremony and badge.</li>
+      <li><strong>Automation</strong> — build a metrics collection platform that automatically captures SLIs for anything deployed to production, removing the friction of manual instrumentation as an adoption blocker.</li>
+      <li><strong>Incentive</strong> — make setting and measuring SLOs an actual annual goal for every development manager, not just an optional best practice.</li>
+    </ul>
+
+    <h3>VALET — the acronym that made it spread</h3>
+    <p>Reviewing what THD's services already monitored revealed a pattern closely mirroring Google's own Four Golden Signals (Chapter 6 of the SRE book) — traffic, latency, errors, and some form of utilization — plus, separately, uptime and support-ticket volume, which had historically been the closest thing THD had to a real reliability metric. This became <strong>VALET</strong>:</p>
+    <table class="recap">
+      <tr><th>Letter</th><th>Stands for</th><th>The question it answers</th></tr>
+      <tr><td>V</td><td>Volume</td><td>How much business traffic can my service actually handle?</td></tr>
+      <tr><td>A</td><td>Availability</td><td>Is the service up when I need it?</td></tr>
+      <tr><td>L</td><td>Latency</td><td>Does it respond fast enough when I use it?</td></tr>
+      <tr><td>E</td><td>Errors</td><td>Does it throw an error when I use it?</td></tr>
+      <tr><td>T</td><td>Tickets</td><td>Does completing my request require manual human intervention?</td></tr>
+    </table>
+    <p>Some deliberate, specific decisions behind each category are worth noting: <strong>utilization was explicitly excluded</strong> from SLOs, on the reasoning that users don't actually care about a service's internal resource usage — they care whether it's up, fast, and error-free — and THD's coming move to cloud infrastructure would shift utilization concerns toward cost planning rather than capacity risk anyway. <strong>Traffic volume</strong> got an SLO specifically because THD, as a retailer, has to deliberately size for known peak events like Black Friday — an SLO here forces that peak-capacity conversation to happen ahead of time rather than being discovered live. For <strong>latency</strong>, THD standardized on percentiles over raw averages (minimum 90th percentile, with user-facing services preferring 95th/99th), and required black-box monitoring alongside white-box instrumentation specifically to catch failures introduced by the network, caches, or proxies sitting outside any individual microservice's own view. For <strong>errors</strong>, THD standardized cleanly on HTTP semantics — never encode an error inside a nominally successful 2xx body; use 5xx for the service's own fault, 4xx for the client's — and, notably, tracked both 4xx and 5xx but based SLOs specifically on 5xx only, since those represent failures the service itself is actually responsible for.</p>
+
+    <h3>Evangelizing VALET — genuinely wide-reaching, not just a slide deck</h3>
+    <p>THD's rollout ran from securing senior executive sponsorship first, down through one-on-one meetings with individual development teams, an internal WordPress blog, company Tech Talks (including an invited Google SRE speaker), open-invitation VALET training workshops that stayed well-attended for months, and — genuinely — branded laptop stickers and t-shirts as part of a real internal marketing push. A weekly VALET-format report went to senior leadership, deliberately framing familiar business metrics (purchase orders created, purchase orders that failed to process) in VALET's own vocabulary, so business language and reliability language stopped being two separate conversations.</p>
+
+    <h3>Automating collection: TPS Reports and the VALET service</h3>
+    <p>Once cultural buy-in existed (with roughly 50 services already manually reporting VALET data into a spreadsheet), THD built real automation to remove the remaining friction. <strong>TPS Reports</strong> (the name a deliberate, self-aware nod to the film <em>Office Space</em>) — built on GCP's BigQuery — automatically ingested frontend logs and other monitoring feeds (like Stackdriver's availability probes) and transformed them into hourly VALET metrics queryable by anyone, with any newly deployed service automatically registered and immediately queryable, no manual onboarding step required. A chatbot integration let any team pull a service's live VALET status directly inside a chat channel — last hour, week-over-week comparison, or a live list of every service currently out of SLO.</p>
+    <p>A separate <strong>VALET service</strong> handled longer-term trending (daily/weekly/monthly granularity) and — importantly — was kept deliberately decoupled from real-time alerting, which stayed the responsibility of each team's own existing monitoring platform. This kept VALET flexible as an organization-wide trending and reporting layer without forcing every team onto one single, rigid monitoring stack. A public-facing <strong>VALET Dashboard</strong> then let any team register a new service, set SLO targets per category, add custom metric types matching their own service's shape, and slice compliance data across many services at once — becoming the concrete foundation for regular, recurring SLO review meetings.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 190" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="190" fill="#FBF8EF"/>
+        <g font-size="12">
+          <rect x="20" y="30" width="160" height="55" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="100" y="60" text-anchor="middle" font-weight="bold" font-size="11">Frontend logs +</text>
+          <text x="100" y="75" text-anchor="middle" font-size="11">monitoring feeds</text>
+
+          <path d="M180 57 L 210 57" stroke="#242121" stroke-width="2" marker-end="url(#a25)"/>
+          <rect x="210" y="30" width="160" height="55" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="290" y="60" text-anchor="middle" font-weight="bold" font-size="11">TPS Reports</text>
+          <text x="290" y="75" text-anchor="middle" font-size="10">(BigQuery, hourly VALET)</text>
+
+          <path d="M370 57 L 400 57" stroke="#242121" stroke-width="2" marker-end="url(#a25)"/>
+          <rect x="400" y="30" width="150" height="55" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="475" y="60" text-anchor="middle" font-weight="bold" font-size="11">VALET service</text>
+          <text x="475" y="75" text-anchor="middle" font-size="10">daily/weekly/monthly trend</text>
+
+          <path d="M475 85 L 475 115" stroke="#242121" stroke-width="2" marker-end="url(#a25)"/>
+          <rect x="390" y="120" width="170" height="45" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="475" y="147" text-anchor="middle" font-weight="bold" font-size="11">VALET Dashboard</text>
+        </g>
+        <defs><marker id="a25" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — the VALET data pipeline, from raw logs to a browsable dashboard (original diagram)</div>
+    </div>
+
+    <h3>The payoff: 50 to 800 services in under a year</h3>
+    <p>Once culture, incentive, and automation were all genuinely in place together, adoption compounded fast: from roughly 50 services manually reporting at the start of the year to <strong>800 services</strong>, with about 50 new ones registering into VALET every month, by year's end. The chapter is careful to note this heavy automation investment isn't a prerequisite for other companies — it paid off specifically at THD's scale, but meaningful benefit starts the moment you simply write SLOs down at all, long before any dashboard exists.</p>
+
+    <h3>Extending VALET beyond simple request-response services</h3>
+    <p>VALET's five categories turned out to generalize cleanly to batch processing too: Volume becomes records processed; Availability becomes "did the job finish by its deadline, as a percentage of runs"; Latency becomes total job runtime; Errors becomes records that failed to process; Tickets stays the same — how often a human had to manually intervene to fix and reprocess data. THD also found VALET a natural fit for chaos-engineering-style destructive testing in staging — running a deliberate failure injection and directly observing its VALET impact (or, ideally, lack of impact) gave a concrete, standardized way to validate resilience claims rather than relying on intuition.</p>
+
+    <h3>What's still ahead</h3>
+    <p>THD's own stated next steps, at time of writing: move toward a genuine Google-style error-budget culture, where being out of SLO actually pauses new feature work in favor of reliability fixes (while still weighing rolling vs. fixed reporting windows, the same tradeoff Chapter 2 covers generally); break VALET down to the level of individual API endpoints and individual consumers, rather than one blended number per whole service; extend latency tracking all the way to genuine end-user experience (capturing third-party tags, CDN caching, and real page-render timing, not just server-side response time); gate automated rollouts on VALET staying within tolerance before proceeding to the next zone or region; and — perhaps most fundamentally — push the responsibility for actually <em>setting</em> an SLO target back onto each service's business owner, based on genuine business criticality, rather than leaving it as a purely technical decision.</p>
+    <div class="callout"><b>THD's simplified business-facing SLO tiers, offered as a concrete example of translating VALET for non-technical stakeholders:</b> 99.5% for internal tools not used by store associates or early-stage MVPs; 99.9% for most non-selling systems; 99.95% for selling systems (or anything supporting them); 99.99% for shared infrastructure. Casting the choice in plain business terms — and being explicit about the real engineering investment required to move up a tier — measurably reduced the kind of misaligned reliability expectations that plague large organizations by default.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">the shared lesson</div>
+    <h2>Same philosophy, genuinely different implementations</h2>
+    <p>The chapter's closing point is worth taking seriously: Evernote and THD share the same underlying philosophical commitment to SLOs, but arrived there through completely different concrete paths — different SLIs, different measurement styles, different rollout strategies, entirely different acronyms and tooling. Neither approach is "more correct" than the other; both were shaped by each company's own specific constraints, culture, and existing technical landscape. The lesson for any other organization reading this isn't "copy VALET" or "copy Evernote's Pingdom setup" — it's that SLO culture is a genuine, sustained journey requiring real strategy and patience, not a one-time technical fix, and that Google's own approach is one valid implementation among several, not the single canonical template everyone else must conform to.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>SLOs remove subjectivity from dev/ops conflict</td><td>Both Evernote's teams reached the same conclusions once shown the same objective data</td></tr>
+      <tr><td>"Perfect is the enemy of good"</td><td>Evernote's simple, imperfect first SLO (uptime only) still drove real, useful action — waiting for comprehensive coverage would have cost months</td></tr>
+      <tr><td>Maintenance counts as downtime if users don't know about it</td><td>An SLO should reflect what users actually experience, not what's technically "planned"</td></tr>
+      <tr><td>Share dashboards with your own dependencies</td><td>A healthy global rollup can hide a real regional or customer-specific outage — Evernote's fix was shared, not siloed, visibility with GCP</td></tr>
+      <tr><td>VALET</td><td>Volume, Availability, Latency, Errors, Tickets — THD's memorable, teachable framework for spreading SLO culture org-wide</td></tr>
+      <tr><td>Automation accelerates adoption, but isn't a prerequisite</td><td>THD scaled from 50 to 800 services via tooling — but real benefit starts the moment you simply write an SLO down</td></tr>
+      <tr><td>Translate SLOs into business language for business owners</td><td>Simplified, tiered targets (99.5% / 99.9% / 99.95% / 99.99%) made VALET intuitive for non-technical stakeholders too</td></tr>
+      <tr><td>SLO culture is a journey, not a one-time fix</td><td>Both companies revised their SLOs repeatedly as real signal came in — that iteration is the process working as intended</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 3, CC BY-NC-ND 4.0 · sre.google/workbook/slo-engineering-case-studies</footer>
+</div>
+</body>
+</html>

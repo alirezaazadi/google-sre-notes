@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.24 — Distributed Periodic Scheduling with Cron</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/24-distributed-periodic-scheduling-with-cron.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 24: Distributed Periodic Scheduling with Cron</h1>
+    <p class="subtitle">Turning a single, humble Unix daemon into a datacenter-scale service — where Chapter 23's Paxos theory becomes a real, working, "skip rather than double-launch" system.</p>
+    <div class="source-note">📖 Based on <em>Chapter 24</em> of Google's SRE book — <a href="https://sre.google/sre-book/distributed-periodic-scheduling/" target="_blank">sre.google/sre-book/distributed-periodic-scheduling</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="23-managing-critical-state-distributed-consensus-for-reliability.html">← Ch.23 Managing Critical State</a><a href="25-data-processing-pipelines.html">next: Ch.25 Data Processing Pipelines →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the starting point</div>
+    <h2>Ordinary cron: simple, and single-machine-fragile</h2>
+    <p>Classic Unix cron (<code>crond</code>) is refreshingly simple: it loads a schedule (the familiar crontab format — "every hour on the hour," or more elaborate combinations), and fires jobs at their scheduled time. Its reliability properties are equally simple, and equally limiting: <strong>the entire failure domain is one machine.</strong> If that machine is down, nothing scheduled on it runs — full stop. The only state that genuinely needs to survive a restart is the crontab configuration itself; launches themselves are fire-and-forget, with no tracking (aside from <code>anacron</code>'s narrow exception of catching up on missed daily-or-less-frequent jobs after a machine comes back).</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the core tension</div>
+    <h2>Idempotency: the property that decides how a cron job should fail</h2>
+    <p>Cron jobs vary wildly in what happens if they run twice, or not at all — and this single distinction shapes almost everything else in the chapter's design:</p>
+    <table class="recap">
+      <tr><th>Job type</th><th>Safe to double-launch?</th><th>Safe to skip?</th></tr>
+      <tr><td>Garbage collection (idempotent)</td><td>Yes — running it twice is harmless</td><td>Usually yes, if it runs again soon</td></tr>
+      <tr><td>Email newsletter blast</td><td>No — recipients get duplicate mail, likely irreversible</td><td>Depends on the business need</td></tr>
+      <tr><td>Monthly payroll run</td><td>Almost certainly not</td><td>No — must not be skipped</td></tr>
+    </table>
+    <div class="callout"><b>The chapter's guiding principle, stated directly:</b> when forced to choose, favor skipping a launch over risking a double launch. The reasoning is asymmetric — a skipped launch is usually detectable and correctable after the fact (job owners can monitor and manually trigger a catch-up run), while undoing a double launch (like that newsletter) can be genuinely impossible. This is "fail closed" applied to scheduling: when in doubt, don't create bad state you can't take back.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">going distributed</div>
+    <h2>Why running cron on one machine is unacceptable at datacenter scale</h2>
+    <p>The chapter's blunt framing: if your cron service runs on one machine out of a 1,000-machine datacenter, then a failure affecting just 0.1% of your fleet can take out cron entirely — clearly not good enough for something many other systems quietly depend on. The fix follows Chapter 2's pattern directly: decouple the process from any specific machine, and let the datacenter scheduler (Borg) handle placement and recovery from machine death.</p>
+    <p>This decoupling isn't free, though — it introduces real new problems:</p>
+    <ul>
+      <li><strong>Rescheduling isn't instant.</strong> Detecting a dead machine needs health-check timeouts; standing the process back up elsewhere needs software installation and startup time. For a cron job that runs every five minutes, even a one-to-two-minute rescheduling delay is a meaningful fraction of its whole interval — which is exactly why Google's design (below) keeps hot standby replicas ready to take over immediately, rather than relying on cold rescheduling alone.</li>
+      <li><strong>Isolation now matters.</strong> A single-machine deployment can get away with loose isolation between processes; datacenter-scale deployment means containerized isolation and upfront resource reservations — which in turn means cron needs to track a fuller lifecycle of state (scheduled → launched → terminated), not just fire-and-forget.</li>
+      <li><strong>Partial launch failure becomes a real, everyday possibility.</strong> Launching a job now often means multiple RPCs to the datacenter scheduler — and the process issuing them can die mid-sequence, leaving some RPCs sent and others not. Recovery has to explicitly account for this ambiguous middle state.</li>
+      <li><strong>The datacenter itself is a much bigger, messier failure domain than one machine.</strong> A partial power outage or storage hiccup can now be the trigger, so Google spreads cron's own replicas across diverse physical locations within the datacenter — explicitly avoiding one power distribution unit taking out the entire cron service at once.</li>
+    </ul>
+    <p>Notably, the chapter explains why cron stays confined to a <em>single</em> datacenter rather than spanning the globe: low latency to the datacenter scheduler it depends on, and — just as importantly — <strong>sharing fate</strong> with that scheduler, since cron is fundamentally useless without it anyway.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the design</div>
+    <h2>Paxos, applied to a genuinely mundane-sounding problem</h2>
+    <p>This chapter is Chapter 23's theory made concrete — Paxos isn't abstract here, it's the literal mechanism keeping multiple cron replicas in consistent agreement about exactly which jobs have launched and when.</p>
+    <p>Google's cron replicas elect one <strong>leader</strong> — and cleverly, they reuse the Fast Paxos variant's own internally-elected leader role to double as the cron service's leader, rather than running two separate leader-election processes side by side. Only the leader ever actually launches jobs or talks to the datacenter scheduler; every other replica is a <strong>follower</strong>, passively tracking state via Paxos so it can take over instantly if needed.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 220" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="220" fill="#FBF8EF"/>
+        <g font-size="12">
+          <rect x="250" y="20" width="160" height="55" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2.5"/>
+          <text x="330" y="42" text-anchor="middle" font-weight="bold">Leader</text>
+          <text x="330" y="60" text-anchor="middle" font-size="10.5">only one that launches jobs</text>
+
+          <path d="M330 75 L 330 100" stroke="#242121" stroke-width="1.5" marker-end="url(#a20)"/>
+          <text x="345" y="93" font-size="10.5">Paxos: sync</text>
+
+          <rect x="60" y="105" width="150" height="55" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="135" y="128" text-anchor="middle" font-weight="bold">Follower</text>
+          <text x="135" y="146" text-anchor="middle" font-size="10.5">tracks state, ready to lead</text>
+
+          <rect x="255" y="105" width="150" height="55" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="330" y="128" text-anchor="middle" font-weight="bold">Follower</text>
+          <text x="330" y="146" text-anchor="middle" font-size="10.5">tracks state, ready to lead</text>
+
+          <rect x="450" y="105" width="150" height="55" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="525" y="128" text-anchor="middle" font-weight="bold">Follower</text>
+          <text x="525" y="146" text-anchor="middle" font-size="10.5">tracks state, ready to lead</text>
+
+          <path d="M330 20 L 200 165" stroke="#242121" stroke-width="1" stroke-dasharray="3 2"/>
+          <path d="M330 20 L 460 165" stroke="#242121" stroke-width="1" stroke-dasharray="3 2"/>
+        </g>
+        <text x="330" y="200" text-anchor="middle" font-size="12" fill="var(--ink-soft)">leader dies → a follower is elected leader within seconds, resumes within 1 min</text>
+        <defs><marker id="a20" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — leader/follower roles over Paxos, keeping fast, safe failover (original diagram)</div>
+    </div>
+
+    <p>The leader tracks the same "next scheduled launch" list an ordinary <code>crond</code> would, but before it actually starts a job, it <strong>synchronously</strong> informs a Paxos quorum that a launch is beginning — and won't proceed until that quorum has acknowledged it. This synchronicity is the entire point: if the leader announces the launch <em>after</em> the fact instead, and then dies mid-launch, a newly elected follower has no way to know the launch already happened — and would very plausibly repeat it, precisely the double-launch outcome the whole design exists to prevent.</p>
+    <p>Every individual launch is tracked by both <strong>job identity</strong> and its specific <strong>scheduled launch time</strong> — not just the job name alone. This matters enormously for high-frequency jobs (say, one running every minute): without the timestamp, there'd be no way to unambiguously tell which specific execution a given in-flight state actually refers to.</p>
+    <p>One more critical rule: the instant a leader loses leadership for any reason, it must <em>immediately</em> stop talking to the datacenter scheduler. Leadership is what guarantees mutual exclusion over that scheduler — without this rule enforced strictly, an old leader and a newly elected one could both simultaneously act on the same job, recreating exactly the split-brain problem Chapter 23 spent so much time warning about.</p>
+
+    <h3>Resolving partial failures — the trickiest part of the whole design</h3>
+    <p>What happens if the leader dies mid-launch — after announcing "starting" but before announcing "done"? The new leader needs a way to determine, unambiguously, whether the underlying RPC to the datacenter scheduler actually went through. The chapter lays out exactly two ways to make this determinable:</p>
+    <ul>
+      <li><strong>Make every external operation idempotent</strong> — safe to simply retry, whether or not it already happened.</li>
+      <li><strong>Make external operation state independently look-up-able</strong> — query the datacenter scheduler directly to find out definitively whether the job already launched, rather than guessing.</li>
+    </ul>
+    <p>Google's practical answer combines both: pre-compute job names <em>before</em> ever mutating anything on the datacenter scheduler, and distribute those names to every replica ahead of time. If the leader dies mid-launch, the newly elected leader simply looks up each precomputed name's actual state on the scheduler and launches only the ones genuinely still missing — no guessing required. And, matching the pattern above, those constructed names must also encode the specific scheduled launch time — otherwise, the chapter's own cautionary example plays out: a short, frequent job launches, the leader crashes before telling the other replicas, an unusually long failover occurs (long enough for the job to finish on its own), and the new leader — seeing a <em>completed</em> job under that name, but with no timestamp to distinguish which run it belongs to — could wrongly conclude it needs to launch again.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">storage</div>
+    <h2>Where Paxos's log and snapshots actually live</h2>
+    <p>Paxos is fundamentally a continuously appended log of state changes — which raises two very practical problems: the log needs to be periodically compacted (or it grows forever), and it needs somewhere durable to actually live.</p>
+    <p><strong>Snapshotting</strong> solves the growth problem the ordinary way: instead of replaying a thousand "increment counter by 1" log entries to reconstruct state, periodically collapse them into "counter = 1000" and discard everything before that point.</p>
+    <div class="fails"><b>Snapshots and logs carry very different stakes.</b> Lose your logs, and you lose only the small amount of state changed since the last snapshot — a bounded, recoverable setback. Lose your <em>snapshots</em>, and you've effectively lost the system's entire history and have to start from zero. This asymmetry directly drives where each piece of data actually gets stored.</div>
+    <p>Google's actual storage split reflects that asymmetry deliberately:</p>
+    <table class="recap">
+      <tr><th>Data</th><th>Where it lives</th><th>Why</th></tr>
+      <tr><td>Paxos logs</td><td>Local disk on each replica only (3 copies, from 3 replicas)</td><td>Frequent small writes are expensive on a distributed filesystem; losing recent logs is an acceptable, bounded risk</td></tr>
+      <tr><td>Snapshots</td><td>Local disk, <em>plus</em> backed up to a distributed filesystem</td><td>Snapshots are the truly critical state — worth the extra durability cost precisely because losing them is catastrophic, not bounded</td></tr>
+    </table>
+    <p>One more design detail worth calling out: a freshly started replica can pull the latest snapshot plus recent logs directly from an already-running peer over the network — meaning replica startup depends on <em>no local machine state at all</em>. Practically, this makes rescheduling a replica to an entirely different machine, or recovering from an outright machine death, a total non-issue for reliability — the replica just bootstraps itself fresh from a healthy peer, wherever it lands.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">scale problems</div>
+    <h2>The thundering herd, and cron's neat statistical fix</h2>
+    <p>Running cron for an entire datacenter surfaces a genuinely different class of problem than running it for a handful of jobs on one machine. The chapter's example is the classic <strong>thundering herd</strong>: everyone's intuitive first instinct for "run this daily" is to schedule it at midnight — completely harmless on one machine, but if 30 different teams all configure a midnight cron job that each spawns a thousand-worker MapReduce, that's a synchronized, massive spike hitting the datacenter all at once, entirely self-inflicted by scheduling convention rather than by any real business need.</p>
+    <div class="math">
+      Standard crontab: "0 0 * * *" — minute=0, hour=0, every day, every month<br>
+      Google's extension: a "?" wildcard lets the *cron system itself* pick the value<br>
+      → hashes the job's own config to a value in range (e.g. 0–23 for hour)<br>
+      → spreads otherwise-identical "run once daily" jobs across the full day automatically
+    </div>
+    <p>This is a genuinely elegant fix precisely because it requires zero coordination between teams — nobody has to agree on staggered times manually, or even know other teams' schedules exist; the hash-based spread happens automatically and deterministically from each job's own configuration. Even with this in place, though, the chapter is honest that global cron launch volume still shows real spikes in practice — some jobs have genuine external temporal dependencies (they need to run at a specific real-world time, not an arbitrary one), which no amount of internal load-spreading can smooth away.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Favor skipping over double-launching</td><td>Skipped launches are usually correctable after the fact; double launches can be genuinely irreversible</td></tr>
+      <tr><td>Leader/follower over Paxos</td><td>Only the leader ever touches the datacenter scheduler — mutual exclusion prevents split-brain-style conflicting actions</td></tr>
+      <tr><td>Synchronous launch announcement</td><td>The leader must confirm a Paxos quorum has seen "launch starting" before proceeding, or failover risks duplicate launches</td></tr>
+      <tr><td>Job identity + launch timestamp</td><td>Disambiguates high-frequency job launches and prevents a delayed failover from misreading old state as new</td></tr>
+      <tr><td>Idempotency or lookup-ability</td><td>The two valid ways to safely resolve a launch that failed partway through an RPC sequence</td></tr>
+      <tr><td>Snapshots vs. logs, stored differently</td><td>Snapshots (catastrophic if lost) get distributed-filesystem backup; logs (bounded loss) stay local-disk only</td></tr>
+      <tr><td>Hash-based schedule spreading</td><td>The "?" wildcard defuses self-inflicted thundering-herd spikes from independently-scheduled "run at midnight" jobs</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 24, CC BY-NC-ND 4.0 · sre.google/sre-book/distributed-periodic-scheduling</footer>
+</div>
+</body>
+</html>

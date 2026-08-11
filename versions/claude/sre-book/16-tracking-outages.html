@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.16 — Tracking Outages</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/16-tracking-outages.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 16: Tracking Outages</h1>
+    <p class="subtitle">Postmortems catch the big fires. This chapter is about the thousand small sparks postmortems never see — and the tool (Outalator) built to spot the pattern in them.</p>
+    <div class="source-note">📖 Based on <em>Chapter 16</em> of Google's SRE book — <a href="https://sre.google/sre-book/tracking-outages/" target="_blank">sre.google/sre-book/tracking-outages</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="15-postmortem-culture-learning-from-failure.html">← Ch.15 Postmortem Culture</a><a href="17-testing-for-reliability.html">next: Ch.17 Testing for Reliability →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the gap</div>
+    <h2>What postmortems (Ch.15) don't cover</h2>
+    <p>Postmortems are only written for incidents with a large enough impact to clear their trigger criteria. That's deliberate — but it leaves a real blind spot: <strong>issues that are individually small, but frequent and widespread, never generate a postmortem at all</strong>, even though collectively they might represent the biggest source of pain a team actually experiences.</p>
+    <p>There's a second, subtler blind spot: postmortems are written per-incident, per-service, so they're good at surfacing "what should <em>this</em> service fix." They're much weaker at surfacing a fix with a poor cost/benefit ratio for any single incident, but a large payoff when applied <em>horizontally</em> across many services at once. The chapter's own example: a change to Bigtable might only mitigate one particular outage a small amount — not obviously worth the engineering effort on its own — but if that same mitigation would help across dozens of unrelated incidents company-wide, the math flips entirely. You can't see that math from inside any single postmortem.</p>
+    <p>To close this gap, the chapter argues you need to be able to ask aggregate questions that no single postmortem can answer: <em>How many alerts does this team get per on-call shift? What fraction of alerts over the last quarter were actually actionable? Which service is generating the most toil?</em> Answering those requires tooling built specifically for pattern-finding across the full stream of alerts — which is exactly what Outalator is for.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the foundation</div>
+    <h2>Escalator: making sure a page never silently goes unanswered</h2>
+    <p>Before outage analysis can happen, you need a reliable record that a notification was actually seen by a human. <strong>Escalator</strong> is that base layer — a shared, replicated system tracking acknowledgment of every SRE alert notification. If no one acknowledges within a configured window, it automatically escalates to the next destination (primary → secondary, for instance).</p>
+    <p>A neat design detail: Escalator was built to be largely transparent, receiving copies of emails already being sent to on-call mailing aliases — meaning it slotted into existing workflows without requiring anyone to change how they worked, or requiring monitoring systems to be rewritten to talk to it directly.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the tool</div>
+    <h2>Outalator: from individual alerts to the "incident" abstraction</h2>
+    <p>Outalator builds directly on top of Escalator's foundation, adding the next layer of abstraction: instead of looking at individual escalating notifications one at a time, it lets you view, group, and annotate them as <strong>outages</strong>.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 200" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="200" fill="#FBF8EF"/>
+        <g font-size="11.5">
+          <rect x="20" y="30" width="140" height="35" fill="#F4E1D6" stroke="#B84B2A" stroke-width="1.8"/>
+          <text x="90" y="52" text-anchor="middle">alert: 500s spike</text>
+          <rect x="20" y="75" width="140" height="35" fill="#F4E1D6" stroke="#B84B2A" stroke-width="1.8"/>
+          <text x="90" y="97" text-anchor="middle">alert: latency high</text>
+          <rect x="20" y="120" width="140" height="35" fill="#F4E1D6" stroke="#B84B2A" stroke-width="1.8"/>
+          <text x="90" y="142" text-anchor="middle">alert: backend down</text>
+
+          <path d="M160 47 C 220 47, 220 100, 280 100" stroke="#242121" stroke-width="1.5" fill="none"/>
+          <path d="M160 92 L 280 100" stroke="#242121" stroke-width="1.5" fill="none"/>
+          <path d="M160 137 C 220 137, 220 100, 280 100" stroke="#242121" stroke-width="1.5" fill="none"/>
+
+          <rect x="280" y="70" width="180" height="60" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.5"/>
+          <text x="370" y="95" text-anchor="middle" font-weight="bold">one Incident</text>
+          <text x="370" y="113" text-anchor="middle" font-size="10.5">tagged, annotated, tracked</text>
+
+          <rect x="500" y="30" width="140" height="35" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="1.8"/>
+          <text x="570" y="52" text-anchor="middle" font-size="10.5">"incidents/day"</text>
+          <rect x="500" y="120" width="140" height="35" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="1.8"/>
+          <text x="570" y="142" text-anchor="middle" font-size="10.5">"alerts/day"</text>
+          <path d="M460 100 L 500 47" stroke="#242121" stroke-width="1.3"/>
+          <path d="M460 100 L 500 137" stroke="#242121" stroke-width="1.3"/>
+        </g>
+      </svg>
+      <div class="diagram-caption">sketch — grouping many alerts into one incident enables two separate metrics (original diagram)</div>
+    </div>
+    <p>Two concrete design choices carry most of the value here:</p>
+    <ul>
+      <li><strong>Time-interleaved view across multiple queues at once.</strong> A single SRE team is often the primary contact point for services whose secondary escalation targets differ (usually distinct developer teams) — being able to see everything in one interleaved timeline, instead of manually switching between separate queues, is a direct usability win during an actual response.</li>
+      <li><strong>Annotation with a signal-to-noise filter.</strong> Outalator stores the original notification and silently captures any email replies too — but not every reply is equally useful (a reply-all that just adds more people to cc isn't insight). Marking an annotation "important" collapses the surrounding clutter, so what's left visible is denser and more useful than a raw, fragmented email thread would ever be.</li>
+    </ul>
+
+    <h3>Grouping is the whole point</h3>
+    <p>A single real event routinely fans out into many separate alerts — a network failure alone can simultaneously page the owning team, every dependent backend service's team, <em>and</em> the network operations center. The chapter is candid that minimizing this fan-out helps, but some duplication is an unavoidable consequence of any reasonable false-positive/false-negative tradeoff in your alerting rules. Emailing "hey, this is the same as that other page" works for one alert in isolation — it does not scale across a team, across teams, or across months of history. Grouping many alerts into a single incident record is what actually makes that scale.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">tagging</div>
+    <h2>Free-form tags, not a rigid taxonomy — and that's deliberate</h2>
+    <p>Not every alert is a real incident — false positives, test events, and misfired emails from humans all happen. Rather than trying to pre-classify these centrally, Outalator supports largely free-form, single-word tags. The one bit of imposed structure: colons are treated as semantic namespace separators, which nudges teams toward hierarchical tags without forcing a rigid schema on anyone.</p>
+    <div class="math">
+      cause:network              — enough detail for some teams<br>
+      cause:network:switch       — more specific, for teams that need it<br>
+      cause:network:cable        — same idea, different granularity<br>
+      customer:132456            — teams handling per-customer issues<br>
+      bug:76543                  — auto-linked to the bug tracker<br>
+      bogus                      — a simple, widely-used false-positive marker
+    </div>
+    <p>Suggested tag prefixes (mainly <code>cause</code> and <code>action</code>) are generated per-team, based on that team's own historical tagging patterns — not imposed top-down. Yes, some tags end up as typos (<code>cause:netwrok</code>) or genuinely unhelpful (<code>problem-went-away</code>) — the chapter accepts that as the cost of a system flexible enough that teams organically converge on standards that actually fit their own service, rather than a predetermined taxonomy that fits none of them well. The chapter's own assessment: despite how trivial tagging sounds, it's probably one of Outalator's single most useful features in practice, even before any formal analysis is run on top of it.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">analysis</div>
+    <h2>Three layers of value, from raw counts to systemic diagnosis</h2>
+    <ul>
+      <li><strong>Layer 1 — basic counting.</strong> Incidents per week/month/quarter, alerts per incident. Simple, but it's the necessary foundation everything else is built on.</li>
+      <li><strong>Layer 2 — comparison over time and across teams.</strong> This is where raw counts start becoming genuinely actionable. "That's the third time this week" only means something once you know whether this service normally sees that pattern five times a <em>day</em>, or five times a <em>month</em> — the comparison, not the raw number, is what carries the signal.</li>
+      <li><strong>Layer 3 — semantic, cross-team pattern-finding.</strong> Identifying which specific infrastructure component is behind the most incidents company-wide, so investment in hardening that one component can be properly justified by its true aggregate impact — impact that's invisible from inside any single team's postmortem log.</li>
+    </ul>
+    <div class="callout"><b>A genuinely useful worked example from the chapter:</b> "stale data" and "high latency" alerts, defined independently by different teams, might both actually trace back to the same root cause — network congestion delaying database replication. Seen in isolation per-team, these look unrelated; examined across teams via shared tags and Outalator's aggregation, the shared cause becomes visible, and the fix effort can be correctly aimed at the actual root rather than patched separately, twice, at each symptom.</div>
+    <p>The chapter also flags an important caveat about the "most incidents caused" metric specifically: it's a good starting point, but it's not the whole story on its own. It might just reflect over-sensitive monitoring rather than a genuinely unstable component, and even a large raw incident count says nothing by itself about how <em>hard</em> each incident was to fix or how severe its actual user impact was. Raw counts point you where to look — they don't replace judgment about what you find there.</p>
+
+    <h3>Practical, everyday uses</h3>
+    <p>Beyond long-horizon trend analysis, Outalator has two very concrete daily uses: selecting relevant incidents (with their tags and important annotations) to include in a handoff email to the next on-call shift, and a "report mode" for weekly service reviews that expands important annotations inline, giving a fast, skimmable overview of the week's lowlights without anyone having to reconstruct it from scratch.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">unexpected wins</div>
+    <h2>Benefits nobody explicitly designed for</h2>
+    <p>The most obvious payoff is faster diagnosis: seeing that your alert flood lines up with another team's known outage saves duplicate investigation. But the chapter highlights a subtler one — <strong>cross-team visibility catching gaps in the alerting itself.</strong> If your service is clearly disrupted by what looks like a Bigtable incident, but you can see in Outalator that Bigtable's own SRE team hasn't been paged yet, proactively alerting them yourself is often exactly the right move — a coordination failure that would otherwise go unnoticed until much later.</p>
+    <p>Some teams push this further with deliberately "dummy" Escalator configurations — routes where no human ever actually receives the notification, but the event still lands in Outalator to be tagged, annotated, and reviewed later. Two concrete uses the chapter names: logging privileged or role-account access for lightweight technical auditing (explicitly <em>not</em> a substitute for real legal/compliance auditing), and automatically recording runs of non-idempotent periodic jobs — like schema changes rolled out from version control — so there's a reviewable trail even though nobody needed to be paged for a normal, successful run.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Postmortems have a blind spot</td><td>They skip small-but-frequent issues and miss horizontal, cross-service opportunities</td></tr>
+      <tr><td>Escalator</td><td>The acknowledgment/escalation layer that guarantees no page silently goes unanswered</td></tr>
+      <tr><td>Grouping alerts into incidents</td><td>Turns unavoidable alert fan-out into one countable, analyzable unit instead of noise</td></tr>
+      <tr><td>Free-form, team-driven tags</td><td>Teams converge on their own useful taxonomy faster than any centrally imposed one would fit</td></tr>
+      <tr><td>Three analysis layers</td><td>Raw counts → comparison over time/teams → cross-team semantic pattern-finding</td></tr>
+      <tr><td>"Most incidents" isn't the whole story</td><td>Raw counts can reflect over-sensitive monitoring, and say nothing about difficulty or severity alone</td></tr>
+      <tr><td>Cross-team visibility</td><td>Sometimes the biggest win is simply noticing another team hasn't been paged yet</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 16, CC BY-NC-ND 4.0 · sre.google/sre-book/tracking-outages</footer>
+</div>
+</body>
+</html>

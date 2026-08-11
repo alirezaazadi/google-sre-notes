@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.12 — Introducing Non-Abstract Large System Design</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/12-introducing-non-abstract-large-system-design.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part II — Practices</div>
+    <h1 class="title">Chapter 12: Introducing Non-Abstract Large System Design</h1>
+    <p class="subtitle">Four questions, asked over and over: is it possible, can we do better, is it feasible, is it resilient? Walked through with a real AdWords click-through-rate system — one machine to five datacenters.</p>
+    <div class="source-note">📖 Based on <em>Chapter 12</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/non-abstract-design/" target="_blank">sre.google/workbook/non-abstract-design</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="11-managing-load.html">← Ch.11 Managing Load</a><a href="13-data-processing-pipelines.html">next: Ch.13 Data Processing Pipelines →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">what NALSD is</div>
+    <h2>Turning a whiteboard sketch into real numbers, at every step</h2>
+    <p><strong>Non-Abstract Large System Design</strong> is Google's name for the disciplined skill of assessing, designing, and evaluating large systems — combining capacity planning, component isolation, and graceful degradation into one repeatable process. The "non-abstract" part is the entire point: every system eventually runs on real machines, in real datacenters, over real networks — and skipping the exercise of turning a whiteboard design into concrete resource estimates makes it dangerously easy to design something that simply doesn't translate into reality. Doing this work up front, repeatedly, tends to produce far fewer painful last-minute design changes forced by some physical constraint nobody checked earlier.</p>
+    <div class="callout"><b>The chapter's own important caveat:</b> the specific numbers that come out of a NALSD exercise matter less than the soundness of the reasoning and assumptions that produced them. Early assumptions heavily shape the final numbers, and making *perfect* assumptions was never the goal — the real value comes from combining many individually imperfect-but-reasonable estimates into a genuinely better understanding of the design as a whole.</div>
+    <p>NALSD runs in two broad phases, each anchored by its own questions — asked roughly in order, though in practice engineers bounce between them constantly:</p>
+    <table class="recap">
+      <tr><th>Phase</th><th>Questions</th></tr>
+      <tr><td>Basic design</td><td>Is it possible? (ignoring resource limits, what design would satisfy requirements?) Can we do better? (can it be meaningfully faster, smaller, more efficient — O(N) vs. O(ln N)?)</td></tr>
+      <tr><td>Scaling up</td><td>Is it feasible? (does it fit real money/hardware constraints — does it need to go distributed?) Is it resilient? (does it fail gracefully — component failure, whole-datacenter failure?) Can we do better?</td></tr>
+    </table>
+  </section>
+
+  <section card class="card">
+    <div class="tab">the problem</div>
+    <h2>Designing a click-through-rate (CTR) dashboard for AdWords</h2>
+    <p>The chapter's running example: build a system that accurately measures and reports CTR (clicks ÷ impressions) for every AdWords ad, sourced from two separate logs — a <strong>query log</strong> (every search, with the ad IDs shown) and a <strong>click log</strong> (every click, referencing the query it came from). Target SLOs: <strong>99.9% of dashboard queries complete in under 1 second</strong>, and <strong>99.9% of the time, displayed CTR data is under 5 minutes old</strong>. Assumed transaction rates: <strong>500,000 search queries/sec</strong> and <strong>10,000 ad clicks/sec</strong> — deliberately large numbers, chosen specifically to force genuinely distributed thinking rather than something a single beefy machine could plausibly handle.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">iteration 1</div>
+    <h2>One machine — cheap to reason about, and quickly disqualified</h2>
+    <p>The simplest possible design: one machine, one SQL database, indexes on <code>query_id</code> and <code>search_term</code>, joining the two logs to compute CTR on demand.</p>
+    <div class="math">
+      Query log entry ≈ 2 KB (aggressively rounded up for safety)<br>
+      (5×10⁵ queries/sec) × (8.64×10⁴ sec/day) × (2×10³ bytes) ≈ 86.4 TB/day<br>
+      → rounded to ~100 TB/day including index overhead<br><br>
+      A 4TB HDD sustains ~200 IOPS<br>
+      (5×10⁵ queries/sec) / (200 IOPS/disk) ≈ 2,500 disks just for query-log writes<br><br>
+      Fitting 100 TB entirely in RAM (64GB/machine): 100TB / 64GB ≈ 1,563 machines
+    </div>
+    <div class="fails"><b>Two independent disqualifications, not just one.</b> Even setting aside the sheer resource math, testing the design against "what happens when this component fails?" reveals a long list of single points of failure — CPU, disk, power, network, cooling — any one of which would blow the SLO the instant it happened. The math alone would have killed this design; the resilience question kills it even harder. This iteration wasn't wasted effort, though — it's what surfaced the real constraints (IOPS, RAM footprint) the next design needs to respect.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">iteration 2</div>
+    <h2>MapReduce — the obvious next step, disqualified by the SLO itself</h2>
+    <p>A batch MapReduce job could periodically join accumulated query and click logs, producing per-<code>ad_id</code> CTR summaries. This scales horizontally without limit — more machines always let it finish, regardless of input size.</p>
+    <div class="fails"><b>The batch model is fundamentally incompatible with the 5-minute freshness SLO.</b> Running MapReduce in small enough batches to hit that window means arbitrary, non-overlapping batch boundaries — and if a query lands in batch 1 while its corresponding click lands in batch 2, the two never get joined at all. MapReduce handles genuinely self-contained batches well; this problem isn't shaped that way.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">iteration 3</div>
+    <h2>LogJoiner — an on-demand join, keyed the smart way</h2>
+    <p>The key insight: clicks are far rarer than queries (2% of volume), so scale around the <em>smaller</em> stream instead of batching the larger one. Build a <strong>QueryStore</strong> holding the full query log, keyed by <code>query_id</code>, queryable on demand. A new component, <strong>LogJoiner</strong>, consumes the click-log stream continuously, looks up each click's corresponding query in QueryStore, and writes the joined result into a <strong>ClickMap</strong> (indexed by <code>ad_id</code>) — while a parallel <strong>QueryMap</strong> independently indexes all query impressions by <code>ad_id</code>, giving the dashboard both halves of the CTR ratio it needs. If a query can't be found for a click yet (log delivery lag), the click waits and retries up to a time limit, then is discarded.</p>
+    <div class="math">
+      LogJoiner network: (10⁴ clicks/sec) × (2×10³ bytes) = 20 MB/sec (~160 Mbps)
+      QueryStore lookup: (10⁴ clicks/sec) × 8 bytes request + 2×10³ bytes response ≈ 160 Mbps
+      LogJoiner → ClickMap: (10⁴ clicks/sec) × (10³ bytes) = 10 MB/sec (~80 Mbps)
+      Total: ~400 Mbps — manageable on ordinary machines
+
+      ClickMap: (10⁴ clicks/sec)×(8.64×10⁴ sec/day)×(16 bytes) ≈ 14 GB/day → round to 20 GB/day
+      QueryMap: 3 ad slots × (5×10⁵ queries/sec)×(8.64×10⁴ sec/day)×(16 bytes) ≈ 2 TB/day
+    </div>
+    <div class="fails"><b>2 TB/day is small enough to store on one machine — but the IOPS problem from iteration 1 hasn't actually gone away.</b> The write pattern is still too many small, frequent operations for a single disk to sustain. The fix isn't a faster disk — it's sharding the whole pipeline.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">iteration 4</div>
+    <h2>Sharded LogJoiner — parallelism, plus real fault tolerance</h2>
+    <p>Run many LogJoiner instances in parallel, each handling one shard of the data. A <strong>log sharder</strong> routes each record deterministically: hash the <code>query_id</code>, take it modulo N (number of shards), and send the record to that shard. This means each LogJoiner sees only a consistent slice of traffic — and crucially, the <em>same</em> query and its corresponding click always land on the <em>same</em> shard, since both share the same <code>query_id</code>. QueryMap is sharded differently — by <code>ad_id</code> instead of <code>query_id</code> — since that's the key it's actually looked up by; ClickMap reuses the same sharding scheme as QueryMap, being the smaller of the two.</p>
+    <div class="callout"><b>Reliability, addressed directly: what happens when a LogJoiner machine dies mid-join?</b> The fix is deliberate, lightweight replication — the log sharder sends duplicate copies of each record to <em>two</em> separate shards, with those two replica shards explicitly placed on different machines. If one shard's machine fails, the other still has the joined data, and the system keeps serving at full accuracy. Losing <em>both</em> replicas simultaneously is possible but rare enough to be an acceptable risk absorbed by the SLO's own error budget — when it does happen, the logs can simply be reprocessed, and the dashboard shows slightly-older-than-5-minutes data for a brief window rather than failing outright.</div>
+    <div class="fails"><b>One more single point of failure remains, and it's a big one.</b> All of this still runs inside a single datacenter — if that datacenter itself goes offline (power, network, or worse), every ClickMap replica is gone simultaneously, and every user's dashboard goes dark at once. The sharding-and-replication work solved machine-level failure; it did nothing for datacenter-level failure.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">iteration 5</div>
+    <h2>Multidatacenter — consensus, and the real cost of surviving a datacenter loss</h2>
+    <p>Surviving a full datacenter outage means ClickMap data has to be genuinely available in multiple, independent datacenters — without simply multiplying total compute cost by however many datacenters you deploy to. This is a direct instance of the <strong>distributed consensus problem</strong> covered in Chapter 23 of the original SRE book: replicate the service (3 or 5 copies) across datacenters, use a consensus algorithm like Paxos to keep them in reliable agreement even through a datacenter-sized failure, and accept that each write now costs at least one network round trip between participating nodes — a real, unavoidable throughput ceiling, though writes can still be parallelized across many independent shards to work around it.</p>
+    <div class="math">
+      Assumed Paxos round-trip latency across geographically separated datacenters: ~25ms
+      → max ~40 sequential operations/sec per single Paxos-backed process
+
+      Replication doubles effective traffic: 20,000 clicks/sec, 1,020,000 queries/sec
+
+      Minimum tasks needed: (1.02×10⁶ queries/sec) / (40 ops/sec) ≈ 25,500 tasks
+      Memory per task (2 copies of 2TB QueryMap ÷ tasks): 4×10¹² / 25,500 ≈ 157 MB/task
+      Tasks per 64GB machine: 6.4×10¹⁰ / 1.57×10⁸ ≈ 408 tasks/machine
+
+      Network: (1.02×10⁶ queries/sec) × (2×10³ bytes) ≈ 16 Gbps total
+      Per task: 16Gbps / 25,500 tasks ≈ 640 Kbps/task
+      Per machine: 408 tasks × 640 Kbps ≈ 256 Mbps (well within a 1Gbps NIC)
+    </div>
+    <div class="callout"><b>The payoff of all this arithmetic: roughly 64 machines per datacenter, at ~25% of each machine's network capacity.</b> Sharded by ad_id across ~25,500 lightweight Paxos-backed tasks, each holding a genuinely small memory footprint, the multidatacenter design turns out to be entirely tractable — not the enormous, unaffordable multiplier a naive "just copy everything to every datacenter" instinct might have feared.</div>
+    <p>Checked against the original requirements: LogJoiner scales horizontally to absorb all click volume; QueryStore and QueryMap comfortably hold a full day's data at the assumed rate; the dashboard's actual read path (a lookup by <code>ad_id</code> against QueryMap and ClickMap) is fast and simple, satisfying the 1-second latency SLO; and because every component in the pipeline scales horizontally, the 5-minute freshness SLO can always be defended by simply adding more machines wherever the pipeline is currently the bottleneck.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the throughline</div>
+    <h2>Iteration builds on iteration — nothing gets thrown away</h2>
+    <p>The chapter's closing emphasis is genuinely important: each design iteration wasn't wasted work discarded once it failed — the one-machine iteration's IOPS and RAM math directly informed every later sharding decision; the MapReduce iteration's freshness failure directly motivated the on-demand LogJoiner design; the single-datacenter LogJoiner's resilience gap directly motivated the consensus-based multidatacenter design. NALSD lets a design evolve step by step, incorporating what each iteration reveals, rather than starting over from a blank whiteboard every time a flaw surfaces.</p>
+    <p>Splitting components by how each was actually expected to grow — LogJoiner by <code>query_id</code>, QueryMap and ClickMap by <code>ad_id</code> — is what let different parts of the system scale independently, and removed any single piece of hardware or software instance as a structural bottleneck. The chapter frames NALSD explicitly as a <em>learned</em> skill, not an innate one — it needs regular, deliberate practice to stay sharp, and the ability to move fluidly from an abstract requirement to a concrete, defensible resource estimate is treated as genuinely critical to building systems that stay healthy over the long run, not just at launch.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Four recurring questions</td><td>Is it possible? Can we do better? Is it feasible? Is it resilient? — asked repeatedly, not just once at the start</td></tr>
+      <tr><td>Reasoning matters more than the exact final numbers</td><td>Early assumptions heavily shape outcomes — the value is combining many reasonable estimates, not achieving perfect precision</td></tr>
+      <tr><td>One machine fails on both math AND resilience</td><td>Even if the IOPS/RAM numbers worked out, a single machine is a long list of single points of failure</td></tr>
+      <tr><td>Batch processing can't satisfy a tight freshness SLO</td><td>MapReduce's arbitrary batch boundaries mean cross-batch clicks and queries never get joined</td></tr>
+      <tr><td>Scale around the smaller stream</td><td>LogJoiner's design deliberately builds an on-demand lookup around the rarer click stream, not the larger query stream</td></tr>
+      <tr><td>Sharding solves throughput; replication solves machine failure</td><td>Two genuinely separate problems, each needing its own explicit design decision</td></tr>
+      <tr><td>Consensus is the price of surviving a whole datacenter loss</td><td>Paxos-backed replication adds real per-write latency cost, but the resulting machine count is far smaller than naive full duplication would suggest</td></tr>
+      <tr><td>Every iteration's failure directly informs the next design</td><td>Nothing is wasted — constraints discovered in a failed iteration become the requirements for the next one</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 12, CC BY-NC-ND 4.0 · sre.google/workbook/non-abstract-design</footer>
+</div>
+</body>
+</html>

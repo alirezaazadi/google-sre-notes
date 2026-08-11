@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.6 — Eliminating Toil</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/06-eliminating-toil.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part I — Foundations</div>
+    <h1 class="title">Chapter 6: Eliminating Toil</h1>
+    <p class="subtitle">"Buying the gnome," a $1,000/hour kernel bug, and two real multi-year projects — automating datacenter line-card repair, and retiring 65,000 home directories down to 50.</p>
+    <div class="source-note">📖 Based on <em>Chapter 6</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/eliminating-toil/" target="_blank">sre.google/workbook/eliminating-toil</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="05-alerting-on-slos.html">← Ch.5 Alerting on SLOs</a><a href="07-simplicity.html">next: Ch.7 Simplicity →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the opening story</div>
+    <h2>20,000 broken machines, and the temptation to just mask the symptom</h2>
+    <p>The chapter opens with a genuinely instructive personal story from a Google production engineer. His first assignment in 2005: log into broken machines, diagnose why, fix or send to hardware repair — except there were over 20,000 broken machines at any given time. The first one he investigated had a root filesystem completely full of nonsense logs from a buggy network driver — and a thousand more machines shared the exact same problem.</p>
+    <p>His first instinct was a script: SSH into every broken machine, check if the filesystem was full, truncate oversized logs, restart syslog. A senior teammate pushed back — not because the script wouldn't work, but because it would <em>work well enough</em> to remove any pressure to actually fix the root cause. The real fix: find the offending line in the kernel source, file a bug against the kernel team with a concrete cost estimate ($1,000/hour, aggregated across affected machines), and get a proper patch shipped — which also prompted the kernel team to strengthen their own release test suite so the bug class couldn't recur.</p>
+    <div class="callout"><b>The lesson framed directly:</b> the short-term satisfaction of "fixing" broken machines every morning is real, but it's a trap — it removes the very incentive that would otherwise drive a permanent fix. The more durable payoff was cerebral, not immediate: knowing the problem was actually solved, not just perpetually re-masked.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">the taxonomy</div>
+    <h2>Toil's six characteristics, made concrete</h2>
+    <p>Building directly on Chapter 5 of the original SRE book, this chapter gives each abstract trait a genuinely concrete anchor example — a full <code>/tmp</code> directory on a web server:</p>
+    <table class="recap">
+      <tr><th>Trait</th><th>The tmp-directory example</th></tr>
+      <tr><td>Manual</td><td>Engineer logs in by hand, hunts for extraneous logs to delete</td></tr>
+      <tr><td>Repetitive</td><td>A full tmp directory is virtually never a one-time event</td></tr>
+      <tr><td>Automatable</td><td>A remediation doc reading "log in to X, run this, check output, restart Y if..." is already pseudocode — genuinely automatable, and ideally the underlying software bug just gets patched instead</td></tr>
+      <tr><td>Nontactical/reactive</td><td>A flood of "disk full" alerts distracts from higher-value work and can mask a genuinely higher-severity alert underneath the noise</td></tr>
+      <tr><td>Lacks enduring value</td><td>Closing today's ticket feels good, but does nothing to prevent tomorrow's identical ticket</td></tr>
+      <tr><td>Grows at least as fast as its source</td><td>Hardware repair volume scales in lockstep with fleet size — though *ancillary* tasks (config changes) don't have to scale the same way</td></tr>
+    </table>
+    <p>A genuinely useful addition beyond the original six-trait list: <strong>toil's effect on morale.</strong> Some engineers tolerate a fair amount of toil fine; others find it actively deflating. Over the long run, toil correlates with career stagnation and burnout-driven attrition — reducing it isn't just an efficiency play, it's a genuine acknowledgment that engineering judgment is better spent where human creativity actually adds value.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">measuring it</div>
+    <h2>Experience and intuition aren't enough — you need an objective number</h2>
+    <p>Different people on the same team routinely reach different conclusions about how much toil actually exists and which piece of it matters most — because intuition isn't repeatable, objective, or transferable, and toil-reduction efforts can span years, well past any single person's tenure or memory of the original problem. The chapter's recommended process:</p>
+    <ol>
+      <li><strong>Identify it</strong> — ideally by consulting the people actually doing the work, since they're best positioned to know where the real pain is.</li>
+      <li><strong>Choose an objective unit</strong> — minutes/hours are the natural default, but account honestly for context-switching cost, not just raw task duration. Other valid units: a patch applied, a ticket closed, a manual production change, a routine email exchange, a hardware operation — anything consistent, objective, and well understood.</li>
+      <li><strong>Track continuously</strong> — before, during, and after any reduction effort, and automate the measurement itself, or you risk creating a new layer of toil just to measure the old one.</li>
+    </ol>
+    <div class="callout"><b>Before starting a toil-reduction project, do the actual cost/benefit math.</b> Time saved should be at least proportional to time invested in building and maintaining the automation — but projects that look "unprofitable" on a narrow hours-saved-vs-hours-spent comparison can still be genuinely worth doing, thanks to indirect benefits: growth in real engineering work over time, better morale and lower attrition, less context-switching, better process standardization, faster onboarding, fewer human-error outages, better security, and faster user response times.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">where toil hides</div>
+    <h2>Six common categories</h2>
+    <ul>
+      <li><strong>Business processes.</strong> Probably the most common source — user onboarding, machine configuration, capacity moderation, all mediated through tickets. This kind of toil is genuinely insidious: it accomplishes its goal (users get what they want), and gets spread evenly enough across a team that it never loudly demands remediation the way an outage does. It quietly accumulates instead.</li>
+      <li><strong>Production interrupts.</strong> Time-sensitive janitorial work — freeing disk space, restarting a leaking process, replacing a failing drive, manually tweaking capacity for expected load. All of it steals attention from more valuable work.</li>
+      <li><strong>Release shepherding.</strong> Even with real automation, code coverage, and testing, release requests, rollbacks, emergency patches, and repetitive manual config changes can still generate genuine toil around the edges of an otherwise automated pipeline.</li>
+      <li><strong>Migrations.</strong> A one-time-feeling task (moving from data store X to Y) that still meets most of toil's actual criteria — it's repetitive in its mechanics even if it only happens once for this specific pair, and the resulting backup/config-adaptation code is often just refactoring one interface into another, delivering the same underlying business value as before.</li>
+      <li><strong>Cost engineering and capacity planning.</strong> Baseline/burstable capacity planning, holiday/launch traffic prep, footprint optimization (one big box vs. four smaller ones), adapting to a specific cloud vendor's proprietary billing quirks — all genuinely toil-prone even at organizations that don't own their own hardware.</li>
+      <li><strong>Troubleshooting opaque architectures.</strong> As microservice architectures spread, new distributed failure modes appear — and without sophisticated tracing or dashboards, troubleshooting can mean manually logging into individual systems and writing ad hoc log queries. Troubleshooting itself isn't inherently toil — it becomes toil when it's the <em>same</em> failure recurring weekly because of brittle architecture, not a genuinely novel problem each time. The chapter's sharp reliability math: each new critical dependency with availability P reduces your own availability by roughly (1−P) — nine critical four-nines dependencies can quietly drag a four-nines service down to three nines.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">strategies</div>
+    <h2>A genuine toolbox, not just "automate it"</h2>
+    <p>The chapter lists a dozen concrete tactics, each illustrated later by one or both case studies:</p>
+    <ul>
+      <li><strong>Identify and measure toil</strong> as its own tracked project — many Google teams file toil in bugs, ranked by fix cost against time saved.</li>
+      <li><strong>Engineer toil out of the system</strong> — the optimal fix. The team running a system in production has invaluable firsthand knowledge of exactly which quirks cause the most pain, and should feed that directly back into product development rather than just absorbing the pain indefinitely.</li>
+      <li><strong>Reject the toil.</strong> Counterintuitively, this is recommended as the <em>first</em> option to genuinely consider for a given piece of toil — weigh the real cost of responding against simply not responding, or deliberately batch/delay tasks to process them in aggregate, which both reduces interruption count and makes the underlying pattern easier to spot and target.</li>
+      <li><strong>Use SLOs to reduce toil.</strong> A well-defined SLO lets engineers legitimately ignore an operational task if it isn't actually threatening the error budget — an SLO scoped to overall service health (not individual devices) scales far more gracefully as the service grows.</li>
+      <li><strong>Start with human-backed interfaces.</strong> For genuinely complex problems with many edge cases, accept structured input via a defined API while a human still handles some of the resulting work behind the scenes — an "engineer behind the curtain" step on the way to full automation, letting you incrementally learn the domain rather than over-engineering a big-bang solution before you fully understand it.</li>
+      <li><strong>Provide self-service methods</strong> once the interface is well-typed — a web form, script, or API, gracefully degrading to a ticket only for genuinely unusual requests or failures.</li>
+      <li><strong>Get support from management and colleagues.</strong> Toil reduction temporarily reduces bandwidth for other work — manager backing, defended with objective toil metrics, is what protects the team from new demands during that window.</li>
+      <li><strong>Promote toil reduction as a feature.</strong> Pairing the reduction effort with a genuinely compelling adjacent win (security, scalability, reliability) makes the business case land much harder than "less toil" alone.</li>
+      <li><strong>Start small and improve</strong> — automate a handful of high-priority items first, then reinvest the reclaimed time into the next iteration, tracking a clear metric like MTTR along the way.</li>
+      <li><strong>Increase uniformity</strong> — the "pets vs. cattle" philosophy: treating interchangeable devices (links, switches, racks, even whole clusters) as a consistent, swappable unit dramatically simplifies both automation and incident response, at real upfront conversion cost.</li>
+      <li><strong>Assess risk within automation directly.</strong> Automation wielding admin-level power needs the same defensive rigor as any other critical system: validate all input carefully even from trusted upstream systems, build in safeguards equivalent to what a human operator would watch for (timeouts, live metric checks), remember that even naive <em>read</em> operations can spike load at scale, and default to a human operator whenever an unsafe condition is detected rather than pushing through regardless.</li>
+      <li><strong>Automate toil response thoughtfully</strong> — rarely a literal transcription of the human workflow. Break the manual process into separable, reusable components rather than one monolithic script, and be careful that automation doesn't erase human understanding of what's actually going wrong underneath it.</li>
+      <li><strong>Use open source and third-party tools</strong> where they already solve your exact problem — a one-off migration rarely justifies fully bespoke tooling.</li>
+      <li><strong>Use feedback to improve</strong> — actively survey the people who actually interact with your tooling, and track hard metrics (latency, error rate, rework rate, human time saved) before and after, not just anecdotal impression.</li>
+    </ul>
+
+    <h3>Legacy systems: a predictable four-stage journey</h3>
+    <p>The chapter names a specific, recognizable arc most legacy systems pass through: <strong>avoidance</strong> (the cost/risk of replacement isn't judged worth it yet — knowingly accepting technical debt); <strong>encapsulation/augmentation</strong> (wrap the brittle legacy core in abstracted APIs, automation, and monitoring — "refinancing high-interest technical debt into low-interest technical debt," still fundamentally a stopgap); <strong>replacement/refactoring</strong> (define a common interface in front of the legacy system, and migrate incrementally via canarying or blue-green deployment — often the legacy system's real "spec" is only defined by its historical behavior, so building production-scale test datasets of expected input/output pairs is what gives confidence the replacement isn't silently diverging); and finally <strong>retirement/custodial ownership</strong> (stragglers who haven't migrated inherit custodial responsibility for whatever remains, aligning incentives to actually finish the migration rather than let it linger forever).</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 1</div>
+    <h2>Automating datacenter line-card repair: from Saturn to Jupiter</h2>
+    <p>As Google's datacenter network topology scaled — moving to a folded Clos topology with dramatically more switches — manual repair went from "occasional and interesting" to "frequent and rote," the classic toil signature. Each failed line card required an engineer to: verify it was safe to move traffic, drain the affected switch, perform the physical repair, and undrain — the same four repetitive steps, over and over, at growing scale, with real risk of human error from context-switching between this rote work and genuinely hard problems simultaneously.</p>
+
+    <h3>Saturn: the first automation pass</h3>
+    <p>Rather than routing every failure to an engineer for manual triage, the team built a system that automatically requested a drain and created a technician case directly — repurposing existing alerting and ticketing infrastructure rather than building from scratch. Two genuinely important design choices: <strong>automated risk assessment</strong> before every drain, specifically to prevent accidentally isolating capacity (eliminating a major source of human error); and a <strong>software-tracked "strike policy"</strong> — first failure gets an automatic reboot and reinstall; a second failure within the tracking window triggers full card replacement, no human judgment call required either time.</p>
+    <p>The resulting workflow reduced human involvement down to: a technician presses a "Prep component" button to drain right before starting physical work, waits for a clear signal, replaces the card, and closes the case — with the surrounding drain/undrain/verification steps all handled automatically.</p>
+
+    <h3>Jupiter: six times the scale demanded a rewrite, not a patch</h3>
+    <p>Jupiter, Google's next-generation fabric, was over six times larger than any prior generation — meaning six times the failure volume too. But greater scale also brought much greater built-in redundancy, which paradoxically enabled <em>more</em> aggressive automation, not less: the whole switch could now be automatically drained the instant a failure was detected, rather than waiting for a technician to manually initiate the "Prep component" step. New automation also handled installing/pushing post-replacement configuration and verifying the repair succeeded before automatically undraining — technician involvement became a true last resort, invoked only when automated recovery genuinely failed.</p>
+    <p>This same repair machinery then extended cleanly to a completely different failure class — memory errors — by simply adding a new "symptom" entry to a config file, rather than building new automation logic from scratch. That's a direct, concrete payoff of the "design reusable components" strategy named above.</p>
+
+    <h3>Lessons learned — genuinely candid, including real mistakes</h3>
+    <ul>
+      <li><strong>UIs shouldn't introduce their own overhead.</strong> The "Prep component" button seemed like a clean idea, but in practice gave technicians no feedback on drain progress, sometimes fell out of sync with the switch's actual real state, and left newer technicians stuck with a generic "contact engineering" message and no clear escalation path. The fix in later iterations: ensure the switch was already safely drained and ready <em>before</em> the technician ever arrived, removing the fragile manual trigger-and-wait step entirely.</li>
+      <li><strong>Don't rely on human expertise to catch automation gaps.</strong> In one high-impact incident, a technician — trying to speed up the tedious "press button, wait" cycle — initiated concurrent drains across every line card awaiting repair simultaneously, causing real network congestion and user-visible packet loss. The automation hadn't been tested against a less-experienced technician's very plausible shortcut.</li>
+      <li><strong>Design reusable components,</strong> not one monolithic workflow — this is precisely what let the memory-error extension above happen so cheaply.</li>
+      <li><strong>Don't overthink the problem.</strong> The team spent nearly <em>three years</em> (2012–2015) meticulously collecting data on over 650 discrete memory-error incidents, trying to precisely distinguish hardware failures from software ones before automating anything. It turned out a simple universal policy — drain, reboot, reinstall; if it recurs, treat it as hardware and replace — worked fine from the start, since most errors were transient. The years of careful diagnosis-first data collection weren't actually necessary to unblock the automation.</li>
+      <li><strong>Sometimes imperfect automation is genuinely good enough.</strong> Network management links couldn't be verified by the team's BERT link-testing tooling — rather than block on building full support, those specific links were simply allowed to skip verification, since they didn't carry customer traffic and the gap could be closed later if it ever actually mattered.</li>
+      <li><strong>Repair automation is not fire-and-forget.</strong> Automation can live far longer than originally planned — Saturn-based fabrics outlived their intended end-of-life due to Jupiter parts shortages, requiring continued investment in "legacy" automation. New engineers need training on these older systems specifically so they can keep fixing bugs in code the original authors may have long since moved on from.</li>
+      <li><strong>Build in risk assessment <em>and</em> defense in depth.</strong> Beyond the primary automated risk check, the team added a secondary hard ceiling — a maximum number of impacted links and impacted devices — that, if exceeded, automatically opens a tracking bug for human investigation rather than proceeding blindly. Originally meant as a temporary stopgap, this secondary check proved genuinely useful on its own for surfacing atypical repair rates caused by things like power outages or unrelated software bugs.</li>
+      <li><strong>Get a failure budget and real manager support.</strong> New automation will fail sometimes, especially early on — management backing is what lets the team persevere through those early failures rather than abandoning the project at the first visible misstep.</li>
+      <li><strong>Think holistically, beyond your own personal toil.</strong> Test with the people actually doing the affected work, and watch for whether your new automation quietly creates <em>new</em> toil elsewhere (extra tickets landing on someone else's queue) — creating problems for other teams breeds resistance to your next automation effort, even if this one technically succeeded.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 2</div>
+    <h2>Decommissioning filer-backed home directories — from 65,000 to ~50</h2>
+    <p>Google's Corp Data Storage (CDS) team ran NFS/CIFS-based "filer" home directories and shared Team Shares for all Googlers via a fleet of NetApp appliances — genuinely useful, and genuinely operationally expensive. As better alternatives matured — internal version control (Piper/Git-on-Borg), Google Drive/Team Drive, Cloud Storage, and an internal distributed filesystem (x20) — the filer solution's specific weaknesses became clear: NFS/CIFS was never designed for WAN latency, so remote and globally distributed teams suffered real degradation; the hardware was expensive to scale; and retrofitting the protocol to work with Google's zero-trust BeyondCorp network security model would have required significant, ongoing engineering investment.</p>
+
+    <h3>Moonwalk: measure before you migrate</h3>
+    <p>Rather than assuming filers were obsolete, the team built <strong>Moonwalk</strong> to actually analyze real usage — daily/monthly active users, which specific job families genuinely relied on home directories, and what file types heavy daily users accessed most. This wasn't purely a toil-reduction argument either — moving common use cases onto Google's own G Suite/GCP products doubled as valuable product feedback, directly improving those products for every other enterprise customer considering the same migration.</p>
+    <p>No single replacement covered every use case — but breaking the problem into smaller, addressable pieces revealed that a <em>combination</em> of more specialized tools together covered the full range better than the one-size-fits-all filer ever had: x20 for globally shared static artifacts, Team Drive for office-document collaboration (far more latency-tolerant than NFS), Colossus for large secure datasets, Piper/Git-on-Borg for engineers' personal dotfile syncing, and a new dedicated history-as-a-service tool for cross-workstation command history.</p>
+
+    <h3>Moira and its sister projects — a genuinely multiyear, phased effort</h3>
+    <p>The full decommissioning ran across four sequential projects: <strong>Moira</strong> (home directory decommissioning itself), <strong>Tekmor</strong> (mopping up the long tail of remaining home-directory users), <strong>Migra</strong> (Team Share decommissioning), and <strong>Azog</strong> (retiring the underlying infrastructure and hardware entirely). Moira itself moved through four deliberately staged phases — starting with the lowest-risk population first (Moonwalk data showed non-engineering Googlers used shared home directories least), then progressively expanding scope as confidence in the replacement tooling and migration process grew.</p>
+    <p>A purpose-built <strong>Moira Portal</strong> (Python/Flask, backed by Bigtable) gave every affected user a self-service landing page, a continually updated FAQ, live status/usage info for their own share, and options to request, deactivate, archive, delete, extend, or reactivate it — genuinely necessary given how many distinct edge-case scenarios had to be handled correctly (a user leaving the company, going on temporary leave, or being under an active litigation hold that legally prohibited deleting their data).</p>
+    <p>Ancillary automation glued the portal to configuration management and user communication — with an explicit, hard requirement that <strong>false positives and false negatives were both unacceptable</strong>: wrongly telling a user action was required (false positive) or silently failing to warn someone their data was actually going away (false negative) both meant real lost trust and real extra support burden. The team even reused another team's existing internal Cloud Storage → Drive migration tool as part of their own auto-archiving flow, rather than reimplementing it from scratch.</p>
+    <div class="callout"><b>The project only reached feature-complete roughly two years in</b> — and even then still needed extra dedicated tooling to handle a long tail of roughly 800 stubborn remaining users. This deliberately slow, staged pace kept the core CDS team lean (averaging just three people), minimized user workflow disruption, kept load on Google's internal help desk manageable, and avoided building speculative tooling ahead of genuine, validated need. The tradeoff, honestly acknowledged: the team had to keep tolerating the underlying filer-related toil for the entire multi-year duration of the migration itself.</div>
+    <p>By 2016 the program was declared complete for its original scope, bringing home directories down from roughly 65,000 to around 50 remaining stragglers (left to the follow-on Azog project) — alongside a measurably improved user experience and the retirement of genuinely expensive legacy hardware and process.</p>
+
+    <h3>Lessons learned</h3>
+    <ul>
+      <li><strong>Challenge assumptions and retire expensive business processes.</strong> Business needs drift and better tooling continuously emerges — periodically re-examining a toil-heavy process, even one that's been "just how we do it" for over a decade, is genuinely worth doing. The chapter is candid that the <em>strongest</em> business case here wasn't toil reduction directly — it was BeyondCorp security benefits — with toil reduction as a compelling, genuine, but secondary win layered on top.</li>
+      <li><strong>Build self-service interfaces — but a custom portal isn't always necessary.</strong> Moira's portal was relatively expensive to build. The chapter notes many equivalent Google teams instead manage configuration purely through version control, treating an ordinary pull request as the entire request-and-approval interface — inheriting code review and CI/CD validation essentially for free, with zero bespoke UI required.</li>
+      <li><strong>Start with human-backed interfaces.</strong> Share requests generated tracking bugs that automation updated as it processed them — tickets functioning as a "quick and dirty GUI" for the underlying automation: a durable log of what happened, automatic stakeholder updates, and a simple, reliable human fallback path whenever the automation itself couldn't safely proceed.</li>
+      <li><strong>"Melt snowflakes."</strong> The team's automation actively normalized nonconforming, edge-case shares to match what the tooling expected, rather than building endless one-off special-case logic to accommodate every irregularity — approaching zero-touch automation for the bulk of migrations as a direct result. Google's own memorable internal name for this instinct — reshaping messy reality to fit the automation, rather than endlessly complicating the automation to fit reality — is "buying the gnome," a nod to an old Froogle search-quality bug where the actual fix turned out to be simply purchasing the single eBay-listed garden gnome that kept incorrectly ranking at the top of "running shoes" search results.</li>
+      <li><strong>Employ organizational nudges.</strong> Requiring an explicit escalation for any *new* share or quota request, while actively recognizing users who voluntarily retired theirs, gently steered behavior toward the desired outcome without a hard mandate — paired with strong self-serve documentation (codelabs, cookbooks) so most user onboarding never needed to touch the owning team at all.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Masking a symptom removes the incentive to fix the real cause</td><td>The opening kernel-log story shows a quick workaround can quietly block the permanent fix from ever happening</td></tr>
+      <tr><td>Objective measurement beats intuition</td><td>Different team members reach different conclusions about toil severity without a shared, objective unit of measure</td></tr>
+      <tr><td>Rejecting toil is a legitimate first option</td><td>Not every piece of toil is worth responding to — deliberate batching also surfaces patterns worth eliminating</td></tr>
+      <tr><td>SLOs let engineers legitimately ignore some operational work</td><td>If a task doesn't threaten the error budget, it may not need a response at all</td></tr>
+      <tr><td>Reusable components compound</td><td>Jupiter's memory-error automation reused the same repair machinery built for line-card failures</td></tr>
+      <tr><td>Don't overthink before automating</td><td>Three years of diagnostic data collection turned out unnecessary — a simple universal policy worked from day one</td></tr>
+      <tr><td>Automation needs defense in depth, not just a primary safety check</td><td>A secondary hard-limit check caught atypical repair rates the primary risk assessment didn't anticipate</td></tr>
+      <tr><td>"Melt snowflakes" ("buying the gnome")</td><td>Normalizing messy edge cases to fit the automation is often cheaper than building endless special-case logic</td></tr>
+      <tr><td>Slow, staged migrations reduce disruption at real toil cost</td><td>Moira's two-year-plus rollout kept the team lean and minimized user pain, at the cost of enduring legacy toil longer</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 6, CC BY-NC-ND 4.0 · sre.google/workbook/eliminating-toil</footer>
+</div>
+</body>
+</html>

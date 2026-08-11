@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.25 — Data Processing Pipelines</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/25-data-processing-pipelines.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 25: Data Processing Pipelines</h1>
+    <p class="subtitle">Why periodic pipelines quietly become fragile as they grow — and Workflow, Google's leader-follower alternative built for exactly-once correctness at scale.</p>
+    <div class="source-note">📖 Based on <em>Chapter 25</em> of Google's SRE book — <a href="https://sre.google/sre-book/data-processing-pipelines/" target="_blank">sre.google/sre-book/data-processing-pipelines</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="24-distributed-periodic-scheduling-with-cron.html">← Ch.24 Distributed Cron</a><a href="26-data-integrity-what-you-read-is-what-you-wrote.html">next: Ch.26 Data Integrity →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the pattern</div>
+    <h2>Pipelines: reads, transforms, outputs — chained together</h2>
+    <p>A data pipeline is the classic pattern: read data in, transform it, write new data out — usually scheduled periodically via something like cron. At Big Data scale, a single program usually isn't enough, so pipelines become <strong>multiphase</strong>: several programs chained together, each stage's output feeding the next stage's input. The number of chained stages is called the pipeline's <strong>depth</strong> — a shallow pipeline might be one program, a deep one can run to hundreds.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the fragility</div>
+    <h2>Periodic pipelines start reliable — and quietly stop being reliable</h2>
+    <p>The chapter's core observation, stated from real accumulated experience: a periodic pipeline, carefully tuned at launch (worker count, run interval, chunking strategy), performs reliably at first — and then organic growth quietly stresses it past that original tuning, and problems start appearing: jobs blowing past their deadline, resource exhaustion, chunks that hang indefinitely.</p>
+
+    <h3>Uneven work distribution — the "hanging chunk" problem</h3>
+    <p>Big Data's foundational trick is splitting work into "embarrassingly parallel" chunks that fit on individual machines. But chunk size isn't always uniform — if work is partitioned by customer, for instance, some customers' data chunks are naturally much larger than others, and because the customer is the unit of indivisibility, the pipeline's <em>entire</em> end-to-end runtime is capped by whichever single chunk happens to be largest.</p>
+    <div class="fails"><b>The trap in how engineers instinctively respond to a hanging chunk:</b> the "obvious" fix — kill the job and let it restart, on the theory that the hang was probably some nondeterministic fluke — often makes things dramatically worse. Because pipelines typically aren't built with checkpointing, restarting doesn't resume from where the hang occurred — it restarts <em>every</em> chunk from scratch, discarding all the time, CPU, and human effort already invested in that run.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">infrastructure friction</div>
+    <h2>Periodic pipelines run as low-priority batch — with real consequences</h2>
+    <p>At Google, periodic pipelines are typically scheduled as lower-priority batch work — a reasonable choice, since batch jobs aren't latency-sensitive the way user-facing web services are, and this lets Borg pack them into whatever capacity is currently unused. But that lower priority carries real, concrete costs: degraded and potentially open-ended startup delays, and — under heavy cluster load — genuine risk of preemption when higher-priority work needs the same resources. Running a well-tuned periodic pipeline successfully becomes a genuine balancing act between paying for guaranteed resources and accepting preemption risk.</p>
+
+    <h3>The scheduling-interval trap</h3>
+    <p>Delays of a few hours are usually tolerable for a pipeline that runs once a day — but as scheduled frequency increases, average scheduling delay can approach (or exceed) the interval between runs, creating a hard practical floor on how often a periodic pipeline can actually run.</p>
+    <div class="math">
+      A ~20-minute job scheduled more often than roughly every 40 minutes:<br>
+      → runs start overlapping with the still-in-progress previous run<br>
+      → failure modes: new runs stack up unprocessed, or worse — the nearly-finished<br>
+      &nbsp;&nbsp;current run gets killed to make room for the next scheduled one, halting all progress
+    </div>
+    <p>Pushing the interval below this effective floor doesn't buy more progress — it actively produces worse outcomes, since the specific failure mode (stacking vs. killing the in-progress run) depends entirely on the batch scheduler's policy, but neither outcome is good.</p>
+
+    <h3>The monitoring blind spot</h3>
+    <p>The standard periodic-pipeline monitoring pattern is to collect metrics <em>during</em> execution but only report them <em>on completion</em> — which means a job that fails partway through leaves you with essentially no operational visibility into what happened. Continuous pipelines don't share this problem, since their tasks simply never stop running, so real-time telemetry is a natural, built-in part of their design rather than something bolted on after the fact.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the herd problem</div>
+    <h2>Thundering herds and Moiré load patterns</h2>
+    <p>This directly echoes Chapter 24's cron discussion: a large periodic pipeline can spin up thousands of workers simultaneously at the start of each cycle, and if there are too many, or they're misconfigured, or driven by faulty retry logic, the underlying cluster services and network can simply be overwhelmed. It compounds in both directions: <strong>no retry logic</strong> means dropped work silently never gets redone; <strong>naive retry logic</strong> means failures compound the overload instead of recovering from it. And the chapter names a very human contributing factor too — engineers with limited pipeline experience often make the problem worse by throwing <em>more</em> workers at a job that's failing to finish on time, which is frequently the opposite of what the underlying bottleneck actually needs.</p>
+
+    <h3>Moiré load pattern — the subtler version</h3>
+    <p>A related, harder-to-spot problem: two or more independent pipelines running on their own separate schedules can occasionally have their execution windows overlap, momentarily piling onto the same shared resource together — even though neither pipeline, viewed in isolation, looks even close to problematic. This shows up clearly on a stacked usage graph: individually modest, staggered load patterns that occasionally interference-pattern into sharp combined spikes — exactly the kind of on-call pain that's genuinely hard to diagnose from any single pipeline's own dashboard, because the actual cause only exists in the interaction between two systems nobody's monitoring together.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the alternative</div>
+    <h2>Google Workflow: leader-follower, built for continuous processing</h2>
+    <p>When a genuinely one-shot batch pipeline gets pulled by business pressure into needing continuously updated results, teams face an uncomfortable choice: refactor under deadline pressure, or move to a fundamentally different, continuous-processing model. Google built <strong>Workflow</strong> (2003) specifically to make continuous, large-scale processing tractable — combining the leader-follower distributed pattern with <strong>system prevalence</strong> (keeping all state in memory, for speed, while durably journaling every mutation to disk) to deliver <strong>exactly-once</strong> correctness guarantees.</p>
+
+    <h3>Workflow as Model-View-Controller</h3>
+    <p>The chapter offers a genuinely useful analogy — mapping Workflow onto the familiar UI design pattern:</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 210" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="210" fill="#FBF8EF"/>
+        <g font-size="12.5">
+          <rect x="30" y="30" width="180" height="140" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2.5"/>
+          <text x="120" y="55" text-anchor="middle" font-weight="bold">Model</text>
+          <text x="120" y="75" text-anchor="middle" font-size="11">Task Master</text>
+          <text x="120" y="95" text-anchor="middle" font-size="10.5">in-memory job state,</text>
+          <text x="120" y="111" text-anchor="middle" font-size="10.5">journaled synchronously</text>
+          <text x="120" y="127" text-anchor="middle" font-size="10.5">to disk</text>
+
+          <rect x="240" y="30" width="180" height="140" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.5"/>
+          <text x="330" y="55" text-anchor="middle" font-weight="bold">View</text>
+          <text x="330" y="75" text-anchor="middle" font-size="11">Workers</text>
+          <text x="330" y="95" text-anchor="middle" font-size="10.5">stateless, disposable,</text>
+          <text x="330" y="111" text-anchor="middle" font-size="10.5">update Task Master</text>
+          <text x="330" y="127" text-anchor="middle" font-size="10.5">transactionally</text>
+
+          <rect x="450" y="30" width="180" height="140" rx="6" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.5"/>
+          <text x="540" y="55" text-anchor="middle" font-weight="bold">Controller</text>
+          <text x="540" y="75" text-anchor="middle" font-size="11">optional helper</text>
+          <text x="540" y="95" text-anchor="middle" font-size="10.5">scaling, snapshots,</text>
+          <text x="540" y="111" text-anchor="middle" font-size="10.5">rollback, business</text>
+          <text x="540" y="127" text-anchor="middle" font-size="10.5">continuity</text>
+        </g>
+      </svg>
+      <div class="diagram-caption">sketch — Workflow's Task Master / Worker / Controller mapped to MVC (original diagram)</div>
+    </div>
+    <p>The <strong>Task Master</strong> (model) holds all job state; for best performance, it typically stores just <em>pointers</em> to work rather than the actual payload, with real input/output data living in a shared filesystem. <strong>Workers</strong> (view) are deliberately, completely stateless — disposable at any moment, which is exactly what makes the whole system resilient to individual worker failure. The optional <strong>Controller</strong> handles everything auxiliary to the core pipeline mechanics: runtime scaling, snapshotting, rolling back state, or halting the pipeline entirely for business continuity reasons.</p>
+    <p>Pipeline depth in Workflow is just a matter of how many task groups the Task Master holds — each group representing one stage, capable of arbitrary operations (mapping, shuffling, sorting, splitting, merging). Workers are self-scheduling — they look for available work of the type they handle and pick it up, rather than being centrally assigned.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">correctness</div>
+    <h2>How Workflow actually guarantees exactly-once — a genuinely elegant layered design</h2>
+    <p>The Task Master can't store every detail of pipeline state (it's bounded by RAM), so correctness comes from a stack of independent guarantees rather than one central source of truth:</p>
+    <ul>
+      <li><strong>Leases, not locks.</strong> A worker acquires a time-bound lease on a work unit and may only commit results for units it currently holds a valid lease on.</li>
+      <li><strong>Unique output filenames per worker attempt.</strong> This is the clever piece that solves the "orphaned worker" problem directly: if a worker gets orphaned (its lease expired, but it doesn't know that yet and keeps working), it can keep writing to its own uniquely-named output file harmlessly — it simply can never successfully <em>commit</em>, because another worker now holds the lease. And because every worker's output file is uniquely named, an orphan can never accidentally overwrite or corrupt a valid worker's in-progress output either.</li>
+      <li><strong>Task versioning tied to configuration.</strong> Every task carries the ID of the configuration used to produce it. If configuration changes while work is still in flight, workers holding leases issued under the <em>old</em> configuration simply can't commit anymore — guaranteeing everything that successfully commits reflects the current configuration, at the acknowledged cost of some in-flight work being thrown away when a config change lands mid-run.</li>
+      <li><strong>A server token identifying the Task Master itself.</strong> This guards against a genuinely subtle failure class: what if the Task Master's network address gets reused by a <em>different</em> Task Master (a config change, a misconfigured load balancer sitting in front of several independent masters, even memory corruption altering an IP)? Both client and server validate this token on every single operation, which prevents a silent, slow-burning corruption where everything looks fine right up until a task ID collision between two different masters actually occurs.</li>
+    </ul>
+    <p>Put together, these compose into what the chapter calls a genuinely layered correctness guarantee: configuration consistency, lease ownership, filename uniqueness, and server identity validation — each one closing a different, independent failure mode the others don't cover.</p>
+    <div class="callout"><b>Why not just use a general-purpose database like Spanner directly?</b> Workflow's power comes specifically from tasks being <strong>unique and immutable</strong> — even a lease change produces an entirely new task rather than mutating an existing record in place. Trying to replicate this on a general database would mean wrapping every single read in a long-running transaction to get equivalent guarantees — technically possible, but the chapter is blunt that it would be "terribly inefficient" compared to Workflow's purpose-built approach.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">disaster resilience</div>
+    <h2>Surviving a whole datacenter going dark</h2>
+    <p>Big Data pipelines need to survive genuinely severe failures — fiber cuts, weather events, cascading power failures that can take out an entire datacenter. Pipelines lacking Workflow's strong system-prevalence guarantees typically just enter an undefined state when this happens, forcing costly, manual, duplicated recovery effort. Workflow's approach: the Task Master journals to <strong>Spanner</strong> — globally consistent, if comparatively low-throughput — specifically to get global durability, using <strong>Chubby</strong> (the distributed lock service from Chapter 2/23) to elect which Task Master instance is currently allowed to write, with that election result itself persisted in Spanner.</p>
+    <p>Because Spanner alone isn't high-throughput enough to serve as the primary pipeline filesystem, globally distributed Workflow deployments run two or more <em>local</em> Workflow instances across distinct clusters, plus lightweight <strong>reference tasks</strong> mirrored into a global Workflow layer as local work is consumed and completed. If a reference task can't be removed from the global layer, the local Workflow simply blocks until the global layer becomes reachable again — a deliberate design choice that preserves transactional correctness even at the cost of temporarily pausing progress, rather than risking a silent inconsistency.</p>
+    <p>Automated failover runs through a small helper binary (functioning as the "controller" in the MVC framing) inside each local Workflow — it creates the reference tasks and periodically updates a heartbeat task in the global Workflow. If that heartbeat isn't refreshed within a configured timeout, a <em>different</em> region's helper binary can safely seize the in-flight work described by the reference tasks and continue the pipeline — regardless of whatever actually happened to the original region.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the takeaway</div>
+    <h2>Google's own closing advice, stated directly</h2>
+    <div class="fails"><b>Periodic pipelines are genuinely useful — but only for genuinely periodic problems.</b> The chapter's explicit parting guidance: if a data processing problem is continuous, or will organically grow to become continuous over time, don't reach for a periodic pipeline at all — go straight to a Workflow-style continuous architecture instead of retrofitting later, under deadline pressure, exactly when it's hardest to do well.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Periodic pipelines start reliable, then quietly degrade</td><td>Organic growth stresses parameters tuned only for launch-time conditions</td></tr>
+      <tr><td>Hanging chunks + no checkpointing</td><td>The instinctive "kill and restart" fix discards all prior progress across every chunk, not just the stuck one</td></tr>
+      <tr><td>Scheduling interval floor</td><td>Pushing run frequency below the effective delay floor causes overlapping runs and progress-halting failures, not faster throughput</td></tr>
+      <tr><td>Thundering herd / Moiré patterns</td><td>Independent pipelines can still collide destructively on shared infrastructure even when each looks fine alone</td></tr>
+      <tr><td>Workflow's leader-follower + system prevalence</td><td>In-memory state with synchronous journaling gives speed and durability together</td></tr>
+      <tr><td>Leases + unique filenames + versioned config + server tokens</td><td>Four independent, layered guarantees that together deliver exactly-once correctness</td></tr>
+      <tr><td>Reference tasks + heartbeat failover</td><td>Lets a continuous pipeline survive an entire datacenter loss without manual recovery</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 25, CC BY-NC-ND 4.0 · sre.google/sre-book/data-processing-pipelines</footer>
+</div>
+</body>
+</html>

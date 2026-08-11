@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.17 — Testing for Reliability</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/17-testing-for-reliability.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 17: Testing for Reliability</h1>
+    <p class="subtitle">"If you haven't tried it, assume it's broken." From unit tests to canaries to the statistics of how confident a passing test suite actually makes you.</p>
+    <div class="source-note">📖 Based on <em>Chapter 17</em> of Google's SRE book — <a href="https://sre.google/sre-book/testing-reliability/" target="_blank">sre.google/sre-book/testing-reliability</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="16-tracking-outages.html">← Ch.16 Tracking Outages</a><a href="18-software-engineering-in-sre.html">next: Ch.18 Software Engineering in SRE →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the framing</div>
+    <h2>Testing is how you buy the right to predict the future</h2>
+    <p>SRE's job includes quantifying confidence in a system — both confidence about its past behavior (from monitoring history) and confidence about its <em>future</em> behavior (a prediction). A prediction is only trustworthy if either nothing changes, or you can precisely account for exactly what changed. Since systems are never static in practice, <strong>testing is the mechanism that lets you claim specific areas of equivalence across a change</strong> — every test that passes both before and after a change is one less thing the prediction has to remain uncertain about.</p>
+    <div class="callout"><b>The core tradeoff the chapter sets up early:</b> more test coverage means less uncertainty per change, which means you can safely make more changes before predicted reliability drops toward an unacceptable threshold. Change too fast without adequate coverage, and you have to pause and let monitoring data accumulate to refill that confidence — testing and observed operational data are two different ways of buying the same thing.</div>
+
+    <h3>Testing and MTTR/MTBF — the mechanism that matters most</h3>
+    <p>A passing test doesn't prove reliability — but a <em>failing</em> one proves its absence. The most valuable case is a test that catches a bug that would otherwise only be caught by production monitoring — but catches it <em>before</em> the push happens. That's effectively <strong>zero Mean Time To Repair</strong>: the push is simply blocked, and the bug never reaches production at all (it still has to be fixed in source, but users never see it). The more bugs you catch this way, the higher your users' effective Mean Time Between Failures — which is precisely the currency that lets developers justify shipping features faster, since a rising MTBF is what "buys" release velocity in the first place.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">traditional tests</div>
+    <h2>The hierarchy: unit → integration → system</h2>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 200" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="640" height="200" fill="#FBF8EF"/>
+        <rect x="240" y="20" width="160" height="45" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+        <text x="320" y="47" text-anchor="middle" font-weight="bold">System test</text>
+        <path d="M320 65 L 320 90" stroke="#242121" stroke-width="1.5"/>
+        <rect x="220" y="90" width="200" height="45" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+        <text x="320" y="117" text-anchor="middle" font-weight="bold">Integration test</text>
+        <path d="M320 135 L 320 160" stroke="#242121" stroke-width="1.5"/>
+        <rect x="200" y="160" width="240" height="35" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+        <text x="320" y="182" text-anchor="middle" font-weight="bold">Unit test — cheapest, fastest, base layer</text>
+      </svg>
+      <div class="diagram-caption">sketch — the traditional test pyramid (original diagram)</div>
+    </div>
+    <ul>
+      <li><strong>Unit tests</strong> — the smallest, cheapest tests: a class or function, tested in isolation, usually completing in milliseconds on a laptop. Also useful as an executable specification of exactly what a function is supposed to do.</li>
+      <li><strong>Integration tests</strong> — assembled components, with dependency injection (Google uses Dagger) used to mock complex dependencies cleanly — a classic example is swapping a real stateful database for a lightweight mock with precisely known behavior.</li>
+      <li><strong>System tests</strong> — full end-to-end testing of an assembled, undeployed system, with three common flavors:
+        <ul>
+          <li><strong>Smoke tests</strong> — the simplest possible sanity check, meant to fail fast and short-circuit more expensive tests if something basic is already broken.</li>
+          <li><strong>Performance tests</strong> — catch slow, silent degradation over the system's lifecycle (memory creeping from 8GB to 32GB, latency drifting from 10ms to 50ms to 100ms) before it ships to users unnoticed.</li>
+          <li><strong>Regression tests</strong> — a documented "gallery of rogue bugs" that have broken the system before, so future refactoring can't silently reintroduce a fix that was already paid for once.</li>
+        </ul>
+      </li>
+    </ul>
+    <p>The chapter is explicit that tests aren't free — unit tests cost milliseconds, but standing up a full server with real or mocked dependencies can cost minutes to hours and dedicated compute. Being deliberate about that cost, not maximizing test count blindly, is itself part of the job.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">production tests</div>
+    <h2>Testing against reality, not a hermetic sandbox</h2>
+    <p>Production (aka black-box) tests interact with the live system, which is inherently <em>not</em> hermetic — staged rollouts mean production is often running several different binary/config version combinations simultaneously, and a test against "production" might inadvertently mix an old binary with a new config, or vice versa, producing a result that's valid in isolation but misleading operationally.</p>
+    <ul>
+      <li><strong>Configuration tests</strong> — check what a binary is <em>actually</em> configured with in production against what source control says it should be. These are inherently non-hermetic by nature. Comparing which config-test version is currently passing against the goal version is a direct, quantifiable measure of how far production has lagged behind ongoing engineering work.</li>
+      <li><strong>Stress tests</strong> — find the actual breaking point, since most components don't degrade gracefully — they fail catastrophically past some threshold. "How full can the database get before writes fail?" "How many QPS before the app server falls over?" You need these answers before an incident forces you to discover them live.</li>
+      <li><strong>Canary tests</strong> — deliberately listed separately, because the chapter is explicit this <em>isn't really a test</em> — it's structured user acceptance. A subset of servers runs the new version, "bakes" through an incubation period exposed to real, unpredictable traffic, and either proceeds to a wider rollout or gets reverted. Because it relies on organic traffic rather than deterministic conditions, it can and does sometimes miss real faults.</li>
+    </ul>
+
+    <h3>The math behind reading a canary's signal (the "order" of a fault)</h3>
+    <p>This is one of the more technical, distinctive sections of the chapter. During an exponential rollout, the cumulative count of reported problems roughly follows <code>C = R·U^K</code>, where R is report rate, K is the traffic-doubling(ish) period, and <strong>U is the "order" of the underlying fault</strong> — in the big-O sense. Once a rollback happens and the dust settles, you can back out an estimate of U from the reports collected:</p>
+    <div class="math">
+      U = 1: the request itself just hits genuinely broken code<br>
+      U = 2: this request corrupts data a *future* request might read<br>
+      U = 3: that corrupted data is also a valid identifier a prior request depended on
+    </div>
+    <p>Most real bugs are order 1 — they scale linearly with traffic, and are usually trackable by converting logs of anomalous responses directly into regression tests. Higher-order bugs are the dangerous ones precisely because they're non-obvious: a request that reliably fails when preceded by a specific sequence of other requests can suddenly <em>pass</em> if you happen to skip one of them during debugging — making them much harder to reproduce and root-cause. Catching these during the canary stage, rather than after a full rollout, is what keeps operational load from spiking unexpectedly.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">bootstrapping</div>
+    <h2>Joining a project mid-flight with zero test coverage</h2>
+    <p>SREs frequently inherit a project already past its research/prototype phase, with no meaningful test coverage yet. Trying to write comprehensive unit tests for everything at once is overwhelming and low-leverage. The chapter's prioritization questions:</p>
+    <ul>
+      <li>Can you rank the codebase by importance at all? (If everything is "high priority," nothing effectively is.)</li>
+      <li>Which functions are genuinely mission- or business-critical? (Billing code is the chapter's own example — usually both critical <em>and</em> conveniently separable from the rest of the system.)</li>
+      <li>Which APIs do other teams actually build against? A bug that never even reaches a real user can still cause serious harm if it silently confuses another team into building the wrong client against your API.</li>
+    </ul>
+    <p>The highest-leverage starting move: a small set of smoke tests run on every release — cheap to write, and it prevents the most embarrassing possible failure, shipping something <em>obviously</em> broken. A good complementary habit for building a real test culture over time: <strong>every reported bug becomes a test case</strong>, written to fail initially (since the bug isn't fixed yet), and pass once it is — which naturally grows a comprehensive regression suite exactly where the system has actually hurt users before, rather than where a test-writer guessed it might.</p>
+
+    <h3>Why a broken build has to be the team's #1 priority, immediately</h3>
+    <p>Once continuous build-and-test infrastructure exists, the chapter is emphatic: when it flags a break, engineers should drop what they're doing and fix it, for several compounding reasons — defects get harder to fix the longer other changes pile on top of them, the whole team works around the breakage in the meantime, scheduled release cadences (nightly/weekly builds) lose their value entirely, and — critically — an emergency release (say, patching a disclosed security vulnerability) becomes far harder to execute safely on top of an already-broken baseline.</p>
+    <div class="callout"><b>An explicit callback to Chapter 9's stability-vs-agility tension:</b> a predictably solid, always-green build is a case where stability directly <em>enables</em> agility rather than trading against it — developers genuinely iterate faster when they can trust the baseline is never silently broken.</div>
+    <p>Build systems with fine-grained dependency graphs (Bazel, mentioned by name) only rebuild and retest what a given change could actually have affected — tests run cheaper and faster, which in turn makes it practical to run them far more often.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">at scale</div>
+    <h2>Testing the tools that test everything else</h2>
+    <p>SRE-built tools are software too, and need their own testing discipline — but the chapter draws a useful distinction between two categories:</p>
+    <ul>
+      <li><strong>Tools operating entirely within an already-tested, mainstream API</strong> (fetching metrics, refactoring non-user-facing replica data) are relatively straightforward — their side effects are bounded by an API surface that's already well understood.</li>
+      <li><strong>Tools that deliberately bypass the normal API</strong> for good operational reasons (say, temporarily disabling transactions on a replica to shorten a maintenance window) are far riskier, precisely because that bypass could be catastrophic if accidentally pointed at a live, user-facing replica instead of an isolated one.</li>
+    </ul>
+    <p>The chapter's concrete defense-in-depth pattern for the risky category: use a separate barrier tool to make a replica intentionally fail its own health check (so it's never released to real users) <em>before</em> the risky tool is allowed to touch it, have the risky tool explicitly check for that barrier at startup and refuse to run without it, and only remove the barrier via the same health-validation tooling used for normal black-box monitoring — layered protection, rather than trusting the risky tool alone to "be careful."</p>
+    <p>Automation tools introduce a genuinely funny, genuinely real failure mode the chapter names directly: <strong>tools that manage each other's environment can create circular dependencies.</strong> A fleet-upgrade tool consumes heavy resources while pushing upgrades — tempting a container-rebalancing tool to move it mid-upgrade — while the rebalancing tool itself occasionally needs upgrading too. This is fine <em>only if</em> both tools have well-tested restart semantics and independently verifiable checkpoint health — otherwise you get exactly the kind of subtle, hard-to-reproduce race the "higher-order bug" discussion above was warning about.</p>
+
+    <h3>Statistical / fuzzing tests: useful precisely because they're not repeatable</h3>
+    <p>Tools like fuzzers, Chaos Monkey, and Jepsen deliberately inject randomness, so simply re-running the same test after a fix doesn't definitively prove the fault is gone. The chapter's practical advice: log the randomized actions taken (even just the RNG seed), turn that log into a release test, and run it repeatedly <em>before</em> triaging the bug — the observed rate of non-failure on replay tells you directly how hard it will eventually be to confidently claim "this is fixed." Variation in exactly how the fault manifests across replays can also help localize which part of the code is actually suspect, and occasionally a later replay surfaces something more severe than the original report — a legitimate reason to escalate a bug's severity after the fact.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the statistics problem</div>
+    <h2>How confident can "all tests passed" actually make you?</h2>
+    <p>This is the chapter's sharpest quantitative section. Test results aren't perfectly deterministic in practice — flakiness exists — so a single pass/fail isn't a hard proof, it's an estimate with uncertainty. Given the sheer number of tests any nontrivial service runs, computing exact statistical confidence per test at every single code version is computationally infeasible — you have to reason about batches of hypotheses at once instead.</p>
+    <p>The chapter runs a genuinely striking worked example: a service with ~21,000 tests, comparing pass/fail vectors before and after a patch (so ~42,000 individual test outcomes total). If the target is that at most 1% of genuinely good patches get incorrectly rejected due to environmental flakiness alone:</p>
+    <div class="math">
+      required per-test correctness rate ≈ 42000th root of 0.99<br>
+      ≈ 99.9999% correct, per individual test
+    </div>
+    <p>That's a remarkably demanding bar, and it's the chapter's way of making concrete just how much cumulative flakiness compounds at scale — a test suite that looks reliable in isolation can still produce an uncomfortably high false-rejection rate for legitimate patches once you multiply that tiny per-test error rate across tens of thousands of tests.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">pushing to prod</div>
+    <h2>Why segregating config from tested code is a reliability hazard, not just an inconvenience</h2>
+    <p>In many organizations, production configuration lives outside the codebase testing infrastructure ever sees — sometimes a legacy "engineers build binaries, ops updates config" split. The chapter argues this segregation is worse than merely annoying: it prevents ever relating the model of what's <em>actually</em> running in production to the model the tests reason about, which specifically blocks catching statistical inconsistencies at development time, before they ever reach users.</p>
+    <p>Not every config file deserves the same testing rigor, though — the chapter proposes a useful two-way split:</p>
+    <ul>
+      <li>A config file that exists purely to <strong>keep MTTR low</strong> (only edited during an active incident) has a naturally slow release cadence relative to MTBF — real uncertainty exists around whether any given emergency hand-edit was actually optimal, but that's an acceptable tradeoff given the context it's used in.</li>
+      <li>A config file that changes <strong>more often than the application itself releases</strong> (e.g., one that encodes rollout state) needs testing and monitoring coverage <em>at least as rigorous</em> as the application it configures — otherwise this file alone will dominate the service's overall reliability profile, quietly, without anyone noticing where the real risk is concentrated.</li>
+    </ul>
+    <div class="callout"><b>The "break-glass" pattern:</b> sometimes an edit genuinely needs to go live before release testing finishes. The chapter's guidance is specific: don't silently bypass testing — keep the tests running in the background, associate the early push with its still-pending test results, and back-annotate the push the moment results land, so a flawed emergency push can be quickly followed by a corrected one. Making the break-glass path <em>noisy</em> (e.g., auto-filing a bug) is deliberate — it keeps the shortcut visible and accountable rather than becoming a quiet, unnoticed habit.</div>
+    <p>On the choice of configuration format itself: an interpreted language (e.g., raw Python) is powerful but risky, since "loading the config" is really "executing a program" with no inherent bound on how long or dangerous that can be. A structured format with a well-tested parser (YAML via a safe loader, or better, protocol buffers with a schema checked automatically at load time) removes a meaningful amount of that risk and toil essentially for free — the schema validation the parser already does becomes testing you didn't have to write yourself.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the loop</div>
+    <h2>Production probes: reusing the same test three different ways</h2>
+    <p>A clever, practical idea closing out the chapter: the same set of known-good and known-bad requests can serve as an integration test, a release test, <em>and</em> — deployed continuously — a production monitoring probe. That might sound redundant (why test the exact same requests three times?) — but each context wraps the system differently: the release test typically pairs the real frontend with a fake backend, while the live probe hits a real load-balanced frontend backed by a real, independently-releasing persistent store. Because frontend and backend often release on different cadences, the exact combination running in production at any given moment is frequently a pairing that was <em>never</em> actually tested together beforehand — which is precisely the gap the continuous probe exists to catch.</p>
+    <p>If a probe fails in production, that's a strong, specific signal: either the frontend-facing API or the backend-facing API isn't actually equivalent between the tested release environment and the live production environment — and unless you already have a known, understood reason for that gap, the site is very likely genuinely broken right now, not just superficially different.</p>
+    <p>Because rollout automation gradually replaces application versions <em>and</em> probe versions together, all four combinations of {old, new} probe × {old, new} application get exercised continuously during a rollout — letting the updater automatically detect exactly which combination is failing and roll back to the last known-good state without waiting for a human to notice and diagnose it manually.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the modern cadence</div>
+    <h2>Why "test once a year" quietly got worse, not better, over time</h2>
+    <p>The chapter closes with a genuinely counterintuitive historical point: in the era of annual releases, MTBF was effectively pinned to "one year" no matter how much testing happened beforehand, because so many changes accumulated into each single release that <em>some</em> user-visible breakage was essentially guaranteed to be hiding somewhere in it — making the prior release's reliability data nearly irrelevant to predicting the next one.</p>
+    <p>Modern build tooling makes it possible to build and test a new version every few minutes instead. Even applying the exact same tests to the exact same eventual code, testing every intermediate version (not just the final annual snapshot) produces a genuinely higher-quality end result — because failures can be mapped back precisely to the specific small change that caused them, rather than being buried somewhere inside a year's worth of accumulated changes with no clear attribution.</p>
+    <p>There's an honest tradeoff acknowledged here too: shipping more versions to users more often does lower raw MTBF, simply because there are more opportunities for user-visible breakage to surface. But each such surfaced failure is also a concrete, specific signal pointing at exactly where test coverage needs to improve — closing that gap protects against that specific class of future failure permanently. Reliability management, done well, is this constant, deliberate balancing act: weighing the uncertainty testing hasn't yet resolved against the real cost of user-visible faults, and using that balance to set release cadence deliberately — not by defaulting to either extreme.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Testing buys predictive confidence</td><td>Each test that passes before and after a change is one less source of uncertainty in the prediction</td></tr>
+      <tr><td>Zero-MTTR bugs</td><td>Tests that block a push entirely before it ships are the highest-value catches — they raise MTBF directly</td></tr>
+      <tr><td>Canary "order" (U)</td><td>Order-1 bugs scale linearly and are easy to regression-test; higher-order bugs hide behind request sequencing and are far more dangerous</td></tr>
+      <tr><td>Bootstrapping coverage</td><td>Start with smoke tests and bug-to-regression-test conversion, not blanket unit-test coverage on day one</td></tr>
+      <tr><td>~99.9999% per-test reliability</td><td>The real bar needed at scale (~21,000 tests) to keep false patch rejections rare — flakiness compounds fast</td></tr>
+      <tr><td>Config needs the same rigor as code</td><td>A frequently-changed config file can dominate site reliability if it's tested less than the app it configures</td></tr>
+      <tr><td>Production probes reuse test requests</td><td>The same known-good/bad requests serve as integration test, release test, and live monitoring probe</td></tr>
+      <tr><td>Shorter release cycles beat annual ones</td><td>Testing every intermediate version enables precise fault attribution that a once-a-year release can never achieve</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 17, CC BY-NC-ND 4.0 · sre.google/sre-book/testing-reliability</footer>
+</div>
+</body>
+</html>

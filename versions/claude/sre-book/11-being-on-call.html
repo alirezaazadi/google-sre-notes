@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.11 — Being On-Call</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/11-being-on-call.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 11: Being On-Call</h1>
+    <p class="subtitle">The math behind team sizing, why "too quiet" is its own hazard, and the neuroscience reason stress makes on-call engineers worse at their job.</p>
+    <div class="source-note">📖 Based on <em>Chapter 11</em> of Google's SRE book — <a href="https://sre.google/sre-book/being-on-call/" target="_blank">sre.google/sre-book/being-on-call</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="10-practical-alerting-from-time-series-data.html">← Ch.10 Practical Alerting</a><a href="12-effective-troubleshooting.html">next: Ch.12 Effective Troubleshooting →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the shape of a shift</div>
+    <h2>Response time is a direct consequence of your SLO, not a separate policy</h2>
+    <p>Being on-call means being reachable and able to act on production within an agreed response time — typically 5 minutes for user-facing, highly time-critical services, and up to 30 minutes for less urgent ones. This number isn't arbitrary; it falls directly out of the error budget math from Chapter 3–4:</p>
+    <div class="math">
+      99.99% quarterly availability target → ~13 minutes of allowed downtime, total, for the whole quarter<br>
+      → on-call response time has to be on the order of minutes, or a single incident could burn the entire budget
+    </div>
+    <p>Most teams run both a <strong>primary</strong> and <strong>secondary</strong> on-call rotation simultaneously. How duties split between them varies — sometimes secondary is a pure fallback for missed pages, sometimes primary handles only pages while secondary absorbs all the non-urgent production work. Some team pairs even serve as each other's secondary, avoiding the need for a dedicated secondary rotation altogether.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">balance: quantity</div>
+    <h2>The arithmetic behind minimum team size</h2>
+    <p>This is the chapter's most directly reusable piece of math. Starting from the 50% engineering-time floor established in Chapter 5, the on-call-specific constraint is stricter: <strong>at most 25% of an SRE's time on-call</strong>, leaving the other 25% for non-paging operational work (tickets, releases).</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 140" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="640" height="140" fill="#FBF8EF"/>
+        <rect x="30" y="30" width="580" height="50" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+        <rect x="30" y="30" width="290" height="50" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+        <rect x="320" y="30" width="145" height="50" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+        <text x="175" y="60" text-anchor="middle" font-size="13">engineering (≥50%)</text>
+        <text x="392" y="60" text-anchor="middle" font-size="12">on-call (≤25%)</text>
+        <text x="537" y="60" text-anchor="middle" font-size="12">other ops (≤25%)</text>
+      </svg>
+      <div class="diagram-caption">sketch — the time budget behind the minimum rotation size (original diagram)</div>
+    </div>
+    <p>Working backward from the 25% cap, with two people on-call at all times (primary + secondary), and week-long shifts:</p>
+    <div class="math">
+      Single-site team: minimum 8 engineers<br>
+      → each engineer on-call (primary or secondary) 1 week out of every 4<br>
+      → 1/4 = 25%, exactly at the ceiling<br><br>
+      Dual-site ("follow the sun") team: minimum 6 engineers per site
+    </div>
+    <p>Why go multi-site at all, given the extra coordination overhead it costs? Two concrete reasons: night shifts have documented negative health effects, and a "follow the sun" rotation across time zones can eliminate them entirely; and — separately — keeping the rotation from growing too large (discussed below) keeps every engineer regularly in contact with production. Multi-site isn't free, though — it trades operational health for real communication and coordination costs, so it's a genuine tradeoff to weigh against a system's actual importance and workload, not an automatic upgrade.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">balance: quality</div>
+    <h2>Not just how much on-call — how rough is each shift</h2>
+    <p>Team size alone doesn't capture whether on-call is sustainable — a small rotation with a quiet system can be fine, while a large rotation on a chronically noisy one still burns people out. The chapter defines an <strong>incident</strong> as a related sequence of events/alerts that would all show up in the same postmortem, and anchors the quality bound in measured reality: root-cause analysis, remediation, and postmortem follow-up together average about 6 hours of work per incident.</p>
+    <div class="math">
+      6 hours per incident → max ~2 incidents per 12-hour on-call shift<br>
+      target distribution: flat over time, median close to 0 incidents/day
+    </div>
+    <p>The "median near 0" detail matters more than it might look: if a specific component pages <em>every single day</em> (median &gt; 1), that's not "handled" just because each individual incident stays under the 2-per-shift ceiling — it's a strong signal that something else is quietly deteriorating in parallel, and the real per-shift load is likely to spike above the target once that second thing breaks too.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">compensation</div>
+    <h2>Paying for on-call is itself a load-limiting mechanism</h2>
+    <p>Google compensates on-call with either time-off-in-lieu or direct pay, capped at some proportion of overall salary. The cap isn't incidental — it functions as a built-in ceiling on how much on-call load any one person can be incentivized to absorb, which protects against the perverse outcome where compensation alone would otherwise encourage someone to volunteer for unsustainable amounts of on-call work.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the psychology</div>
+    <h2>Why "trust your gut" is bad advice mid-incident</h2>
+    <p>This section brings in real cognitive-science grounding, and it's one of the more distinctive parts of the chapter. Human decision-making broadly runs on two different systems: fast, intuitive, automatic reactions, versus slower, deliberate, rational analysis. For a complex distributed-systems outage, the deliberate mode reliably produces better outcomes — but stress actively works against it.</p>
+    <p>Stress hormones (cortisol, CRH) measurably impair the cognitive functions the deliberate mode depends on, pushing behavior toward unreflective, habitual action — which is exactly when heuristics and confirmation bias become most tempting. The chapter's own example: an alert pages for the fourth time this week, and the first three were caused by the same known external issue — it's extremely tempting to assume cause #4 is "obviously" the same thing again, without actually checking.</p>
+    <div class="fails"><b>The core warning:</b> intuition and quick reactions feel reassuring mid-incident, but intuition is frequently wrong and hard to justify with actual data — and pursuing a plausible-but-incorrect hunch from the very start wastes exactly the time an incident can least afford to lose.</div>
+
+    <h3>What actually reduces the stress, structurally</h3>
+    <p>The chapter doesn't just diagnose the problem — it names three concrete organizational supports that lower the felt stakes of any single decision an on-call engineer has to make alone:</p>
+    <ul>
+      <li><strong>Clear escalation paths</strong> — the developer teams behind SRE-supported systems typically run their own 24/7 rotation too, so escalating a genuinely unfamiliar or ambiguous problem is always a legitimate, expected option, not an admission of failure.</li>
+      <li><strong>A formal incident-management protocol</strong> (detailed in Ch.14) for anything spanning multiple teams or lacking a clear time bound — offloading the cognitive overhead of "who does what, how do we communicate status" onto a pre-defined structure, often backed by tooling that automates the rote parts (formatting updates, handing off roles) so the engineer's attention stays on the actual problem.</li>
+      <li><strong>A blameless postmortem culture</strong> — knowing that a wrong call made under pressure will be examined as a systems question, not a personal one, removes a significant source of decision-paralysis in the moment.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">too much load</div>
+    <h2>Operational overload — and what to actually do about it</h2>
+    <p>When on-call load creeps past the 25% ceiling, the fix is treated as a real, trackable objective for the quarter — not a vague aspiration. The chapter suggests making the symptoms explicitly measurable (e.g., "daily tickets &lt; 5," "paging events per shift &lt; 2") so progress is verifiable rather than a matter of impression.</p>
+    <p>Two specific, common root causes get called out directly:</p>
+    <ul>
+      <li><strong>Misconfigured alerting</strong> — paging rules not actually tied to real SLO threats, or alerts that aren't genuinely actionable. This is Chapter 6's paging philosophy showing up again as a lived operational cost, not just a design principle.</li>
+      <li><strong>Alert fan-out</strong> — a single underlying condition triggering many separate alerts. The fix is grouping related alerts at the monitoring layer so the ratio approaches 1 alert per 1 incident — otherwise the on-call engineer burns real time triaging duplicates instead of addressing the actual problem.</li>
+    </ul>
+    <p>When the root cause is outside SRE's own control — say, application developers shipping changes that make the system noisier or less reliable — the chapter's escalation path is notably blunt: SRE can <strong>"give back the pager,"</strong> routing on-call responsibility back to the developer team until the system meets SRE's bar. This is explicitly framed as rare and usually temporary — most of the time, working jointly with developers to reduce load is enough — but the option existing at all is itself meaningful. It's a structural check that keeps the reliability-vs-velocity tension (from Chapter 1's error budget discussion) actually balanced in practice, rather than being a one-directional obligation SRE always has to absorb.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the opposite failure</div>
+    <h2>Operational underload: a quiet system is its own risk</h2>
+    <p>This is the chapter's least intuitive section, and worth sitting with. Too little on-call exposure sounds like a good problem to have — but going too long without touching production creates real knowledge gaps and confidence distortions (in <em>either</em> direction — overconfidence <em>or</em> underconfidence), and those gaps only surface at the worst possible moment: during an actual incident.</p>
+    <div class="callout"><b>The chapter's fix:</b> deliberately size rotations so every engineer is on-call at least once or twice a quarter, and supplement real incidents with practice — "Wheel of Misfortune" tabletop exercises (simulated incidents for training, covered in Ch.28) and Google's company-wide DiRT (Disaster Recovery Training) drills, which combine theoretical and hands-on multi-day testing of real infrastructure and services.</div>
+    <p>The throughline connecting overload and underload: both are really the same underlying problem — a mismatch between an engineer's actual, current familiarity with production and what an incident will demand of them under pressure. Overload wears that familiarity down through sheer volume; underload lets it silently atrophy from disuse. The fix in both directions is the same instinct: keep exposure to real production work in a sustainable, bounded range — neither flooded nor starved.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Response time ← SLO</td><td>Paging speed is derived directly from the error budget, not chosen independently</td></tr>
+      <tr><td>25% on-call ceiling</td><td>Drives a hard minimum team size — 8 for single-site, 6 per site for multi-site</td></tr>
+      <tr><td>~2 incidents/shift ceiling</td><td>Based on a measured ~6 hours of real work per incident, including postmortem follow-up</td></tr>
+      <tr><td>Stress impairs deliberate thinking</td><td>Cortisol/CRH push toward risky heuristics and confirmation bias right when careful analysis matters most</td></tr>
+      <tr><td>Escalation, protocol, blameless culture</td><td>Structural supports that lower the real stakes of any single on-call decision</td></tr>
+      <tr><td>"Give back the pager"</td><td>A rare but real check that keeps reliability-vs-velocity tension genuinely balanced, not one-sided</td></tr>
+      <tr><td>Operational underload</td><td>Too little production exposure is its own hazard — knowledge and confidence both quietly erode</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 11, CC BY-NC-ND 4.0 · sre.google/sre-book/being-on-call</footer>
+</div>
+</body>
+</html>

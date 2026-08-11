@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.6 — Monitoring Distributed Systems</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/06-monitoring-distributed-systems.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part II — Principles</div>
+    <h1 class="title">Chapter 6: Monitoring Distributed Systems</h1>
+    <p class="subtitle">The four golden signals, why "what's broken" beats "why is it broken" for paging, and the philosophy behind every good alert.</p>
+    <div class="source-note">📖 Based on <em>Chapter 6</em> of Google's SRE book — <a href="https://sre.google/sre-book/monitoring-distributed-systems/" target="_blank">sre.google/sre-book/monitoring-distributed-systems</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="05-eliminating-toil.html">← Ch.5 Eliminating Toil</a><a href="07-the-evolution-of-automation-at-google.html">next: Ch.7 Automation →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">vocabulary</div>
+    <h2>Alerts, tickets, and the expensive cost of a page</h2>
+    <p>A quick shared vocabulary the chapter leans on throughout:</p>
+    <ul>
+      <li><strong>White-box monitoring</strong> — looking inside the system: logs, internal metrics, instrumented HTTP endpoints.</li>
+      <li><strong>Black-box monitoring</strong> — testing the system the way a user would experience it, from outside, with no knowledge of internals.</li>
+      <li><strong>Alert</strong> — a notification for a human, which comes in three flavors of urgency: a <strong>ticket</strong> (handle in a few days), an <strong>email alert</strong> (rarely useful — mostly ignored noise), or a <strong>page</strong> (wake someone up, right now).</li>
+    </ul>
+    <div class="callout"><b>The central cost the whole chapter revolves around:</b> a page is genuinely expensive. It interrupts focused work, or sleep, or personal time. Page too often and people start skimming, second-guessing, or tuning out alerts — including the real ones. Good alerting isn't about catching everything; it's about maximizing signal and minimizing noise.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">the core distinction</div>
+    <h2>Symptom vs. cause — page on the first, debug with the second</h2>
+    <p>Every monitoring system should be able to answer two different questions — <em>what's broken</em>, and <em>why</em> — and the chapter's sharpest lesson is that these deserve very different treatment. "What's broken" (the symptom) is what should wake somebody up. "Why" (the cause) is what they figure out once they're awake.</p>
+    <table class="recap">
+      <tr><th>Symptom (page on this)</th><th>Possible cause (debug toward this)</th></tr>
+      <tr><td>Serving HTTP 500s / 404s</td><td>Database servers refusing connections</td></tr>
+      <tr><td>Responses are slow</td><td>CPU overloaded, or a half-severed network cable causing partial packet loss</td></tr>
+      <tr><td>Users in one region aren't getting content</td><td>A CDN misconfiguration blacklisted certain client IPs</td></tr>
+      <tr><td>Private content is world-readable</td><td>A push accidentally dropped ACL enforcement</td></tr>
+    </table>
+    <p>Notice the pattern: symptoms are what the <em>user</em> experiences, causes are internal plumbing. Paging on causes gets you fragile, ever-multiplying alert rules ("if the database is slow, alert database-slow; else alert website-slow") that break constantly as the system's internals keep changing. Paging on symptoms is far more stable — "users are seeing errors" stays true regardless of which internal component happens to be at fault this week.</p>
+    <p>There's a wrinkle worth remembering: in a layered system, one team's symptom is another team's cause. A slow database read is the <em>symptom</em> for the database team, but the <em>cause</em> of a slow page for the frontend team watching it from outside. Which makes white-box monitoring genuinely dual-purpose — sometimes it tells you a user-facing symptom, sometimes it's the root-cause detail one layer down.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the four golden signals</div>
+    <h2>If you can only track four numbers, track these</h2>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 260" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="260" fill="#FBF8EF"/>
+        <g font-size="13">
+          <rect x="30" y="30" width="280" height="90" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="170" y="55" text-anchor="middle" font-weight="bold" font-size="15">Latency</text>
+          <text x="170" y="76" text-anchor="middle" font-size="11.5">time to serve a request —</text>
+          <text x="170" y="92" text-anchor="middle" font-size="11.5">track success and failure latency separately!</text>
+
+          <rect x="340" y="30" width="280" height="90" rx="6" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="480" y="55" text-anchor="middle" font-weight="bold" font-size="15">Traffic</text>
+          <text x="480" y="76" text-anchor="middle" font-size="11.5">demand on your system —</text>
+          <text x="480" y="92" text-anchor="middle" font-size="11.5">requests/sec, sessions, transactions/sec</text>
+
+          <rect x="30" y="140" width="280" height="90" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="170" y="165" text-anchor="middle" font-weight="bold" font-size="15">Errors</text>
+          <text x="170" y="186" text-anchor="middle" font-size="11.5">requests that fail — explicit,</text>
+          <text x="170" y="202" text-anchor="middle" font-size="11.5">implicit (wrong content), or by policy</text>
+
+          <rect x="340" y="140" width="280" height="90" rx="6" fill="#EFC94C33" stroke="#B8952F" stroke-width="2"/>
+          <text x="480" y="165" text-anchor="middle" font-weight="bold" font-size="15">Saturation</text>
+          <text x="480" y="186" text-anchor="middle" font-size="11.5">how "full" the system is —</text>
+          <text x="480" y="202" text-anchor="middle" font-size="11.5">watch the tightest-constrained resource</text>
+        </g>
+      </svg>
+      <div class="diagram-caption">sketch — the four golden signals (original diagram)</div>
+    </div>
+    <ul>
+      <li><strong>Latency.</strong> The subtlety: separate successful-request latency from failed-request latency. A DB connection error might return an HTTP 500 <em>instantly</em> — mixing that into your "average latency" makes the service look fast when it's actually broken. And a slow error is worse than a fast one, so it deserves its own tracking, not just filtering-out.</li>
+      <li><strong>Traffic.</strong> Demand, in whatever unit fits the system — HTTP req/s for a web service, concurrent sessions for streaming, transactions/s for a key-value store.</li>
+      <li><strong>Errors.</strong> Failures can be explicit (an HTTP 500), implicit (a 200 with the <em>wrong</em> content — silently worse, since nothing obviously failed), or defined by policy ("anything over our 1-second SLO counts as an error even if it eventually succeeded").</li>
+      <li><strong>Saturation.</strong> How close to capacity you are, tracked on whichever resource is tightest (memory, I/O, CPU — pick the actual bottleneck). Crucially, most systems degrade in performance <em>before</em> hitting 100% utilization — which is exactly why watching the 99th-percentile latency over a short window is often the earliest usable warning sign of saturation, ahead of the raw utilization number itself.</li>
+    </ul>
+    <div class="callout"><b>The rule of thumb:</b> measure all four, page a human when any one is problematic (or nearly so, for saturation specifically) — and your service has at least decent baseline coverage.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">the tail</div>
+    <h2>Averages lie — again, and this time with a math trick</h2>
+    <p>Same lesson as Chapter 4's SLI discussion, but with the practical instrumentation trick spelled out. If a service averages 100ms latency at 1,000 requests/sec, it's entirely possible that 1% of requests take 5 seconds — meaning the other 99% are actually running <em>faster</em> than the average makes it look. If your frontend calls several such backends, one backend's 99th-percentile tail can quietly become the frontend's <em>median</em> experience.</p>
+    <div class="math">
+      Don't store: raw latency numbers → compute mean later<br>
+      Do store: request counts per latency bucket (a histogram)<br>
+      e.g. 0-10ms, 10-30ms, 30-100ms, 100-300ms... (roughly ×3 boundaries)
+    </div>
+    <p>Bucketing at collection time, rather than trying to reconstruct percentiles from stored averages later, is what actually makes tail latency visible and cheap to query.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">practical tuning</div>
+    <h2>How often should you even measure?</h2>
+    <p>Resolution should match what you're trying to catch, not be maximized blindly:</p>
+    <ul>
+      <li>CPU load sampled once a minute will miss short-lived spikes that are quietly driving your tail latency.</li>
+      <li>But for a service targeting 99.9% annual uptime (~9 hours of allowed downtime a year), probing an HTTP 200 status more than once or twice a <em>minute</em> is already overkill.</li>
+    </ul>
+    <p>When you want high resolution without paying for constant fine-grained collection: sample locally at high frequency, but only ship an <em>aggregated</em> summary externally. Example: record CPU utilization every second, bucket it into 5%-wide buckets, and only report the aggregated bucket counts once a minute. You still catch brief hotspots, but you're not paying to store and transmit a full second-by-second stream forever.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the philosophy</div>
+    <h2>The checklist for "should this page a human?"</h2>
+    <p>This is the practical center of the chapter — a short set of questions meant to be run against every candidate alert before it's allowed to page anyone:</p>
+    <ul>
+      <li>Does this detect an <em>otherwise undetected</em>, urgent, actionable, and actively-or-imminently user-visible condition?</li>
+      <li>Will I ever be able to ignore this alert as "known-benign"? If so — when, why, and how do I stop that from happening again?</li>
+      <li>Does it definitely mean users are being hurt right now — and are there cases (drained traffic, test deploys) where it fires but nobody's actually affected, that need explicit filtering?</li>
+      <li>Can I actually <em>act</em> on this page? Is that action urgent, or could it truly wait until morning? Could it be automated instead of paging a human at all?</li>
+      <li>Is someone else already being paged for the same underlying issue, making this page redundant?</li>
+    </ul>
+    <p>Underneath those questions sits a small, blunt philosophy: every page should demand urgency, be genuinely actionable, require actual judgment (a robotic response means it shouldn't have been a page), and represent something novel rather than a known, scripted non-event. If a page satisfies all of that, it genuinely doesn't matter whether black-box or white-box monitoring triggered it — the source is irrelevant once the page itself is high quality.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case studies</div>
+    <h2>Two real examples of choosing the long-term fix over the pager</h2>
+    <h3>Bigtable: too many alerts, buried signal</h3>
+    <p>Bigtable's SLO was originally based on <em>mean</em> latency, but a long, ugly tail (the worst 5% of requests) kept dragging that mean toward violation — triggering a flood of email alerts and pages, most of them well-understood and non-urgent, that consumed enormous engineering time just to triage. The genuinely important pages got lost in the noise.</p>
+    <p>The fix wasn't more alerting discipline — it was a deliberate, temporary <strong>lowering of the bar</strong>: the team switched the SLO target to 75th-percentile latency (a looser, more honest target given the known tail problem) and simply turned off email alerts entirely, buying the team breathing room to actually fix the underlying storage-stack issues instead of firefighting the symptom forever.</p>
+
+    <h3>Gmail: when the "hack" becomes the honest answer</h3>
+    <p>Early Gmail ran on a repurposed batch-processing scheduler (Workqueue) that would routinely "de-schedule" individual tasks — each representing a tiny slice of users — triggering a page every time. At Gmail's scale, that was thousands of potential pages, clearly unsustainable as a long-term alerting posture.</p>
+    <p>The team built a small tool to "poke" the scheduler back into a good state automatically. The interesting tension: some engineers worried that automating this fully would let the actual root cause languish forever, permanently deprioritized once the pain disappeared. The chapter's judgment on this tension is direct: <strong>a page with a rote, scriptable response is a red flag</strong> — if a team resists automating it, that's usually a sign the team doesn't trust itself to actually follow through on the real fix, which is a bigger problem than the page itself, and worth escalating rather than tolerating.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 190" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="640" height="190" fill="#FBF8EF"/>
+        <text x="30" y="26" font-size="13" font-weight="bold">the short-term vs. long-term trade both case studies make</text>
+        <rect x="40" y="50" width="240" height="90" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+        <text x="160" y="78" text-anchor="middle" font-size="13">accept a controlled,</text>
+        <text x="160" y="96" text-anchor="middle" font-size="13">short-term dip in</text>
+        <text x="160" y="114" text-anchor="middle" font-size="13">availability / alert coverage</text>
+        <path d="M280 95 L 340 95" stroke="#242121" stroke-width="2.5" marker-end="url(#a9)"/>
+        <rect x="340" y="50" width="260" height="90" rx="6" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+        <text x="470" y="78" text-anchor="middle" font-size="13">buys time to fix the real,</text>
+        <text x="470" y="96" text-anchor="middle" font-size="13">structural cause instead of</text>
+        <text x="470" y="114" text-anchor="middle" font-size="13">firefighting it forever</text>
+        <defs><marker id="a9" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — trading short-term pain for long-term stability (original diagram)</div>
+    </div>
+
+    <div class="fails"><b>The common thread:</b> a rickety system can often be dragged to high availability through sheer heroic effort, but that path burns people out and depends on a few irreplaceable heroes. A deliberate, temporary step back is frequently the actually-strategic move — and it's worth tracking pages-per-shift over the long run, not just reacting to each page in isolation, to make sure the team's overall trajectory is healthy.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Symptom vs. cause</td><td>Page on symptoms (stable, user-visible); use causes for debugging, not paging rules</td></tr>
+      <tr><td>Four golden signals</td><td>Latency (split by success/failure), traffic, errors, saturation — minimum viable coverage</td></tr>
+      <tr><td>Histograms over averages</td><td>Bucket latencies at collection time so the tail is visible, not hidden behind a mean</td></tr>
+      <tr><td>Match resolution to the goal</td><td>Higher resolution isn't free — sample locally, aggregate before shipping externally</td></tr>
+      <tr><td>The paging checklist</td><td>Urgent, actionable, requires judgment, novel — otherwise it shouldn't be a page</td></tr>
+      <tr><td>Bigtable / Gmail lessons</td><td>Deliberately trading short-term availability/coverage for a real structural fix often beats endless firefighting</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 6, CC BY-NC-ND 4.0 · sre.google/sre-book/monitoring-distributed-systems</footer>
+</div>
+</body>
+</html>

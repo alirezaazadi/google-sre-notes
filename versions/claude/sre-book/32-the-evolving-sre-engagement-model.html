@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.32 — The Evolving SRE Engagement Model</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/32-the-evolving-sre-engagement-model.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part IV — Management (closes here)</div>
+    <h1 class="title">Chapter 32: The Evolving SRE Engagement Model</h1>
+    <p class="subtitle">From reviewing services after the fact, to joining at design time, to never needing to review at all — because reliability got baked into the framework everyone builds on.</p>
+    <div class="source-note">📖 Based on <em>Chapter 32</em> of Google's SRE book — <a href="https://sre.google/sre-book/evolving-sre-engagement-model/" target="_blank">sre.google/sre-book/evolving-sre-engagement-model</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="31-communication-and-collaboration-in-sre.html">← Ch.31 Communication and Collaboration</a><span>Part V — Conclusions →</span></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the premise</div>
+    <h2>Most of this book assumes SRE already owns the service — this chapter is about how it gets there</h2>
+    <p>Few services start their lives with SRE support already in place — there needs to be a real, deliberate process for evaluating whether a service merits it, negotiating what needs fixing first, and then formally instituting support. Google calls this <strong>onboarding</strong>, and the chapter traces its evolution through three genuinely distinct models, each addressing limitations the previous one couldn't solve — not a simple linear replacement, but three approaches that all still coexist today, chosen based on a service's specific situation.</p>
+    <div class="callout"><b>The chapter's framing borrows directly from software engineering itself:</b> the earlier a bug is caught, the cheaper it is to fix. Applied to services, that means the earlier SRE is genuinely involved, the better and more reliable the resulting service — and, in the best case, the process can be short-circuited entirely by giving product development a pre-validated <em>platform</em> to build on, so services arrive at SRE's door already reliable by construction, rather than needing to be retrofitted after the fact.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">what SRE cares about</div>
+    <h2>The six dimensions "production" actually covers</h2>
+    <p>Whichever model applies, SRE engagement aims to improve a service along the same consistent set of axes: system architecture and interservice dependencies, instrumentation/metrics/monitoring, emergency response, capacity planning, change management, and performance (availability, latency, efficiency). Not every service gets this — Google explicitly can't provide full SRE engagement everywhere, both because many services genuinely don't need that level of reliability investment, and because demand for SRE support structurally exceeds SRE's available bandwidth by design.</p>
+    <p>Two lighter-weight alternatives exist for services that don't warrant (or haven't yet reached) full engagement:</p>
+    <ul>
+      <li><strong>Documentation</strong> — Google's internal Production Guide codifies production best practices distilled from real SRE and development experience, usable by any team independently.</li>
+      <li><strong>Consultation</strong> — often via the Launch Coordination Engineering team from Chapter 27, typically a focused engagement: one or two SREs spend a few hours reviewing a design at a high level, then meet with developers to flag risky areas and point to known good patterns. The chapter is honest that consultation is necessarily broad and shallow given the time available — genuinely insufficient once a service has grown by orders of magnitude past its original scope, or become a critical dependency for many other services. At that scale, the stakes clearly justify moving to real, sustained engagement instead.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">model 1</div>
+    <h2>The Simple PRR Model — the "classic," reactive approach</h2>
+    <p>The <strong>Production Readiness Review (PRR)</strong> is the prerequisite gate before an SRE team formally accepts production responsibility for an already-launched service. It has two explicit goals: verify the service meets accepted production standards and that its owners are genuinely ready to work with SRE, and directly improve reliability by reducing the expected number and severity of future incidents.</p>
+
+    <h3>The five phases</h3>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 130" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="130" fill="#FBF8EF"/>
+        <g font-size="11">
+          <rect x="10" y="40" width="120" height="45" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="1.8"/>
+          <text x="70" y="67" text-anchor="middle" font-weight="bold">Engagement</text>
+          <path d="M130 62 L 155 62" stroke="#242121" stroke-width="1.5" marker-end="url(#a23)"/>
+          <rect x="155" y="40" width="120" height="45" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="1.8"/>
+          <text x="215" y="67" text-anchor="middle" font-weight="bold">Analysis</text>
+          <path d="M275 62 L 300 62" stroke="#242121" stroke-width="1.5" marker-end="url(#a23)"/>
+          <rect x="300" y="40" width="120" height="45" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="1.8"/>
+          <text x="360" y="60" text-anchor="middle" font-weight="bold" font-size="10.5">Improvements</text>
+          <text x="360" y="75" text-anchor="middle" font-size="9.5">&amp; refactoring</text>
+          <path d="M420 62 L 445 62" stroke="#242121" stroke-width="1.5" marker-end="url(#a23)"/>
+          <rect x="445" y="40" width="110" height="45" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="1.8"/>
+          <text x="500" y="67" text-anchor="middle" font-weight="bold">Training</text>
+          <path d="M555 62 L 580 62" stroke="#242121" stroke-width="1.5" marker-end="url(#a23)"/>
+          <rect x="580" y="40" width="95" height="45" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="1.8"/>
+          <text x="627" y="67" text-anchor="middle" font-weight="bold" font-size="10.5">Onboarding</text>
+        </g>
+        <defs><marker id="a23" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — the Simple PRR Model's five phases (original diagram)</div>
+    </div>
+    <ol>
+      <li><strong>Engagement</strong> — SRE leadership picks a suitable team; 1-3 SREs are chosen or self-nominate to run the review. This small group opens discussion with the development team on establishing an SLO/SLA, planning any disruptive design changes needed for reliability, and setting a rough training/handoff schedule.</li>
+      <li><strong>Analysis</strong> — SREs build a service-specific PRR checklist, drawing on domain expertise and the shared Production Guide, then evaluate the service against it. Representative checklist items the chapter names directly: do updates touch an unreasonably large fraction of the system at once? does the service hit the correctly-provisioned instance of its dependencies (e.g., not accidentally depending on a batch-processing system for live user requests)? does it request adequate network QoS for critical remote calls? are all user-visible failures instrumented, logged centrally, and properly alertable? SREs also review recent incidents and postmortem follow-ups specifically to gauge real emergency-response demands.</li>
+      <li><strong>Improvements and Refactoring</strong> — findings get prioritized by reliability impact, negotiated jointly with development into an agreed execution plan, then both teams work the fixes together. This phase's duration varies the most of any phase, driven by available engineering time and the service's starting maturity.</li>
+      <li><strong>Training</strong> — the SRE reviewers who ran the PRR personally take ownership of training the full team that will inherit on-call responsibility — design overviews, deep dives on real request flows, hands-on operational exercises — typically with active development-team participation.</li>
+      <li><strong>Onboarding</strong> — a progressive handoff of operational responsibility, change management, and access rights. The development team stays available to backstop and advise SRE for a defined settling-in period, which becomes the foundation of the ongoing working relationship between the two teams going forward.</li>
+    </ol>
+    <p>None of this ends at onboarding — <strong>continuous improvement</strong> is treated as an ongoing, permanent phase: the SRE team keeps accumulating deep service knowledge through day-to-day operation, change review, incident response, and especially postmortems, and feeds that knowledge back to development as concrete proposals, while also contributing durable lessons to the shared Production Guide for the benefit of every other team.</p>
+    <div class="callout"><b>The chapter's own Shakespeare example:</b> as the toy Shakespeare search service (introduced back in Chapter 2) grew in usage and revenue, SRE support became worth pursuing. The PRR surfaced a concrete, fixable gap — dashboards weren't covering all the metrics the SLO actually depended on. Once resolved, SRE took the pager, with two developers still folded into the on-call rotation — and going forward, future launches get discussed with SRE up front specifically to keep things running smoothly (while, as the chapter wryly notes, Murphy's Law keeps looking for its opening regardless).</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">model 2</div>
+    <h2>Early Engagement — moving SRE upstream, into the design phase itself</h2>
+    <p>The Simple PRR Model has real structural costs: it adds communication overhead for development, requires the right SRE reviewers to actually be available amid their other commitments, and demands SRE work be genuinely visible and reviewed by development for real knowledge transfer to happen — SREs should function as embedded collaborators, not an external auditing unit. But its <em>core</em> limitation is timing: by the point a Simple PRR happens, the service is already launched and running at scale — meaning SRE's opportunity to shape the things that actually determine reliability has, in large part, already closed.</p>
+    <p>The <strong>Early Engagement Model</strong> fixes this by bringing SRE in during Design, sometimes staying through Build, and taking over ownership any time during or after the Build phase — genuine active collaboration across the full development lifecycle rather than a late-stage review gate. Good candidates for this model share recognizable traits: significant new functionality being added to a system SRE already manages, a substantial rewrite or replacement targeting an existing system's use case, or a development team proactively seeking SRE's advice, or an eventual takeover, from the very start.</p>
+
+    <h3>Benefits, phase by phase</h3>
+    <table class="recap">
+      <tr><th>Phase</th><th>What early SRE involvement buys</th></tr>
+      <tr><td>Design</td><td>Prevents entire categories of future incidents — design mistakes are far cheaper to fix before implementation than after. "The best production incidents are those that never happen." When a genuine tradeoff forces a less-than-ideal choice, SRE is present for that decision and understands *why* it was made — heading off later disputes.</td></tr>
+      <tr><td>Build</td><td>SRE can directly recommend proven libraries and components, and help build operational controls in from the start — while gaining hands-on operational familiarity with the system well before launch, not scrambling to learn it during an incident.</td></tr>
+      <tr><td>Launch</td><td>SRE helps implement established launch patterns like "dark launches" — routing a slice of real traffic to the new service in parallel, discarding its response before it ever reaches a user, purely to gather real operational signal with zero user-facing risk before the real cutover.</td></tr>
+      <tr><td>Post-launch</td><td>A stable service at launch means development spends less time torn between "add features" and "fix reliability" — because reliability was already handled upstream instead of competing for attention after the fact.</td></tr>
+    </table>
+    <p>The deeper, more durable payoff: sustained, close collaboration across the whole lifecycle builds genuine cross-team solidarity — and gives SRE a much shorter, smoother path to taking over ownership than the Simple PRR Model's after-the-fact review ever could.</p>
+
+    <h3>Disengaging gracefully — a genuinely positive outcome, not a failure</h3>
+    <p>Sometimes, after early engagement, a service turns out not to need full SRE ownership at all — sometimes that's clear post-launch, sometimes SRE stays involved but never formally takes over. The chapter frames this explicitly as a <em>success</em>, not a wasted effort: it means the service was engineered to be reliable and genuinely low-maintenance from the start, and can stay safely with the development team. Symmetrically, if a service SRE engaged early with simply never reaches the scale originally projected, that invested effort is treated as an ordinary, acceptable part of overall business risk — the team gets reassigned, and whatever was learned still feeds back into how future engagements are run.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">model 3</div>
+    <h2>Frameworks and the SRE Platform — solving the scaling problem structurally</h2>
+    <p>Even with Early Engagement in place, real scaling limits emerged as Google's service count kept growing. The chapter is candid about the patterns that surfaced:</p>
+    <ul>
+      <li>Onboarding a single service still typically consumed 2-3 SREs for 2-3 <em>quarters</em> — a real, serialized bottleneck, since SRE capacity to run PRRs simply couldn't keep pace with demand, forcing strict prioritization queues.</li>
+      <li>Because engineering practices differed service to service, functionally identical production features got <strong>reimplemented independently, over and over</strong> — the chapter's specific example: near-identical logging frameworks, rebuilt separately in the same language, purely because different services never shared the same underlying coding structure. Pure wasted engineering effort.</li>
+      <li>Even when a clear pattern emerged across many incidents (overload situations, data hot-spotting recurring across services), there was no clean mechanism to replicate a fix broadly — each SRE contribution tended to stay locally scoped to the one service it was built for.</li>
+    </ul>
+
+    <h3>External pressure made this worse, not better</h3>
+    <p>Google's shift toward microservices architecture directly compounded the problem: more services, each with real fixed operational overhead regardless of how simple it individually was, meant total support demand kept climbing — while microservices simultaneously created an expectation of much <em>faster</em> deployment than the PRR model's months-long lead time could realistically support. On top of that, hiring and training genuinely qualified SREs is expensive and slow, and SRE was still expected to meaningfully serve the large, growing population of teams that had never received direct support at all.</p>
+
+    <h3>The structural fix: codify best practices directly into shared frameworks</h3>
+    <p>Rather than reviewing each service individually after the fact, Google built SRE-supported <strong>service frameworks</strong> — one per major language environment (Java, C++, Go) — so that using the framework <em>itself</em> made a service production-ready by construction, rather than needing a separate audit and remediation cycle bolted on afterward.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 190" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="190" fill="#FBF8EF"/>
+        <rect x="30" y="20" width="600" height="55" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+        <text x="330" y="52" text-anchor="middle" font-weight="bold">Application business logic — owned by product dev</text>
+        <path d="M330 75 L 330 100" stroke="#242121" stroke-width="1.5" marker-end="url(#a24)"/>
+        <rect x="30" y="105" width="600" height="55" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.5"/>
+        <text x="330" y="130" text-anchor="middle" font-weight="bold">Framework modules — instrumentation, logging, load</text>
+        <text x="330" y="148" text-anchor="middle" font-size="11">shedding, traffic control — built &amp; maintained by SRE</text>
+        <defs><marker id="a24" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — the framework split: business logic on top, SRE-maintained infrastructure underneath (original diagram)</div>
+    </div>
+    <p>Framework modules encapsulate a canonical solution for each recurring production concern — instrumentation and metrics, request logging, traffic/load control systems — so development teams can focus purely on business logic, trusting the framework has already handled correct infrastructure usage underneath. Concretely, a framework provides things like standard monitoring dimensions, a standard request-debugging log format, a standard load-shedding configuration format, and a semantically consistent measure of "overload" that different control systems can all reason about identically.</p>
+    <p>An important nuance: different language implementations (Go vs. Java vs. C++) can't literally share code, but the goal is a consistent API, behavior, configuration surface, and operational controls <em>across</em> languages — so a development team can pick whichever language platform genuinely fits their needs, while SRE still gets the same familiar operational behavior and tooling no matter which one was chosen.</p>
+
+    <h3>What frameworks actually bought Google</h3>
+    <ul>
+      <li><strong>Dramatically lower operational overhead</strong> — built-in conformance tests for coding structure, dependencies, and style (which incidentally also strengthens privacy, testing, and security posture), plus built-in deployment, monitoring, and automation for every framework-based service, letting a genuinely large number of microservices be managed without a linear staffing cost per service. The chapter's own striking claim: an idea could go from concept to fully deployed, SRE-grade production quality in a matter of <em>days</em>.</li>
+      <li><strong>Universal support "by design," even without dedicated SREs.</strong> Services that will never warrant a full dedicated SRE team can still build on the same shared, SRE-maintained production standards — quietly breaking the strict staffing bottleneck that had constrained the earlier models, and lifting baseline quality broadly across Google, not just for the subset of services with a dedicated team.</li>
+      <li><strong>Faster, lighter PRRs where they're still needed</strong> — built-in framework features mean less has to be individually verified, onboarding a framework-based service typically takes a single SRE roughly one quarter (versus the earlier 2-3 SREs over 2-3 quarters), and the cognitive burden on the SRE team managing it afterward drops correspondingly.</li>
+      <li><strong>A genuinely new engagement model: shared responsibility.</strong> The original model was binary — full SRE ownership, or effectively none. A common framework changes that: SRE can own and maintain the shared platform/infrastructure layer (load shedding, overload handling, traffic management, logging, monitoring), while development retains on-call responsibility for their own application-level bugs — splitting responsibility cleanly along a real technical seam, rather than forcing an all-or-nothing choice for every single service.</li>
+    </ul>
+    <div class="callout"><b>The staffing implication, stated directly:</b> this new split changes SRE headcount planning in two distinct ways — since so much of the underlying technology is now genuinely shared, fewer dedicated SREs are needed per individual service; and it enables entirely new platform teams, staffed according to what the shared platform itself needs to stay healthy, rather than staffed in proportion to how many services happen to be using it — and those platform teams can be shared cleanly across many products at once.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">the closing note</div>
+    <h2>Three models, all still in active use — not a strict progression</h2>
+    <p>The chapter's own conclusion is worth taking at face value: all three models — Simple PRR, Early Engagement, and Frameworks — remain in active practice at Google simultaneously. They're not a strict linear evolution where each one obsoletes the last; they're three different tools suited to different situations, and the right choice depends on a given service's maturity, scale, and how early SRE genuinely has the opportunity to get involved. That said, the chapter is candid that frameworks represent the most structurally significant shift of the three — the one doing the most to expand SRE's real reach, lower baseline management overhead, and lift production quality broadly across the organization, not just for the subset of services lucky enough to get a dedicated team.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Simple PRR Model</td><td>Reactive, post-launch review — engagement, analysis, improvements, training, onboarding, then continuous improvement</td></tr>
+      <tr><td>Design-phase decisions are the cheapest to get right</td><td>The same "earlier is cheaper" logic as bug-fixing, applied directly to service architecture</td></tr>
+      <tr><td>Early Engagement Model</td><td>SRE embedded from Design through Build, sometimes taking over ownership as early as Build itself</td></tr>
+      <tr><td>Dark launches</td><td>Route real traffic to a new service, discard the response — real operational signal with zero user risk</td></tr>
+      <tr><td>Disengaging early is a success, not a failure</td><td>It means the service was engineered to be reliable and low-maintenance without needing full-time SRE ownership</td></tr>
+      <tr><td>Frameworks codify best practice into the build itself</td><td>Production-readiness becomes a property of the framework, not a separate audit bolted on afterward</td></tr>
+      <tr><td>Shared responsibility model</td><td>SRE owns the platform layer; development owns application logic — breaking the old all-or-nothing staffing bind</td></tr>
+      <tr><td>All three models still coexist</td><td>Not a strict progression — the right model depends on a service's specific maturity and timing, not a universal default</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 32, CC BY-NC-ND 4.0 · sre.google/sre-book/evolving-sre-engagement-model</footer>
+</div>
+</body>
+</html>

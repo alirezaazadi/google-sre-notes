@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.5 — Alerting on SLOs</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/05-alerting-on-slos.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part I — Foundations</div>
+    <h1 class="title">Chapter 5: Alerting on SLOs</h1>
+    <p class="subtitle">Six increasingly clever ways to turn "we're burning our error budget" into a real alert — and why multiwindow, multi-burn-rate is the one Google actually recommends.</p>
+    <div class="source-note">📖 Based on <em>Chapter 5</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/alerting-on-slos/" target="_blank">sre.google/workbook/alerting-on-slos</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="04-monitoring.html">← Ch.4 Monitoring</a><a href="06-eliminating-toil.html">next: Ch.6 Eliminating Toil →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the four dials</div>
+    <h2>Precision, recall, detection time, reset time</h2>
+    <p>Turning an SLO into an actual alert means finding a rule that balances four properties simultaneously — and, as this chapter shows in genuinely satisfying step-by-step detail, most naive attempts optimize one at the expense of the others:</p>
+    <table class="recap">
+      <tr><th>Property</th><th>Definition</th></tr>
+      <tr><td>Precision</td><td>Of the alerts that fired, what fraction corresponded to a genuinely significant event?</td></tr>
+      <tr><td>Recall</td><td>Of the genuinely significant events, what fraction actually triggered an alert?</td></tr>
+      <tr><td>Detection time</td><td>How long between a real problem starting and a notification going out?</td></tr>
+      <tr><td>Reset time</td><td>How long does the alert keep firing after the underlying issue is actually resolved?</td></tr>
+    </table>
+    <p>The chapter walks through six approaches in increasing order of sophistication — each one a genuine, working attempt that fixes the previous approach's specific flaw, while (often) introducing a new one. This progression is worth following in full, because each failure mode is a real, common mistake teams make in practice.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">attempt 1</div>
+    <h2>Alert when the instantaneous error rate exceeds the SLO</h2>
+    <div class="math">
+      expr: job:slo_errors_per_request:ratio_rate10m{job="myjob"} >= 0.001
+      (99.9% SLO → alert if the last 10 minutes' error rate ≥ 0.1%)
+    </div>
+    <p><strong>Detection time:</strong> excellent — 0.6 seconds for a total outage. <strong>Recall:</strong> excellent — fires on anything that even brushes the threshold.</p>
+    <div class="fails"><b>The fatal flaw: terrible precision.</b> A brief 0.1% error rate sustained for exactly 10 minutes triggers this alert while consuming only 0.02% of the entire monthly error budget. Taken to the extreme, a service could fire this alert up to 144 times a day, every single day, and still comfortably meet its SLO — the alert is reacting to noise, not genuine threat.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">attempt 2</div>
+    <h2>Widen the window</h2>
+    <div class="math">
+      expr: job:slo_errors_per_request:ratio_rate36h{job="myjob"} > 0.001
+      (alert only if 5% of the 30-day budget would be spent — a 36-hour window)
+    </div>
+    <p><strong>Detection time:</strong> still good — 2 minutes 10 seconds for a full outage. <strong>Precision:</strong> meaningfully better, since a sustained high rate is far more likely to represent a genuine threat.</p>
+    <div class="fails"><b>The new flaw: terrible reset time.</b> After a total outage that's already been fixed, the 36-hour rolling average stays elevated above threshold for the <em>entire remaining 36-hour window</em> — the alert keeps firing for a day and a half after the problem is already resolved, actively training on-call to distrust and eventually ignore it. Long windows are also more expensive to compute, given the sheer number of underlying data points involved.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">attempt 3</div>
+    <h2>Add a "for" duration instead</h2>
+    <div class="math">
+      expr: job:slo_errors_per_request:ratio_rate1m{job="myjob"} > 0.001
+      for: 1h
+    </div>
+    <p>The tempting shortcut: require the error rate to stay above threshold for a full hour before firing, using a cheap short-window rate rather than an expensive long-window average.</p>
+    <div class="fails"><b>This is actively worse in a specific, dangerous way.</b> Duration doesn't scale with severity — a total (100%) outage and a marginal 0.2% outage both take exactly one hour to alert, even though the 100% outage would burn <em>140% of the entire 30-day budget in that single hour alone</em>. Worse: if the metric dips back under threshold even momentarily, the duration timer resets from zero — meaning an SLI that oscillates between passing and failing may never fire at all. The chapter's own striking example: 100% error spikes lasting exactly 5 minutes every 10 minutes, forever, never trip a 10-minute duration threshold — despite quietly consuming 35% of the entire monthly error budget. The chapter explicitly recommends against using duration clauses for SLO-based alerting, with only a narrow exception for filtering very short-lived noise.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">attempt 4</div>
+    <h2>Alert on burn rate</h2>
+    <p><strong>Burn rate</strong> is the key concept that finally breaks the tradeoff: how fast, relative to the SLO's own pace, the service is consuming its error budget. A burn rate of <strong>1</strong> means "consuming budget exactly fast enough to hit zero right at the end of the SLO window" — for a 99.9% SLO over 30 days, that's a constant 0.1% error rate.</p>
+    <div class="math">
+      Burn rate 1 → 0.1% error rate → exhausts budget in 30 days<br>
+      Burn rate 2 → 0.2% error rate → exhausts budget in 15 days<br>
+      Burn rate 10 → 1% error rate → exhausts budget in 3 days<br>
+      Burn rate 1,000 → 100% error rate → exhausts budget in 43 minutes
+    </div>
+    <p>The trick: instead of scaling the <em>window</em> to control precision, scale the <em>threshold</em> — using a short, cheap window, but requiring a proportionally higher error rate before it counts as significant. Deciding "a 5% budget spend over 1 hour deserves a page" works out to a burn rate of 36:</p>
+    <div class="math">
+      expr: job:slo_errors_per_request:ratio_rate1h{job="myjob"} > 36 * 0.001
+    </div>
+    <p><strong>Precision:</strong> good — you're now specifically targeting a meaningful chunk of budget. <strong>Detection time:</strong> good. <strong>Reset time:</strong> much better — 58 minutes, versus the previous approach's day-and-a-half.</p>
+    <div class="fails"><b>The remaining flaw: poor recall.</b> A sustained 35x burn rate — enough to exhaust the <em>entire</em> 30-day budget in just 20.5 hours — never actually crosses the 36x threshold this rule is watching for, so it never fires at all. And 58 minutes is still a genuinely long reset time for something already resolved.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">attempt 5</div>
+    <h2>Multiple burn rates, layered together</h2>
+    <p>Rather than picking one single burn rate/window pair, layer several — each tuned to catch a different severity and urgency, with the fastest, most severe burns routed to a page and slower, more gradual burns routed to a ticket instead:</p>
+    <table class="recap">
+      <tr><th>Budget consumed</th><th>Window</th><th>Burn rate</th><th>Notification</th></tr>
+      <tr><td>2%</td><td>1 hour</td><td>14.4</td><td>Page</td></tr>
+      <tr><td>5%</td><td>6 hours</td><td>6</td><td>Page</td></tr>
+      <tr><td>10%</td><td>3 days</td><td>1</td><td>Ticket</td></tr>
+    </table>
+    <div class="math">
+      expr: (rate1h > 14.4*0.001) or (rate6h > 6*0.001)
+      severity: page
+
+      expr: rate3d > 0.001
+      severity: ticket
+    </div>
+    <p>The rationale for the ticket tier specifically: a slow-but-real burn (10% budget in 3 days) is genuinely significant, but the pace of consumption itself gives you comfortable time to address it during normal working hours — waking someone up at 3am for it would be a wasted interruption, not a necessary one.</p>
+    <div class="fails"><b>Two real costs of this approach:</b> reset time gets even longer thanks to the 3-day window, and — without care — <em>multiple</em> notifications can fire simultaneously for the same underlying event (10% of budget spent in 5 minutes technically also satisfies the 6-hour and 1-hour thresholds too), requiring genuine alert-suppression logic to avoid flooding on-call with three redundant pages for one real problem.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">attempt 6 — the recommendation</div>
+    <h2>Multiwindow, multi-burn-rate alerts</h2>
+    <p>The final refinement adds one more parameter: a <em>second, much shorter</em> window that must <em>also</em> currently be breaching the same threshold, alongside the long window, before the alert is allowed to fire. This is the piece that finally fixes reset time properly — once the short window drops back under threshold, the alert stops firing almost immediately, even while the long window is still catching up.</p>
+    <div class="callout"><b>Rule of thumb for sizing the short window:</b> roughly 1/12th the length of the long window. In the chapter's own worked example: after 15% errors for 10 minutes, the short-window average crosses the threshold almost immediately, and the long-window average crosses about 5 minutes later — at which point the alert actually starts firing. Once the errors stop, the short window drops back under threshold within about 5 minutes (reset time fixed!), even though the long window itself takes a full 60 minutes to fully recover — but because both conditions are now required together, the alert correctly stops as soon as the short window clears.</div>
+    <div class="math">
+      Page:  (rate1h > 14.4*0.001 AND rate5m > 14.4*0.001)
+          OR (rate6h > 6*0.001 AND rate30m > 6*0.001)
+
+      Ticket: (rate24h > 3*0.001 AND rate2h > 3*0.001)
+           OR (rate3d > 0.001 AND rate6h > 0.001)
+    </div>
+    <p>Google's own recommended starting parameters for a 99.9% SLO:</p>
+    <table class="recap">
+      <tr><th>Severity</th><th>Long window</th><th>Short window</th><th>Burn rate</th><th>Budget consumed</th></tr>
+      <tr><td>Page</td><td>1 hour</td><td>5 minutes</td><td>14.4</td><td>2%</td></tr>
+      <tr><td>Page</td><td>6 hours</td><td>30 minutes</td><td>6</td><td>5%</td></tr>
+      <tr><td>Ticket</td><td>3 days</td><td>6 hours</td><td>1</td><td>10%</td></tr>
+    </table>
+    <div class="callout"><b>The chapter's clear verdict:</b> this approach achieves good precision, good recall (thanks to the 3-day tail), fast detection, and fast reset simultaneously — genuinely balancing all four dials at once, which none of the previous five attempts managed. The real cost is complexity: more parameters, window sizes, and thresholds to actually understand and maintain — which is exactly why the chapter later recommends bucketing services rather than hand-tuning every single one independently (see below).</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">low-traffic services</div>
+    <h2>When a single request can blow your whole budget</h2>
+    <p>The burn-rate math above assumes traffic volume is high enough that a single failed request is statistically negligible. That assumption breaks for genuinely low-traffic services — nights, weekends, or just inherently low-volume systems.</p>
+    <div class="math">
+      10 requests/hour, 1 fails → 10% hourly error rate<br>
+      For a 99.9% SLO, that's a 1,000x burn rate → pages immediately<br>
+      → consumes 13.9% of the entire 30-day budget from ONE failed request<br>
+      → the whole month's budget only tolerates ~7 failed requests, total
+    </div>
+    <p>Single requests routinely fail for ephemeral, uninteresting reasons that genuinely don't warrant the same emergency response as a systemic outage. Four concrete mitigations, matched to different situations:</p>
+    <ul>
+      <li><strong>Generate artificial traffic.</strong> Synthetic requests give the monitoring system a steady baseline signal to work with, reusing existing SLO logic and thresholds unchanged — but this only works well if you can synthesize a genuinely representative slice of real request types (harder for complex, stateful services), and it has a real blind spot: a real-user-affecting bug that the synthetic traffic happens not to trigger will hide behind the artificial traffic's own healthy-looking success rate.</li>
+      <li><strong>Combine related low-traffic services into one monitored group.</strong> Works well when services genuinely share a failure domain (a common backend database, say) — pooling raises effective traffic volume, giving the same burn-rate math real statistical footing. The downside: a complete failure of one individual low-traffic service inside the group might not move the group's blended number enough to count as significant on its own.</li>
+      <li><strong>Change the service or client to lower the real impact of a single failure.</strong> Client-side retries with exponential backoff and jitter, or fallback/store-and-forward paths that capture a failed request for later retry — both genuinely reduce how much a single ephemeral failure actually hurts the user, which is arguably the more fundamental fix regardless of traffic volume.</li>
+      <li><strong>Just lower the SLO, or widen the alerting window.</strong> If a single failure's real user impact doesn't actually justify paging someone at 3am, a lower SLO reflects that honestly, and only pages for genuinely large, sustained outages. This is explicitly framed as a product decision, not a pure engineering one — lowering an SLO changes real expectations and shifts when the error budget policy actually kicks in, which needs the same stakeholder buy-in Chapter 2 describes for setting any SLO in the first place.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">extreme targets</div>
+    <h2>When the SLO itself is unusually loose or unusually tight</h2>
+    <p><strong>Very loose SLOs</strong> (e.g., 90% availability) can break the recommended default parameters in the opposite direction: a complete, total outage only consumes 1.4% of that budget in an hour — under the 2% page threshold from the standard table — meaning the "page" tier as written could literally never fire, regardless of how bad things get. These thresholds genuinely need re-tuning to the specific SLO in use, not applied as a universal constant.</p>
+    <div class="fails"><b>Very tight SLOs create the opposite, more dangerous problem.</b> A service targeting 99.999% monthly availability exhausts its <em>entire</em> budget from a total outage in just 26 seconds — faster than the collection interval of many monitoring systems, let alone the full round trip through alert evaluation, notification routing, and a human actually reading a page. Even an automated remediation system might not react in time to save any budget at all. The chapter's blunt conclusion: getting notified you have 26 seconds of budget left isn't a useful defense at this reliability tier — the only real defense is designing the system so a 100% outage is structurally, vanishingly unlikely to happen in the first place (staged/canary rollouts, covered in Chapter 16, are the concrete mechanism — rolling a change out to just 1% of users first buys roughly 43 minutes of reaction time at the same 1% burn rate, instead of 26 seconds at 100%).</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">scaling alerting</div>
+    <h2>Don't hand-tune every service — bucket by request class instead</h2>
+    <p>A service with 100 microservices (or, equivalently, one service with 100 distinct request types) accumulates real, unmanageable toil if every single one gets its own hand-picked window sizes and burn-rate thresholds. The chapter's clear recommendation: pick <em>one</em> set of alerting parameters and apply it uniformly — then, separately, group request types into a small number of <strong>availability tiers</strong> based on genuine similarity of importance, rather than custom-tuning each one individually.</p>
+    <table class="recap">
+      <tr><th>Class</th><th>Meaning</th><th>Availability</th><th>Latency (p90 / p99)</th></tr>
+      <tr><td>CRITICAL</td><td>Most important — e.g. user login</td><td>99.99%</td><td>100ms / 200ms</td></tr>
+      <tr><td>HIGH_FAST</td><td>Core interactive functionality</td><td>99.9%</td><td>100ms / 200ms</td></tr>
+      <tr><td>HIGH_SLOW</td><td>Important, but not latency-sensitive (e.g. generating a report)</td><td>99.9%</td><td>1,000ms / 5,000ms</td></tr>
+      <tr><td>LOW</td><td>Needs *some* availability, but outages are mostly invisible (e.g. background notification polling)</td><td>99%</td><td>—</td></tr>
+      <tr><td>NO_SLO</td><td>Not user-visible at all — dark launches, alpha functionality</td><td>—</td><td>—</td></tr>
+    </table>
+    <p>This deliberately trades a small amount of fidelity (compared to a hypothetical, perfectly-tuned-per-endpoint system) for a dramatic reduction in real, ongoing management overhead — the chapter's judgment is that this handful of buckets still protects user happiness effectively, at a fraction of the cognitive cost of tuning parameters individually across dozens or hundreds of endpoints.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Four dials: precision, recall, detection time, reset time</td><td>Most naive alerting rules optimize one or two at the direct expense of the others</td></tr>
+      <tr><td>Duration ("for") clauses are actively dangerous for SLO alerting</td><td>They don't scale with severity, and reset entirely on any brief dip — periodic spikes can go undetected forever</td></tr>
+      <tr><td>Burn rate</td><td>Scaling the threshold (not just the window) lets a short, cheap window still catch only genuinely significant events</td></tr>
+      <tr><td>Multiwindow, multi-burn-rate is the recommended default</td><td>The only approach in the chapter's progression that balances all four dials simultaneously</td></tr>
+      <tr><td>Short window ≈ 1/12 the long window</td><td>The rule of thumb that fixes reset time without sacrificing detection speed</td></tr>
+      <tr><td>Low-traffic services need special handling</td><td>A single failed request can register as a 1,000x burn rate purely from low request volume, not real severity</td></tr>
+      <tr><td>Extremely tight SLOs need canarying, not better alerting</td><td>A 99.999% target can exhaust its entire budget in 26 seconds — faster than any alert pipeline can react</td></tr>
+      <tr><td>Bucket services by request class, don't hand-tune each one</td><td>CRITICAL/HIGH_FAST/HIGH_SLOW/LOW/NO_SLO keeps alerting manageable at real scale</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 5, CC BY-NC-ND 4.0 · sre.google/workbook/alerting-on-slos</footer>
+</div>
+</body>
+</html>

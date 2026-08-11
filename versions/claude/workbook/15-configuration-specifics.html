@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.15 — Configuration Specifics</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/15-configuration-specifics.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part II — Practices</div>
+    <h1 class="title">Chapter 15: Configuration Specifics</h1>
+    <p class="subtitle">Five real pitfalls that swallow configuration languages whole, a Jsonnet walkthrough for Kubernetes, and why an infinite loop is the least of your worries — the "billion laughs attack" works even on plain XML.</p>
+    <div class="source-note">📖 Based on <em>Chapter 15</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/configuration-specifics/" target="_blank">sre.google/workbook/configuration-specifics</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="14-configuration-design-and-best-practices.html">← Ch.14 Configuration Design</a><a href="16-canarying-releases.html">next: Ch.16 Canarying Releases →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">two flavors of toil</div>
+    <h2>Replication toil, then complexity toil — the predictable arc</h2>
+    <p>Early in a project's life, configuration is lightweight — a handful of INI, JSON, or YAML files. As applications, servers, and variations multiply, what used to be "edit one file" becomes "edit the same setting in five places" — the chapter names this <strong>replication toil</strong>: the mundane burden of managing config duplicated across a system. It's not unique to huge organizations either — it shows up especially fast in microservice architectures with many independently configured components.</p>
+    <div class="fails"><b>The natural fix — building a configuration language or framework — doesn't eliminate toil, it just changes its shape.</b> Freed from overwhelming duplication, a project's config corpus grows again with renewed energy, and eventually runs into <strong>complexity toil</strong>: the genuinely frustrating task of untangling emergent, sometimes undesirable behavior from your own automation. This typically shows up once a team crosses roughly 10+ engineers, and compounds with continued growth — the earlier you address it, the better, since configuration complexity essentially never shrinks on its own.</div>
+    <p>Three broad strategies, in order of preference: remove the configuration altogether where the application can reasonably infer or dynamically compute the answer itself (it may have direct access to information — machine specs, current load — the configuration layer never will); introduce a real configuration language to eliminate duplication if replication toil is the dominant pain; and, once a system is in place, adopt the operational best practices below to actively manage complexity toil going forward.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">five pitfalls</div>
+    <h2>How configuration systems consistently go wrong</h2>
+    <p>The chapter's central, hard-won claim: it's difficult to find a popular configuration system that avoids <em>all</em> of the following pitfalls — Google built several internal systems that fell into more than one before arriving at its current understanding.</p>
+    <ul>
+      <li><strong>Pitfall 1 — failing to recognize configuration as a programming-language problem.</strong> If you're not deliberately designing a language, whatever you end up with is unlikely to be a good one. Programming-language features creep in even when the stated goal was "pure data" — a <code>count</code> attribute meaning "provision more than one of these" is a language feature (it needs an external evaluator) wearing data's clothing. String-interpolation rules that quietly grow into full expression support suffer the same fate — strings that "look like just data" but secretly encode checksums, base64, or structural logic. Even the popular YAML+Jinja combination falls into this trap: each half is excellent alone (YAML for pure data, Jinja for HTML templating), but combined they become genuinely hard for both humans and tools to reason about or analyze.</li>
+      <li><strong>Pitfall 2 — designing accidental or ad hoc language features.</strong> Bolting programming constructs onto a simple format piecemeal, over time, tends to produce something more complex — and less expressive — than a language actually designed as a language from the start, riddled with gotchas the original authors never anticipated because they never considered how the features would interact.</li>
+      <li><strong>Pitfall 3 — building too much domain-specific optimization.</strong> The smaller a bespoke language's user base, the longer it takes to justify real tooling investment — and engineers are understandably reluctant to invest deeply in learning something with zero applicability outside one narrow domain, with no Stack Overflow answers to lean on when something breaks.</li>
+      <li><strong>Pitfall 4 — interleaving configuration evaluation with side effects.</strong> Letting configuration reach out to external systems or out-of-band data (DNS lookups, live VM IDs, "latest build version") during evaluation breaks hermeticity outright — in the worst case, you can't even debug your configuration without actually spending money reserving live cloud resources. The fix: evaluate configuration fully first, expose the resulting pure data for inspection, and only then allow any side effects to occur.</li>
+      <li><strong>Pitfall 5 — reaching for an existing general-purpose scripting language (Python, Ruby, Lua).</strong> This looks like a shortcut past the first four pitfalls, but tends to be heavyweight and typically needs intrusive sandboxing to preserve hermeticity — a general-purpose language can touch the local filesystem and network by design, which is precisely the access you don't want a config evaluator to have by default. It also assumes every future configuration maintainer is fluent in that specific language, which won't hold indefinitely.</li>
+    </ul>
+    <div class="callout"><b>The chapter's recommendation, given all five traps: use an existing, purpose-built configuration DSL</b> (HOCON, Dhall, Jsonnet, and similar) rather than reinventing one. Even if a DSL initially looks more powerful than you strictly need, that headroom tends to get used eventually — and an in-house style guide can always restrict a language's practical surface area if a team wants tighter guardrails than the language itself enforces.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">jsonnet</div>
+    <h2>A quick orientation to the chapter's chosen example language</h2>
+    <p>Jsonnet is a hermetic, open-source configuration DSL — Python-like syntax, object orientation, functional constructs — and is a strict superset of JSON, meaning any valid JSON file is already a valid Jsonnet program that simply outputs itself, with added support for comments and more permissive quoting/commas on top. The chapter is explicit there's no single dominant configuration language at Google or among its readers — Jsonnet was chosen purely as a concrete, illustrative example, and the underlying lessons transfer directly to whatever language a team actually uses.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">integration</div>
+    <h2>Wiring a configuration language into a real application</h2>
+    <p>If a configuration language natively outputs the format an application already expects (Jsonnet → JSON, directly usable by anything that speaks JSON, YAML, or HCL), no extra integration work is needed. For a genuinely different target format, the general recipe is: represent the configuration data using the language's own generic primitives (maps, lists, strings — available in essentially any config language); use the language's own constructs to eliminate duplication; then serialize to the actual required output format, reusing an existing serializer where one exists (Jsonnet's standard library already emits INI and XML), falling back to basic string templating only as a last resort for formats that genuinely resist structured representation (a raw Bash script, say).</p>
+    <p>Once a language can drive one application, it can often drive several simultaneously from the same source — defining a port number exactly once and generating both an Nginx config and a matching Terraform firewall rule from it, for instance, or configuring monitoring dashboards, retention policies, and alert routing from the same underlying files. Configuration can nest too — a Cassandra config embedded inside a Deployment Manager config, itself embedded inside a Kubernetes ConfigMap — and a good language handles the resulting string-quoting gymnastics cleanly rather than leaving it to the author.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">worked example</div>
+    <h2>Kubernetes: YAML's real ceiling, and what Jsonnet buys you past it</h2>
+    <p>Kubernetes deliberately ships with no bundled configuration language at all — not even an ad hoc one. Simple deployments get by fine on plain YAML; larger ones typically reach for something like Jsonnet once genuine abstraction becomes necessary. YAML's own abstraction facility — anchors — is rarely useful in practice and isn't even supported by Kubernetes itself, so replicating a Kubernetes object four times with minor variations in practice means four nearly-identical YAML files, with the actually-important differences buried in a sea of duplicated boilerplate.</p>
+    <p>The chapter's worked Jsonnet solution defines one abstract template (<code>MyTemplate</code>) with a required <code>tier</code> field — deliberately left unset via Jsonnet's <code>error</code> construct, so any attempt to instantiate the template without overriding <code>tier</code> fails loudly at evaluation time, functioning much like a pure-virtual method in an object-oriented language. Four separate, short instance files each override just <code>tier</code> (and, where needed, <code>namespace</code> or an extra label) — with the double-colon <code>::</code> syntax marking <code>tier</code> itself as a hidden field, present for internal template logic but never actually emitted into the final JSON Kubernetes would otherwise reject as an unrecognized property.</p>
+    <div class="callout"><b>The key advantage over a plain function call: templates let you override <em>any</em> field from the parent, not just parameters explicitly exposed by a function signature.</b> A specific instance can reach in and override something normally considered "too low-level" to parameterize — session affinity, say — without the base template needing to have anticipated that override in advance. This is the same "escape hatch for power users" philosophy from Chapter 14, made concrete: the common case stays simple, and the uncommon case still has a clean way to reach past it.</div>
+    <p>Abstraction like this pays off in two recognizable patterns: a single team maintaining near-identical configuration variants across environments (prod/stage/dev/test) or geographies, and an infrastructure team maintaining a reusable template for a shared component (a caching layer, an API-serving framework) that individual application teams instantiate and lightly customize for their own specific needs.</p>
+  </section>
+
+  <section card class="card">
+    <div class="tab">in-house apps</div>
+    <h2>Designing a custom application to coexist cleanly with a config language</h2>
+    <p>The chapter's governing split: let the configuration language handle the <em>language</em> problem, and let your application handle everything else. Concrete, transferable recommendations:</p>
+    <ul>
+      <li><strong>Consume a single pure-data file</strong> — let the config language itself handle splitting configuration across multiple source files via imports, so the application only ever needs to parse one final, merged artifact.</li>
+      <li><strong>Represent named collections as objects keyed by name, not arrays of objects with a name field.</strong> <code>{"cat": {...}, "dog": {...}}</code> beats <code>[{"name": "cat", ...}, {"name": "dog", ...}]</code> — the object form lets entities be referenced directly by name (<code>animals.cat</code>) rather than through a brittle numeric index that silently breaks if ordering ever changes.</li>
+      <li><strong>Group configuration by functional relationship, not by entity type, at the top level.</strong> A structure like <code>{"pot_assembly1": {"pot": {...}, "lid": {...}}}</code> keeps logically related pieces together in one subtree — which is exactly what lets the configuration language apply abstraction along real functional boundaries, rather than fighting an arbitrary type-based grouping that splits related concerns apart.</li>
+      <li><strong>Keep the data representation itself simple.</strong> Don't embed language-like features into the data format (that's Pitfall 1 again, one layer down) — doing so forces users to guess whether a given abstraction belongs in the data or in the surrounding language, which is pure confusion for no real benefit. Don't over-engineer around verbosity either — a config language can absorb that cost far more gracefully than a hand-rolled data-format shortcut can. And avoid interpreting custom string-interpolation syntax inside your application when you can possibly avoid it — sometimes it's genuinely unavoidable (describing post-generation actions like alerts or handlers), but the language should be doing as much of the language-level work as it possibly can.</li>
+    </ul>
+    <div class="fails"><b>Don't use the configuration language to paper over an inconsistent underlying model.</b> If your data model has awkward naming, mismatched plurals, or genuine mistakes, fix those in the model itself — patching them over at the configuration-language layer just relocates the inconsistency rather than removing it, and risks making things worse if the underlying model changes shape later.</b></div>
+    <p>The chapter is direct that configuration changes tend to dominate real outage root causes over time — which makes validating generated configuration a genuine reliability practice, not just hygiene. Syntactic validity alone (does the JSON parse?) catches very little; real value comes from schema validation plus domain-specific checks — required fields actually present, referenced filenames actually existing, numeric values within sane bounds. JSONSchema works directly against Jsonnet's JSON output; applications built on Protocol Buffers get validation nearly for free, since generating the canonical proto JSON form and deserializing it will itself surface most structural problems. Critically: never silently ignore unrecognized field names during validation — an unexpected field is very often a typo, and catching it early (ideally in a precommit hook, not after deployment) is exactly the kind of cheap, high-leverage check worth automating.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">operating it</div>
+    <h2>Treating configuration like the software it actually is</h2>
+    <ul>
+      <li><strong>Version shared libraries deliberately.</strong> A breaking change to a widely-used template library forces a real choice: force a synchronized global update across every consumer (often organizationally infeasible), or version the library so different consumers can migrate independently — accepting that consumers who stay on an older version accumulate real technical debt they'll eventually have to pay down. Most config languages, Jsonnet included, don't natively support versioning — a simple directory-per-version convention in the import path does the job in practice.</li>
+      <li><strong>Check configuration into real source control.</strong> This directly delivers the change-history and easy-rollback properties Chapter 14 called for, plus a genuine bonus: code review becomes possible for configuration changes the same way it's standard practice for application code.</li>
+      <li><strong>Invest in tooling — style enforcement, linting, editor integration.</strong> Post-write and precommit hooks that run formatters and linters automatically keep quality consistent across every author, without relying on individual discipline alone.</li>
+      <li><strong>Write real unit tests for shared template libraries.</strong> A Jsonnet test file can import the library under test, exercise it against representative inputs, and assert on the resulting output using <code>assert</code> or the standard library's <code>assertEqual</code> (which usefully reports the actual mismatched values on failure) — with community-maintained frameworks like jsonnetunit available for running a full structured suite rather than aborting at the very first failing assertion.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">when to evaluate</div>
+    <h2>Early, at build time, or at runtime — three points on a real tradeoff</h2>
+    <p>Because a properly hermetic configuration language always produces the same output for the same input, generated JSON is fully interchangeable with the Jsonnet source that produced it — meaning you have real freedom in <em>when</em> you choose to actually run the evaluation.</p>
+    <table class="recap">
+      <tr><th>When</th><th>Pros</th><th>Cons</th></tr>
+      <tr><td>Very early — check in the generated JSON alongside source</td><td>Reviewers can sanity-check that a refactor genuinely didn't change output; full line-level audit history at both levels; no runtime evaluation risk or binary-size cost</td><td>Generated JSON isn't always readable (long embedded strings); may be unsuitable to commit at all (too large, contains secrets); concurrent edits across separate source files can collide into painful JSON merge conflicts</td></tr>
+      <tr><td>Middle — evaluate at build time, embed the resulting JSON in the release artifact</td><td>Controls runtime complexity, binary size, and risk exposure without rebuilding JSON on every pull request; zero risk of source and generated output drifting apart</td><td>A more complex build pipeline; harder for a reviewer to directly see the concrete effect of a change</td></tr>
+      <tr><td>Late — evaluate at runtime, linking the language directly into the application</td><td>Simplest to set up — no separate build step; supports genuinely dynamic, user-supplied configuration at runtime</td><td>Larger runtime footprint and risk surface; configuration bugs surface at runtime, which is the most expensive place to discover them; untrusted input needs real, deliberate sandboxing (see below)</td></tr>
+    </table>
+    <p>Google's own general preference leans toward the build-time middle ground for exactly the reasons in that row. Which approach fits depends heavily on your actual deployment shape — a purely local command-line tool (like ksonnet) can safely link the evaluator in-process, since the code only ever runs on its own author's machine; Box.com's infrastructure instead uses Git hooks that act only on already-generated JSON checked into the repo, specifically to avoid ever running Jsonnet server-side; a server-side deployment daemon like Helm or Spinnaker, by contrast, has little choice but to evaluate configuration at runtime on the server — which is precisely where the next section's precautions become essential.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">abusive configuration</div>
+    <h2>An infinite loop is the easy failure mode — the real danger is subtler</h2>
+    <p>Unlike a long-running service, configuration evaluation is supposed to terminate quickly with a concrete result. Bugs — or deliberate attacks — can violate that assumption. The chapter's simplest illustration, a trivially non-terminating recursive Jsonnet function, makes the point obvious; a similarly simple function that keeps appending to an ever-growing list makes the unbounded-<em>memory</em> version of the same problem just as easy to write.</p>
+    <div class="fails"><b>Restricting the language to guarantee termination (removing Turing completeness) doesn't actually solve this.</b> A program can terminate in the formal sense while still consuming an absurd, practically-infinite amount of time or memory before it does — the chapter's example: naive recursive doubling that's entirely well-defined and guaranteed to halt, yet still explodes combinatorially in practice. This exact class of attack — the "billion laughs attack" — is well known even against supposedly inert, non-Turing-complete formats like plain XML and YAML, via deeply nested entity or anchor expansion.</div>
+    <p>How much this actually matters depends heavily on trust level. A command-line tool that a developer runs locally to build and deploy their own Kubernetes objects is evaluating fully <em>trusted</em> code — accidental non-termination is rare, and a stray Ctrl-C is a perfectly adequate mitigation; accidental memory exhaustion is genuinely unlikely in that setting. A server like Helm or Spinnaker that accepts arbitrary configuration code from end users and evaluates it live inside a request handler is a fundamentally different, much riskier situation — exactly the setup a real denial-of-service attack could exploit to tie up request handlers or exhaust server memory.</p>
+    <p>For that untrusted case, the chapter's concrete recommendation is real sandboxing — running the evaluator in a separate process under a resource limit (<code>ulimit</code> or the equivalent on non-Unix systems), typically by forking to the command-line executable rather than linking the language directly into the request handler. Done this way, a runaway configuration fails safely within its resource budget and reports the failure back to the end user, rather than silently degrading the whole service for everyone. Using a memory-safe native implementation of the language (the chapter mentions Go's native Jsonnet implementation specifically) adds a further layer of defense against classic memory-safety exploits in a C++-based evaluator.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Replication toil → complexity toil is a predictable arc</td><td>Building a config framework doesn't eliminate toil — it just relocates it, and the earlier you address complexity toil the better</td></tr>
+      <tr><td>Five pitfalls, and most systems fall into more than one</td><td>Recognizing configuration as a genuine language-design problem from the start avoids the worst of them</td></tr>
+      <tr><td>Prefer an existing DSL over rolling your own or reaching for Python</td><td>Purpose-built languages avoid the sandboxing and tooling costs a general-purpose scripting language brings</td></tr>
+      <tr><td>Templates let you override any field; functions only parameterize what's exposed</td><td>The Kubernetes example shows templates as the genuine "escape hatch" for power-user overrides</td></tr>
+      <tr><td>Group config by functional relationship, not entity type</td><td>Keeps logically related settings together, which is what lets abstraction follow real functional boundaries</td></tr>
+      <tr><td>Fix an inconsistent model at the model, not the config layer</td><td>Papering over it with configuration-language tricks just relocates the inconsistency</td></tr>
+      <tr><td>Validate generated config beyond mere syntax</td><td>Configuration changes dominate real outage root causes — schema and domain-specific checks catch what parsing alone misses</td></tr>
+      <tr><td>Sandbox untrusted configuration evaluation</td><td>Termination guarantees alone don't prevent a "billion laughs"-style resource exhaustion attack</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 15, CC BY-NC-ND 4.0 · sre.google/workbook/configuration-specifics</footer>
+</div>
+</body>
+</html>

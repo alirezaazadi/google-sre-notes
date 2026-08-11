@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.11 — Managing Load</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/11-managing-load.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part II — Practices</div>
+    <h1 class="title">Chapter 11: Managing Load</h1>
+    <p class="subtitle">Pokémon GO's 50x-over-estimate launch, "stabilized anycast," and the fictional dress shop whose load balancer and load shedder were secretly fighting each other.</p>
+    <div class="source-note">📖 Based on <em>Chapter 11</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/managing-load/" target="_blank">sre.google/workbook/managing-load</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="10-postmortem-culture-learning-from-failure.html">← Ch.10 Postmortem Culture</a><a href="12-introducing-non-abstract-large-system-design.html">next: Ch.12 Non-Abstract Large System Design →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the premise</div>
+    <h2>No single tool stabilizes load — it's always a combination</h2>
+    <p>This chapter extends Chapters 19–20 of the original SRE book with concrete, real-world detail, centered on Google Cloud Load Balancer (GCLB) as a working example — though the chapter is explicit that its lessons generalize to essentially any large-scale load balancer. Google deliberately avoided DNS-based load balancing for GCLB specifically because it depends on client cooperation to properly expire and refetch DNS records — a real, endemic weakness covered in the original book's Chapter 19. Instead, GCLB is built on <strong>anycast</strong>: routing clients to the topologically nearest cluster via BGP, using a single virtual IP, which both improves latency and lets DNS record TTLs be set much longer.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the architecture</div>
+    <h2>Anycast, Maglev, GSLB, and the GFE — four layers, each with a job</h2>
+    <p>Plain anycast has two real weaknesses: too many nearby users can overwhelm one frontend site, and BGP route recalculation ("flapping") can reset in-progress TCP connections when a user's traffic suddenly gets rerouted to a different frontend mid-session.</p>
+    <div class="callout"><b>Stabilized anycast — the fix.</b> Google's custom load balancer, <strong>Maglev</strong>, maintains a mapping from client IPs to their actual closest frontend site. If a Maglev machine receives a packet for a client that's really closest to a *different* site, it forwards that packet to a Maglev machine at the correct site instead of processing it locally — preserving session continuity even when BGP routing briefly disagrees with the "true" nearest site.</div>
+    <p><strong>Maglev</strong> itself distributes incoming packets evenly across a pool of machines via Equal-Cost Multi-Path (ECMP) forwarding — meaning capacity scales simply by adding more Maglev machines, and redundancy is modeled as N+1 rather than the traditional active/passive 1+1 pairing most hardware load balancers use. It uses consistent hashing plus a connection-tracking table (keyed on the packet's 5-tuple: source/destination address, source/destination port, protocol) to route a packet to the same backend as previous packets in that connection, without needing to share connection state across machines — letting Maglev scale by raw packet rate rather than by connection count.</p>
+    <p><strong>GSLB</strong> (Global Software Load Balancer) sits above Maglev, balancing live traffic between entire clusters — matching demand to available capacity and transparently draining traffic away from failed clusters. <strong>GFE</strong> (Google Front End) is typically the first Google server an HTTP(S) request actually touches: it terminates the client's TCP/SSL session, inspects the HTTP header and URL path to decide which backend service should handle the request, then re-encrypts and forwards it. GFEs continuously health-check their own backends, and use "lame duck" mode (from Chapter 20 of the original SRE book) to gracefully retire a backend — continuing to serve in-flight requests while failing new health checks — so updates never disrupt an active user request. GFEs also maintain persistent connections to recently active backends specifically to avoid paying fresh connection-setup latency on every new request.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 190" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="190" fill="#FBF8EF"/>
+        <g font-size="11.5">
+          <rect x="15" y="70" width="140" height="50" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="1.8"/>
+          <text x="85" y="100" text-anchor="middle" font-weight="bold">Client (anycast)</text>
+          <path d="M155 95 L 185 95" stroke="#242121" stroke-width="1.8" marker-end="url(#a26)"/>
+          <rect x="185" y="70" width="120" height="50" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="1.8"/>
+          <text x="245" y="100" text-anchor="middle" font-weight="bold">Maglev</text>
+          <path d="M305 95 L 335 95" stroke="#242121" stroke-width="1.8" marker-end="url(#a26)"/>
+          <rect x="335" y="70" width="120" height="50" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="1.8"/>
+          <text x="395" y="100" text-anchor="middle" font-weight="bold">GFE</text>
+          <path d="M455 95 L 485 95" stroke="#242121" stroke-width="1.8" marker-end="url(#a26)"/>
+          <rect x="485" y="70" width="180" height="50" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="1.8"/>
+          <text x="575" y="100" text-anchor="middle" font-weight="bold">Backend service</text>
+          <text x="335" y="35" text-anchor="middle" font-size="11" fill="var(--ink-soft)">GSLB coordinates capacity across all layers</text>
+        </g>
+        <defs><marker id="a26" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — the request path through GCLB's layers (original diagram)</div>
+    </div>
+    <p>To minimize latency specifically, Maglev and GFE are pushed to the very edge of Google's network — SSL is terminated as close to the user as physically possible, since negotiating HTTPS costs two full round trips, and requests then travel over already-established, long-lived encrypted connections deeper into the network from there. Combined with staged canarying — deploying a new version to a small server subset first, gradually increasing traffic while watching for regressions — this architecture is what lets GCLB offer a 99.99% availability SLA.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 1</div>
+    <h2>Pokémon GO: 50x over the most optimistic load estimate</h2>
+    <p>Niantic's 2016 launch was, by the chapter's own account, wildly more popular than anticipated — load-tested for up to 5x their most optimistic traffic projection, the actual launch requests-per-second rate hit nearly <strong>50x</strong> that estimate. Compounding the raw volume challenge: the game world is globally shared and highly interactive, requiring near-real-time state updates distributed to every nearby player simultaneously.</p>
+
+    <h3>Before GCLB: a fragile pre-launch architecture</h3>
+    <p>At launch, Pokémon GO used Google's regional Network Load Balancer (NLB) to route traffic into a Kubernetes cluster, with Nginx pods acting as Layer-7 reverse proxies handling SSL termination, HTTP buffering, and routing to application backends. This had real structural weaknesses: SSL termination this far from the edge meant two full round trips before a request even began real processing; buffering HTTP requests from slow-sending clients caused resource exhaustion on the proxy tier; and low-level attacks like SYN floods couldn't be effectively absorbed by a purely packet-level proxy.</p>
+
+    <h3>The migration, and the cascade it triggered</h3>
+    <p>A large SYN flood attack made migrating to GCLB an urgent priority, undertaken jointly by Niantic and Google's CRE/SRE teams. The initial cutover, during a traffic trough, was unremarkable — but as traffic climbed back toward peak, both companies discovered real client demand was actually <strong>200% higher</strong> than anything previously observed. Niantic's frontend proxies simply couldn't keep pace with inbound connections — and refused connections weren't even visible in existing request monitoring, so the true scale of demand stayed hidden until backends themselves started failing.</p>
+    <div class="fails"><b>A textbook cascading failure followed, and it compounded in a specific, ugly way.</b> Overloaded backends didn't fail fast — they got extremely <em>slow</em>, so requests began timing out at the load-balancing layer instead of being cleanly rejected. The load balancer's own retry logic then added <em>more</em> load on top of an already-struggling backend. This retry storm stressed the GFE's SSL client code trying to repeatedly reconnect to unresponsive backends hard enough to trigger a severe GFE performance regression — cutting GCLB's <em>worldwide</em> capacity roughly in half, for every other GCLB customer, not just Pokémon GO.</div>
+    <p>On top of that, the Pokémon GO app's own retry strategy — a single immediate retry, then constant backoff — meant that whenever the backend briefly returned a burst of fast errors (say, during a shared backend restart), client retries synchronized into a genuine thundering herd. The resulting spikes hit <strong>20x</strong> the previous global peak RPS.</p>
+
+    <h3>The response and the long-term fix</h3>
+    <p>Google's on-call Traffic SREs isolated the GFEs serving Pokémon GO traffic into their own dedicated pool (protecting every other GCLB customer from the collateral damage), enlarged that isolated pool until it could absorb peak traffic despite the ongoing GFE regression (which shifted the bottleneck back to Niantic's own struggling backend), and — with Niantic's explicit agreement — applied an administrative rate limit specifically on Pokémon GO traffic, deliberately containing demand long enough for Niantic to stabilize and scale up properly.</p>
+    <p>Afterward, Niantic added jitter and truncated exponential backoff to its client retry logic — directly defusing the synchronized-retry thundering herd. Google, in turn, learned to treat GFE backend behavior itself as a potential major source of systemic load, adding qualification and load-testing practices specifically to catch GFE degradation triggered by slow or misbehaving backends before it ships. Both companies drew the same final lesson: measure real client-side demand as close to the client as possible — had that 200% gap been visible ahead of time, Niantic's resources could have been scaled up preemptively, before the cutover, rather than discovered live under fire.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">autoscaling</div>
+    <h2>A powerful tool that's genuinely easy to misconfigure</h2>
+
+    <h3>Unhealthy machines quietly break the average</h3>
+    <p>Standard autoscaling averages utilization across all instances, assuming they're roughly homogeneous — but instances stuck starting up, warming up, or wedged in a "zombie" non-serving state still count toward that average, silently masking real need for more capacity. Three combinable fixes: autoscale using a capacity metric observed directly by the load balancer (which naturally discounts unhealthy instances); wait for new instances to genuinely stabilize before counting their metrics at all (a defined "cool-down" period); and pair autoscaling with <strong>autohealing</strong>, which monitors instance health and automatically restarts anything unhealthy — with enough recovery time built in for the restarted instance to actually become healthy again before being judged.</p>
+
+    <h3>Stateful systems need different tools than horizontal scaling</h3>
+    <p>If a stateful system routes every request in a session to the same specific backend, simply adding more instances (horizontal scaling) doesn't relieve pressure on an already-overburdened pathway — intelligent, task-level routing (consistent hashing) that actually redistributes load is the better fit. <strong>Vertical</strong> autoscaling can help absorb short-term hotspots in a stateful system, used carefully — since it's typically applied uniformly across all instances, low-traffic instances can end up growing unnecessarily large right alongside the genuinely hot ones.</p>
+
+    <h3>Configure conservatively, and asymmetrically on purpose</h3>
+    <p>Scaling up is more urgent and less risky than scaling down — failing to scale up risks real overload and dropped traffic, while overly cautious scale-down just wastes some spare capacity. Most autoscaler implementations are deliberately built this way: quick to react to traffic jumps, slower and more conservative before reducing resources. The chapter's practical recommendation: keep your service comfortably far from key bottlenecks (CPU chief among them), and reserve real spare capacity for both overload protection and basic redundancy — new instances never turn up and start serving instantly, so the autoscaler needs genuine reaction time built into the buffer.</p>
+
+    <h3>Set hard constraints — because runaway autoscaling is a real failure mode</h3>
+    <div class="fails"><b>Two concrete, realistic disaster scenarios the chapter names directly:</b> a buggy new release burns CPU without doing any real work — autoscaler keeps adding capacity in response until all available quota is exhausted, for zero actual benefit. Or: an unrelated dependency starts failing, causing every request to hang indefinitely — autoscaler keeps adding job capacity to handle the growing backlog, which only sends *more* traffic at the already-struggling, unrecovering dependency, making its recovery even less likely.</div>
+    <p>The fix: set explicit minimum and maximum bounds on what the autoscaler is allowed to do, confirm you actually have enough quota reserved to reach those limits, and treat this as a genuine capacity-planning input, not an afterthought. Equally important: maintain an easy, obvious, fast, well-documented kill switch, and make sure on-call engineers actually know how to disable autoscaling and manually control scale when something is clearly behaving wildly.</p>
+
+    <h3>Don't let autoscaling silently overload what's downstream</h3>
+    <p>An autoscaler correctly reacting to more traffic passes that increased load straight down the stack — to databases and other backend dependencies that may not scale as gracefully or linearly. A real dependency analysis before deploying autoscaling matters here, ensuring downstream services have genuine headroom and degrade gracefully rather than falling over. This gets trickier still when multiple microservices <em>share</em> a quota pool — one service autoscaling aggressively in response to a spike can starve the others of the same shared quota, especially if the traffic spike affects all of them simultaneously. Splitting quota per microservice (potentially even into separate projects) is one concrete fix.</p>
+
+    <h3>Balance across regions, not just within one</h3>
+    <p>Some autoscaling systems (AWS, GCP among them) run a separate, continuous rebalancing job across regional instance groups, specifically to avoid one zone growing disproportionately large relative to its siblings. This evens out quota usage where quota is allocated per-zone, and — as a genuine side benefit — spreading instances across more zones also spreads your failure domains, directly improving resilience against a single zone's outage.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 2</div>
+    <h2>Dressy: when load balancing and load shedding secretly fight each other</h2>
+    <p>A fictional online dress retailer runs its app across three equally-sized regions specifically to absorb single-zone failures. One day, customer complaints flood in — the app is unreachable for many users. Investigation reveals something genuinely strange: the load balancer is inexplicably funneling <em>all</em> traffic into Region A, even though A is completely overloaded while B and C sit nearly empty.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 190" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="190" fill="#FBF8EF"/>
+        <g font-size="11.5">
+          <text x="20" y="24" font-size="12.5" font-weight="bold">10:46am: all 3 regions climbing from 90 RPS together</text>
+          <rect x="20" y="45" width="180" height="55" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="110" y="68" text-anchor="middle" font-weight="bold">Region A</text>
+          <text x="110" y="86" text-anchor="middle" font-size="11">11:10am: 400 RPS</text>
+          <rect x="240" y="45" width="180" height="55" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="330" y="68" text-anchor="middle" font-weight="bold">Region B</text>
+          <text x="330" y="86" text-anchor="middle" font-size="11">11:10am: 40 RPS</text>
+          <rect x="460" y="45" width="180" height="55" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="550" y="68" text-anchor="middle" font-weight="bold">Region C</text>
+          <text x="550" y="86" text-anchor="middle" font-size="11">11:10am: 40 RPS</text>
+        </g>
+        <text x="330" y="135" text-anchor="middle" font-size="12" fill="#B84B2A">Region A: most requests actually return 503 errors</text>
+        <text x="330" y="155" text-anchor="middle" font-size="11.5" fill="var(--ink-soft)">load balancer sees LOW CPU per request → thinks A is efficient → sends more traffic</text>
+      </svg>
+      <div class="diagram-caption">sketch — how a "successfully rejected" error looked like efficiency to the load balancer (original diagram)</div>
+    </div>
+    <p>The team's load balancer was utilization-aware, reading each container's CPU usage to estimate how "full" it was. From its perspective, Region A's per-request CPU cost looked <em>ten times lower</em> than B or C — so naturally, it kept routing more traffic there, believing it had found spare, efficient capacity.</p>
+    <div class="fails"><b>The real mechanism: load shedding, deployed independently earlier that week, was quietly lying to the load balancer.</b> Once CPU utilization crossed a threshold, servers in Region A began instantly rejecting new requests with an error rather than processing them — first 10%, then 20%, then 50% — while total CPU usage stayed essentially flat. Every rejected request looked, to the load balancer, exactly like a genuinely cheap, fast, successful response. Region A was "serving" 240 RPS at its 80% CPU shedding cap; B and C were only managing 120 RPS each. The load balancer logically concluded Region A was simply more efficient, and kept sending it more traffic — a positive feedback loop entirely invisible to either system in isolation.</div>
+    <p><strong>What actually went wrong:</strong> load shedding and load balancing were each added separately, likely by different engineers, and nobody had examined the two as one unified traffic-management system. The load balancer had no way to distinguish a fast successful response from a fast rejected one.</p>
+    <p><strong>The fix:</strong> teach the load balancer's utilization calculation that an error response isn't free — count each shed request as, say, 120% CPU utilization (any value clearly over 100% works) instead of near-zero. Region A now correctly reads as overloaded, traffic naturally redistributes to B and C, and the system settles into genuine balance instead of a false, error-driven equilibrium.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">combining strategies</div>
+    <h2>Load balancing, autoscaling, and load shedding are never fully independent</h2>
+    <p>Real systems routinely need more than one load-management tool working together — regional autoscaling combined with cross-region load balancing; local-latency-optimized load balancing combined with load shedding for genuine traffic spikes beyond what new capacity can absorb in time; autoscaling combined with load shedding when a data pipeline runs out of memory faster than new pods can be provisioned. Each concrete combination brings its own specific interaction risk worth pre-empting deliberately:</p>
+    <ul>
+      <li><strong>Load balancing + autoscaling</strong> can form a positive feedback loop — traffic concentrating near one location causes that location to grow, which then attracts even more traffic. If that location later fails, the remaining locations can be caught without enough spare capacity to absorb the overflow, and scaling them up isn't instant. Setting a minimum instance count per location, reserved specifically as failover headroom, guards against this.</li>
+      <li><strong>Autoscaling + load shedding</strong> should be sequenced deliberately — thresholds should generally let the system autoscale <em>before</em> load shedding kicks in, or you risk shedding traffic you could have simply scaled up to serve instead.</li>
+      <li><strong>RPC deadlines matter for both together.</strong> Without an explicit deadline, a process holds resources for an in-flight request indefinitely (or until a very large default timeout) — quietly risking memory exhaustion and crashes, and inflating latency for users waiting behind it. The chapter's concrete recommendation: servers should actively terminate requests that have run too long, clients should actively cancel requests they no longer need a response to (don't let a server start an expensive operation for a client that already gave up and returned an error to its own user), and a sane default deadline should be documented directly in the API's own interface definition.</li>
+    </ul>
+    <div class="callout"><b>The chapter's closing synthesis:</b> load balancing, load shedding, and autoscaling all pursue the same underlying goal — equalizing and stabilizing system load — but because they're so often built, deployed, and configured by different engineers at different times, they end up behaving as if independent when they genuinely aren't. Both the Pokémon GO and Dressy case studies show the same underlying failure shape: individually reasonable systems, each behaving exactly as configured, combining into an emergent, genuinely dangerous feedback loop nobody explicitly designed for. Treating traffic management holistically — instrumenting the intersections between tools, watching explicitly for feedback loops, and coordinating emergency shutdown across every layer — is what actually prevents that outcome, rather than discovering it for the first time in a live postmortem.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Stabilized anycast</td><td>Maglev preserves TCP session continuity even when BGP route flapping would otherwise reset connections mid-stream</td></tr>
+      <tr><td>Slow failure is worse than fast failure</td><td>Pokémon GO's backends timing out (rather than failing fast) triggered load-balancer retries that compounded the overload</td></tr>
+      <tr><td>Synchronized client retries create thundering herds</td><td>A burst of fast, simultaneous errors can synchronize client retry timing into a 20x traffic spike</td></tr>
+      <tr><td>Measure demand as close to the client as possible</td><td>A 200% gap between projected and real demand went undetected until it was already live and cascading</td></tr>
+      <tr><td>Autoscaling needs hard min/max bounds and a kill switch</td><td>A CPU-burning bug or a hung dependency can otherwise drive autoscaling to exhaust all available quota</td></tr>
+      <tr><td>An error response isn't free CPU savings</td><td>Dressy's load balancer mistook shed (rejected) requests for genuinely efficient ones, worsening the imbalance it was trying to fix</td></tr>
+      <tr><td>Sequence autoscaling before load shedding</td><td>Shedding traffic you could have simply scaled up to serve is a wasted, avoidable rejection</td></tr>
+      <tr><td>Treat load management as one interconnected system</td><td>Tools built and deployed independently can still form dangerous, invisible feedback loops together</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 11, CC BY-NC-ND 4.0 · sre.google/workbook/managing-load</footer>
+</div>
+</body>
+</html>

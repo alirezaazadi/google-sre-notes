@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.4 — Service Level Objectives</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/04-service-level-objectives.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part II — Principles</div>
+    <h1 class="title">Chapter 4: Service Level Objectives</h1>
+    <p class="subtitle">SLI, SLO, SLA — three words people use interchangeably that mean very different things, and the practical craft of picking good ones.</p>
+    <div class="source-note">📖 Based on <em>Chapter 4</em> of Google's SRE book — <a href="https://sre.google/sre-book/service-level-objectives/" target="_blank">sre.google/sre-book/service-level-objectives</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="03-embracing-risk.html">← Ch.3 Embracing Risk</a><a href="05-eliminating-toil.html">next: Ch.5 Eliminating Toil →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">vocabulary</div>
+    <h2>SLI → SLO → SLA: three layers, not one word</h2>
+    <p>These three terms get flattened into "SLA" in casual conversation constantly. Keeping them separate is the whole point of the chapter:</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 220" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="220" fill="#FBF8EF"/>
+        <rect x="30" y="30" width="180" height="150" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.5"/>
+        <text x="120" y="58" text-anchor="middle" font-size="15" font-weight="bold">SLI</text>
+        <text x="120" y="78" text-anchor="middle" font-size="12">indicator —</text>
+        <text x="120" y="94" text-anchor="middle" font-size="12">a measured number</text>
+        <text x="120" y="120" text-anchor="middle" font-size="11.5" fill="var(--ink-soft)">"99th %ile latency</text>
+        <text x="120" y="136" text-anchor="middle" font-size="11.5" fill="var(--ink-soft)">was 87ms"</text>
+
+        <path d="M210 105 L 245 105" stroke="#242121" stroke-width="2" marker-end="url(#a8)"/>
+
+        <rect x="245" y="30" width="180" height="150" rx="6" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.5"/>
+        <text x="335" y="58" text-anchor="middle" font-size="15" font-weight="bold">SLO</text>
+        <text x="335" y="78" text-anchor="middle" font-size="12">objective —</text>
+        <text x="335" y="94" text-anchor="middle" font-size="12">a target for the SLI</text>
+        <text x="335" y="120" text-anchor="middle" font-size="11.5" fill="var(--ink-soft)">"99% of Gets &lt;</text>
+        <text x="335" y="136" text-anchor="middle" font-size="11.5" fill="var(--ink-soft)">100ms"</text>
+
+        <path d="M425 105 L 460 105" stroke="#242121" stroke-width="2" marker-end="url(#a8)"/>
+
+        <rect x="460" y="30" width="180" height="150" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2.5"/>
+        <text x="550" y="58" text-anchor="middle" font-size="15" font-weight="bold">SLA</text>
+        <text x="550" y="78" text-anchor="middle" font-size="12">agreement —</text>
+        <text x="550" y="94" text-anchor="middle" font-size="12">SLO + a consequence</text>
+        <text x="550" y="120" text-anchor="middle" font-size="11.5" fill="var(--ink-soft)">"miss it → we</text>
+        <text x="550" y="136" text-anchor="middle" font-size="11.5" fill="var(--ink-soft)">refund you"</text>
+
+        <defs><marker id="a8" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — indicator, objective, agreement, each building on the last (original diagram)</div>
+    </div>
+    <ul>
+      <li><strong>SLI (indicator)</strong> — a directly measured number: request latency, error rate, throughput, availability (fraction of well-formed requests that succeed, sometimes called <em>yield</em>), durability (will the data still be there later).</li>
+      <li><strong>SLO (objective)</strong> — a target range for an SLI, shaped like <code>SLI ≤ target</code> or <code>lower ≤ SLI ≤ upper</code>. Note you don't always get to <em>choose</em> the SLI's value — incoming request volume is dictated by users — but you can absolutely set a target for something like average latency, and that target then shapes engineering decisions (buy faster hardware, rewrite the hot path).</li>
+      <li><strong>SLA (agreement)</strong> — an SLO plus an explicit consequence for missing it, usually financial (a rebate, a penalty). The quick test for telling an SLO from something people are sloppily calling an "SLA": ask "what happens if we miss it?" No real consequence → it's an SLO. SRE rarely writes SLAs directly (that's a business/legal conversation) but helps define the SLIs an SLA leans on, since a fuzzy measurement guarantees a dispute later.</li>
+    </ul>
+    <div class="callout"><b>Google Search has no public SLA</b> — no contract with the whole internet — but it still has very real consequences for unavailability (reputation, ad revenue). SLOs matter with or without a formal agreement attached.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">the Chubby story</div>
+    <h2>The danger of being <em>too</em> reliable</h2>
+    <p>This is the chapter's best illustration of why SLOs need to be actively enforced, not just aspired to. Chubby (the lock service from Ch.2) was so reliable in practice that other teams started building on the unstated assumption that it would <em>never</em> go down — creating hidden, unacknowledged dependencies with no fallback path.</p>
+    <p>The fix was counterintuitive: SRE began <strong>deliberately taking global Chubby down</strong> on a schedule whenever real failures hadn't already used up its error budget for the quarter — intentionally synthesizing an outage. This flushes out unreasonable dependencies while the fix is cheap and planned, instead of finding them for the first time during a real, unplanned outage.</p>
+    <div class="fails"><b>The general principle:</b> a service that's much more reliable than its stated SLO teaches its users the wrong lesson. Meet the target — don't quietly exceed it forever.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">choosing SLIs</div>
+    <h2>Picking the right handful of indicators</h2>
+    <p>Track too many metrics and nothing gets proper attention; track too few and real problems go unseen. The chapter groups services into a few archetypes, each with its own natural SLI set:</p>
+    <table class="recap">
+      <tr><th>System type</th><th>What it typically tracks</th></tr>
+      <tr><td>User-facing serving systems</td><td>Availability, latency, throughput — could we respond? how fast? how much load could we take?</td></tr>
+      <tr><td>Storage systems</td><td>Latency, availability, <em>durability</em> — is the data still there when we need it?</td></tr>
+      <tr><td>Big data / pipelines</td><td>Throughput and end-to-end latency — how much data, how long start-to-finish?</td></tr>
+      <tr><td>All systems</td><td>Correctness — was the right answer returned? (often a data quality concern, not strictly SRE's to fix, but still worth tracking)</td></tr>
+    </table>
+
+    <h3>Averages lie — use distributions</h3>
+    <p>A single average latency number hides two very different failure shapes: bursty instantaneous load that a per-minute average smooths away, and a long tail of slow requests hiding behind a healthy-looking median. The chapter's example: typical requests finish in ~50ms, but 5% of requests take 20x longer — and an average-only dashboard shows a flat, boring line all day while that tail latency swings wildly underneath it.</p>
+    <p>The fix is to track <strong>percentiles</strong>, not just the mean: the 50th percentile (median) for the typical case, and a high percentile like the 99th or 99.9th for a realistic worst case. There's also a user-experience reason to favor high percentiles specifically: people tend to prefer a system that's <em>consistently</em> a bit slower over one that's usually fast but occasionally very slow — high variance is worse than a higher, more predictable baseline. If your 99.9th percentile looks good, the typical case is almost certainly fine too.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 220" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="640" height="220" fill="#FBF8EF"/>
+        <text x="20" y="24" font-size="13" font-weight="bold">same average latency, two very different distributions</text>
+        <line x1="60" y1="180" x2="600" y2="180" stroke="#242121" stroke-width="1.5"/>
+        <!-- flat "average line" -->
+        <line x1="60" y1="140" x2="600" y2="140" stroke="#4C6B4F" stroke-width="2" stroke-dasharray="4 4"/>
+        <text x="580" y="132" font-size="11" fill="#4C6B4F" text-anchor="end">avg (looks fine)</text>
+        <!-- bumpy actual p99 line -->
+        <path d="M60 155 C 120 150, 160 60, 220 70 C 280 80, 320 150, 380 155 C 440 158, 480 50, 540 65 C 570 72, 590 150, 600 155" stroke="#B84B2A" stroke-width="2.5" fill="none"/>
+        <text x="200" y="45" font-size="11" fill="#B84B2A">p99 spikes — the real story</text>
+        <defs></defs>
+      </svg>
+      <div class="diagram-caption">sketch — a flat average hiding a spiky tail (original diagram, illustrative)</div>
+    </div>
+
+    <h3>Client-side vs. server-side measurement</h3>
+    <p>Server-measured latency can look perfectly fine while users are still suffering — say, from slow client-side JavaScript rendering the page after the server already responded. Some SLIs genuinely need to be measured from the client's vantage point, not just the server's, or you'll miss the exact problems that affect users most.</p>
+
+    <h3>Standardize your SLI definitions</h3>
+    <p>Once you've decided on a metric, nail down its measurement details once, in a reusable template, rather than re-litigating them every time: aggregation window ("averaged over 1 minute"), which population ("all tasks in a cluster"), sampling frequency ("every 10 seconds"), which requests count ("HTTP GETs from black-box monitoring"), and what "latency" even means ("time to last byte"). This turns every future SLI definition into filling in a blank instead of a fresh debate.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">choosing SLOs</div>
+    <h2>Working backward from what users want, not forward from what's easy to measure</h2>
+    <p>The chapter's strongest piece of process advice: start from what users actually care about, even if it's hard to measure, and work backward to a proxy metric — rather than starting from whatever's easiest to instrument and calling that "good enough." The second path quietly optimizes for the wrong thing.</p>
+
+    <div class="math">
+      Example SLOs, in increasing specificity:<br>
+      • 99% of Get RPCs complete in &lt; 100ms<br>
+      • layered: 90% &lt; 1ms, 99% &lt; 10ms, 99.9% &lt; 100ms<br>
+      • split by workload: 95% of throughput clients' Sets &lt; 1s; 99% of latency clients' Sets (&lt;1kB payload) &lt; 10ms
+    </div>
+    <p>That last pattern matters whenever one system serves genuinely different workloads (a bulk pipeline that wants throughput, an interactive client that wants low latency) — a single blended SLO would satisfy neither user well, so define separate objectives per class instead of averaging across incompatible needs.</p>
+
+    <h3>Five rules of thumb for picking targets</h3>
+    <ul>
+      <li><strong>Don't anchor on current performance.</strong> Adopting whatever the system happens to do today, unreflectively, can lock in a number that only survives through heroics — and can't be improved without a rewrite.</li>
+      <li><strong>Keep it simple.</strong> Complicated aggregations obscure real changes in system behavior and make the SLO hard to reason about.</li>
+      <li><strong>Avoid absolutes.</strong> "Infinite scale with zero latency increase, always available" sounds appealing and is unrealistic — chasing it burns years and money on marginal gains nobody asked for.</li>
+      <li><strong>Have as few SLOs as possible.</strong> Cover the system's important attributes, no more. A useful gut-check: if an SLO never actually wins you an argument about priorities, it's probably not earning its keep.</li>
+      <li><strong>Perfection can wait.</strong> Start loose and tighten over time as you learn the system's real behavior — much cheaper than starting too strict and having to walk it back once it turns out to be unattainable.</li>
+    </ul>
+
+    <h3>SLOs as a control loop</h3>
+    <p>Once defined, SLOs aren't just documentation — they close a feedback loop: measure the SLI → compare against the SLO → if it's trending toward a miss, diagnose why → take the corrective action (e.g., add capacity if CPU-bound). Without the SLO as a tripwire, you don't know whether — or when — to act at all.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">setting expectations</div>
+    <h2>Two tactics for not overpromising</h2>
+    <ul>
+      <li><strong>Keep a safety margin.</strong> Set a stricter <em>internal</em> SLO than the one advertised externally. This buys room to notice and fix chronic problems before users ever see them, and gives you slack to trade some performance for maintainability later without breaking a public promise.</li>
+      <li><strong>Don't overachieve.</strong> This is the Chubby lesson generalized: users build on what you <em>actually</em> deliver, not what you promised. If real performance quietly runs well ahead of the stated SLO, users will silently start depending on that extra headroom — so you either intentionally throttle/take the system down sometimes, or accept that you've effectively raised your own bar without meaning to.</li>
+    </ul>
+    <div class="callout"><b>The throughline for the whole chapter:</b> an SLO is a lever for prioritization and a contract with reality, not a report card. Picking one badly (too strict, too loose, too vague, silently over-delivered) has real engineering costs in either direction.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Term</th><th>Definition</th></tr>
+      <tr><td>SLI</td><td>A measured indicator (latency, error rate, throughput, availability, durability)</td></tr>
+      <tr><td>SLO</td><td>A target range for an SLI</td></tr>
+      <tr><td>SLA</td><td>An SLO plus a consequence for missing it</td></tr>
+      <tr><td>Percentiles &gt; averages</td><td>Averages hide bursts and long tails; track p50 and a high percentile like p99</td></tr>
+      <tr><td>Too-reliable is a bug</td><td>Chubby's forced outages prevent silent, unacknowledged dependence on extra headroom</td></tr>
+      <tr><td>Target-setting rules</td><td>Don't anchor on current state, keep it simple, avoid absolutes, keep the SLO count low, start loose</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 4, CC BY-NC-ND 4.0 · sre.google/sre-book/service-level-objectives</footer>
+</div>
+</body>
+</html>

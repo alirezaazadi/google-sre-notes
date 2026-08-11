@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.31 — Communication and Collaboration in SRE</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/31-communication-and-collaboration-in-sre.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part IV — Management</div>
+    <h1 class="title">Chapter 31: Communication and Collaboration in SRE</h1>
+    <p class="subtitle">Production meetings, the sit-your-chair-on-the-smaller-side video-call trick, and Viceroy — how two rival monitoring dashboards became one, by accident-turned-design.</p>
+    <div class="source-note">📖 Based on <em>Chapter 31</em> of Google's SRE book — <a href="https://sre.google/sre-book/communication-and-collaboration/" target="_blank">sre.google/sre-book/communication-and-collaboration</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="30-embedding-an-sre-to-recover-from-operational-overload.html">← Ch.30 Embedding an SRE</a><a href="32-the-evolving-sre-engagement-model.html">next: Ch.32 The Evolving SRE Engagement Model →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the starting point</div>
+    <h2>SRE reports to no single master — and that shapes everything</h2>
+    <p>The chapter opens by naming a genuine structural quirk: SRE is deliberately <strong>not</strong> a command-and-control organization. A service or infrastructure SRE team effectively answers to two masters simultaneously — the product development team whose systems they support (a very strong, accountability-driven relationship), and the broader SRE organization they formally report through. There's real diversity in how this plays out across Google: some SRE teams are far smaller than their product-dev counterparts, some roughly equal, and some situations exist where SRE effectively <em>is</em> the product development team. No single organizational template fits all of it — which the chapter frames as a genuine strength, well suited to SRE's fundamentally pragmatic character, rather than a gap that needs fixing.</p>
+    <div class="callout"><b>The chapter's useful framing device:</b> think of communication the way you'd think of a well-designed API. Data about projects, service state, and production has to flow reliably between interested parties — and just like an API, a good design here is genuinely hard to retrofit once it's already wrong. The same logic extends to collaboration itself: the best outcomes come from product and production concerns meeting in an atmosphere of real mutual respect — and the chapter is explicit that simply appointing someone "in charge of reliability" without giving them genuine software and systems engineering skill isn't sufficient on its own.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">production meetings</div>
+    <h2>The one meeting type SRE actually finds worth defending</h2>
+    <p>Given SRE's well-earned "antipathy to pointless meetings," it's notable that the chapter singles out <strong>production meetings</strong> as genuinely valuable. The core purpose: an SRE team carefully articulates the state of its services to itself and its invitees, so that everyone — not just the team — leaves with the <em>same</em> shared understanding. Deliberately, these are <strong>service-oriented</strong>, not individual status updates — the second, equally important goal is bringing accumulated production wisdom directly to bear on design, configuration, and implementation decisions, creating a genuine, recurring feedback loop between what the system actually does and what it was designed to do.</p>
+    <p>Cadence and length are calibrated deliberately: weekly is the sweet spot — frequent enough that meaningful material has accumulated, infrequent enough that people don't quietly start skipping it. 30–60 minutes is the target window: shorter risks cutting real discussion short (or signals your service portfolio has room to grow); longer usually means either getting lost in unnecessary detail, or a genuine sign it's time to shard the team or the service set into smaller, more focused meetings.</p>
+    <p>The chair role deliberately rotates through the team — not because everyone chairs equally well (they don't), but because shared ownership of the service is worth more than any single meeting's polish, and it doubles as real, transferable practice for the exact chairing skills needed during live incident coordination. A genuinely fun, empirically-observed (if scientifically unverified) tactic for imbalanced video calls: when a much smaller team is meeting a much larger one, put the chair on the <em>smaller</em> side by default — the larger side naturally quiets down, and some of video conferencing's inherent imbalance effects (talking over each other, distracting side chatter) measurably improve.</p>
+
+    <h3>The default agenda — service health, not individual status</h3>
+    <table class="recap">
+      <tr><th>Agenda item</th><th>What it covers</th></tr>
+      <tr><td>Upcoming production changes</td><td>Near-term visibility — the useful properties of a change: start time, duration, expected effect</td></tr>
+      <tr><td>Metrics</td><td>Core SLIs, but also gradual trends (creeping load, CPU, resource efficiency) even in a week without dramatic failure</td></tr>
+      <tr><td>Outages</td><td>Postmortem-sized problems — an indispensable, recurring opportunity for real learning</td></tr>
+      <tr><td>Paging events</td><td>The tactical view — who got paged, what happened, and critically: *should this have paged at all?*</td></tr>
+      <tr><td>Nonpaging events</td><td>Three flavors: should-have-paged-but-didn't (fix the monitoring), not-pageable-but-needs-attention (track it), not-pageable-and-doesn't-need-attention (delete the alert — it's just noise)</td></tr>
+      <tr><td>Prior action items</td><td>A catchall to track follow-through — consistent delivery here is a genuine, durable credibility builder</td></tr>
+    </table>
+    <p>Attendance is compulsory for the team itself — especially valuable when a team is spread across countries and time zones, since this is often the main structured chance to actually interact as a group. Major stakeholders and partner product-dev teams should attend too; the chapter is pointed that if your relationship with a partner team is bad enough that you genuinely can't invite them, that relationship itself is the actual problem to fix — perhaps by starting with a single trusted representative or intermediary — because losing the operations-to-development feedback loop forfeits much of the value an SRE team exists to provide in the first place.</p>
+    <p>A genuinely nice practical trick for handling a big invite list: use a real-time collaborative doc (Google Docs) as the living agenda, pre-populated by anyone in engineering with bottom-up ideas and comments ahead of time. The chapter describes the small, satisfying choreography this enables — the chair types a sentence, someone else appends a source link in brackets, a third person quietly fixes a typo — collaborative editing that gets the agenda genuinely finished faster while making more people feel real ownership over its content, not just its outcome.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">collaboration within SRE</div>
+    <h2>Distributed by design — and what that costs and buys</h2>
+    <p>Because on-call and emergency response inherently benefit from geographic spread (follow-the-sun coverage, from Chapter 11), SRE teams have very good business reasons to be distributed across time zones — which produces genuinely fluid team boundaries: local teams, site teams, cross-continental teams, and virtual teams of every size and cohesion level, layered on top of each other simultaneously.</p>
+    <p>This distribution shapes team structure directly: because SRE's core value comes from genuine technical mastery, and mastery is hard to achieve broadly, teams naturally specialize around a related subset of systems to keep cognitive load manageable. The tradeoff is explicit and real: specialization sharpens technical depth, but risks siloing knowledge and losing sight of the broader picture — a tension the chapter names rather than pretends to fully resolve. A crisp, explicit team charter (what a team supports, and just as importantly, what it deliberately doesn't) helps, though the chapter admits this doesn't always fully succeed in practice.</p>
+
+    <h3>Team composition and roles</h3>
+    <p>Formal roles include tech lead (TL), SRE manager (SRM), and project/program manager (PM/TPM/PgM) — but the chapter notes real teams vary in how tightly these are defined. Some people work best with crisp, well-defined boundaries (fast, safe in-scope decisions); others thrive in a more fluid setup with dynamically negotiated responsibility. The general tradeoff: more fluid teams tend to be more experienced and more adaptable to novel situations — at the direct cost of needing to communicate more often, since less can be safely assumed as background shared knowledge.</p>
+    <p>Notably, Google's TLs can do nearly everything an SRM can, since Google managers are themselves highly technical — the two genuinely distinct manager-only responsibilities are formal performance management, and functioning as the catchall owner for anything nobody else has clearly claimed. The chapter's description of a genuinely great TL/SRM/TPM: someone who can cheerfully turn their hand to organizing a project, reviewing a design doc, or writing code directly, as the moment actually requires — not confined strictly to their formal lane.</p>
+    <p>On diversity specifically: the chapter cites real evidence that more diverse teams simply perform better — while being upfront that running one well demands deliberate attention to communication style and cognitive bias, which it doesn't attempt to fully unpack within the chapter's scope.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study</div>
+    <h2>Viceroy: how two competing monitoring dashboards became one</h2>
+    <p>This is the chapter's extended, genuinely instructive case study — and it opens with an honest admission of organizational failure before it becomes a success story. Because SRE's structural incentives at the time rewarded each team building its <em>own</em> solution, and cross-team work was hard while shared infrastructure was closer to a raw toolkit than a finished product, monitoring dashboards became "particularly fertile ground for duplication of work" — the chapter's own memorable phrase for the resulting mess is a landscape of "smoldering, abandoned hulks" of monitoring frameworks nobody maintained.</p>
+
+    <h3>The setup: Monarch's console gap</h3>
+    <p>As Google migrated from the legacy Borgmon (Chapter 10) toward the newer Monarch monitoring system, Monarch turned out to have a real, concrete gap: consoles that worked fine for a small service didn't scale to complex ones, and it offered no support for the still-widely-used legacy system — making a clean transition genuinely difficult. With no viable shared alternative available, multiple teams — including one effort called <strong>Consoles++</strong> — independently spun up their own console-building solutions over a 12–18 month stretch, largely unaware of each other, since coordinated tracking across teams essentially didn't exist yet at the time.</p>
+
+    <h3>Discovery, near-miss, and eventual merge</h3>
+    <p>Engineers behind these separate efforts eventually discovered each other and formed <strong>Viceroy</strong> in mid-2012 to build one shared, general solution. Early momentum was real — by 2013 teams still on the legacy system were showing genuine interest. But a first serious attempt to merge Viceroy with the separately-still-running Consoles++ effort stalled: Viceroy was deliberately built with minimal JavaScript, while Consoles++ was built almost entirely <em>in</em> JavaScript — a fundamental architectural mismatch too deep to bridge at the time, despite genuinely shared long-term goals (both wanted a data cache and an offline pipeline for expensive-to-compute data).</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 210" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="210" fill="#FBF8EF"/>
+        <g font-size="12">
+          <rect x="30" y="30" width="260" height="60" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="160" y="55" text-anchor="middle" font-weight="bold">Viceroy (2012)</text>
+          <text x="160" y="75" text-anchor="middle" font-size="11">minimal JavaScript by design</text>
+
+          <rect x="360" y="30" width="260" height="60" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="490" y="55" text-anchor="middle" font-weight="bold">Consoles++ (2012)</text>
+          <text x="490" y="75" text-anchor="middle" font-size="11">built mostly in JavaScript</text>
+
+          <text x="330" y="115" text-anchor="middle" font-size="12" fill="#B84B2A">2013: too different to merge — parked</text>
+          <path d="M330 130 L 330 155" stroke="#242121" stroke-width="1.5" marker-end="url(#a22)"/>
+          <rect x="180" y="160" width="300" height="45" rx="6" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.5"/>
+          <text x="330" y="187" text-anchor="middle" font-weight="bold" font-size="12">2014: Viceroy adopts JS → merge succeeds</text>
+        </g>
+        <defs><marker id="a22" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — the parked-then-merged trajectory of Viceroy and Consoles++ (original diagram)</div>
+    </div>
+    <p>By the end of 2013, the technical gap had narrowed on its own — Viceroy had independently started adopting JavaScript for rendering monitoring graphs, which meant the integration question simplified to "serve Consoles++'s data out of the Viceroy server." First working prototypes landed in early 2014, full integration completed by year's end, and — because Viceroy had already established broader brand recognition as the shared solution — the combined project kept the Viceroy name.</p>
+    <p>The payoff from actually joining forces was concrete and mutual: Viceroy gained Consoles++'s data sources and JavaScript client support; a rewritten JS compilation system let separate teams selectively include only the modules they needed, letting the merged project scale to many teams' custom code without becoming an unmanageable monolith; Consoles++ in turn benefited from Viceroy's caching and background data pipeline work. By the end of 2014, Viceroy was declared SRE's general monitoring solution — notably as a <em>recommendation</em>, not a mandate, which the chapter frames as characteristically Google: nobody was forced to migrate, teams were simply steered away from building yet another redundant console framework from scratch.</p>
+
+    <h3>Real challenges the merger still faced</h3>
+    <ul>
+      <li><strong>Cross-site coordination friction.</strong> Remote team members' subtle communication-style differences were easy to misread early on, and engineers outside the main site missed the informal "water cooler" conversations that often shape real decisions — a real cost, even though it improved over time.</li>
+      <li><strong>Contributor churn.</strong> The extended contributor pool was far larger and more dynamic than the small stable core team — most contributors could realistically dedicate only one to three months before rotating back to other responsibilities, meaning onboarding cost was paid constantly and repeatedly.</li>
+      <li><strong>Diluted ownership from casual contributions.</strong> A genuinely double-edged outcome: useful features sometimes went unsupported once their contributor moved on and were eventually dropped — but the same rotation also meant returning contributors became de facto local Viceroy experts back on their home teams, organically driving further adoption nobody had explicitly planned for.</li>
+      <li><strong>Scope crept beyond original ambition</strong>, straining timelines until the team tightened project management and set clearer direction to keep delivery on track.</li>
+      <li><strong>Distributed ownership bred quiet local decision-making.</strong> Even with good intentions all around, people naturally default to resolving issues locally with whoever's physically nearby, rather than always looping in remote co-owners — a structural, recurring source of friction, not a one-time mistake to simply avoid.</li>
+    </ul>
+
+    <h3>The chapter's distilled recommendations for cross-site projects</h3>
+    <ul>
+      <li>Only actually go cross-site when there's a genuine reason to — it costs real latency and communication overhead in exchange for potentially much higher total throughput, if (and only if) the coordination mechanics are done well.</li>
+      <li>Not all volunteer contributions are equally valuable — filter for contributors chasing a genuinely committed goal, not people after "a notch on their belt" from attaching their name to something shiny with no intention of maintaining it afterward.</li>
+      <li>Divide and conquer deliberately: split the project into components small enough for one focused, ideally single-site subteam apiece, each with clear deliverables and deadlines — while staying alert to Conway's Law quietly reshaping your software to mirror your org chart rather than the problem's natural structure.</li>
+      <li>Write everything down. Design docs and real reviews are the concrete technique that offsets physical and logical distance most directly.</li>
+      <li>Settle standards explicitly — debate fully, but on a strict time limit, then document the decision and move forward; when consensus genuinely can't be reached, designate a trusted arbitrator rather than letting the disagreement quietly stall the whole project.</li>
+      <li>In-person interaction still has no real substitute — bring project leaders together physically when possible, and hold team summits at a neutral site specifically so no single location holds unintentional home-field advantage over the discussion.</li>
+      <li>Scale your project management style to the project's current actual size — heavy process on a small, early-stage effort is just as much a mismatch as too little process on a large, mature one.</li>
+    </ul>
+  </section>
+
+  <section card class="card">
+    <div class="tab">outside SRE</div>
+    <h2>Case study: migrating DFP from MySQL to F1</h2>
+    <p>The chapter's second case study makes a specific, structural point: collaboration between SRE and product development works best when it starts in the <em>design</em> phase — ideally before a single line of code exists — because SREs are best positioned to shape architecture and behavior decisions that become genuinely difficult, sometimes impossible, to retrofit once implementation is already underway.</p>
+    <p>The concrete example: migrating DoubleClick for Publishers' (DFP) core database from MySQL to F1, alongside a significant schema refactor enabled by F1's ability to natively store and index protocol buffer data. The system in question processed roughly <strong>100 TB of data daily</strong>, spread across several datacenters, using around 1,000 CPUs and 8 TB of RAM — and the hard constraint was a fully live migration with zero visible disruption to users at any point.</p>
+
+    <h3>How the roles split — and why that split made sense</h3>
+    <p>Product development teams typically hold deeper knowledge of business logic and closer contact with product managers and the actual business need; SRE teams typically hold deeper infrastructure expertise, from repeatedly reusing the same underlying building blocks (distributed storage clients, database libraries) across many different services and internalizing their caveats over years of production exposure. Given that the business-logic changes here were partly <em>dependent</em> on the new infrastructure, the project deliberately started with SREs driving the infrastructure design first — covering how to extract only <em>changed</em> data rather than the full database every time, how to tolerate losing machines without service impact, how to keep resource usage scaling linearly with data volume, and full capacity planning.</p>
+    <p>Two SREs produced a detailed design document up front; both teams reviewed it jointly, refined it against real edge cases, and — critically — explicitly defined the interface boundary between infrastructure and business logic early. That interface definition is what actually let both teams work in parallel afterward: product development iterated independently on business-logic changes, SREs iterated independently on infrastructure, and whenever the two genuinely intersected (a business-logic change that depended on an infrastructure detail), the pre-agreed coordination structure meant that dependency surfaced and got resolved quickly rather than silently causing a mismatch discovered late.</p>
+
+    <h3>Validation, rollout, and the quiet payoff of a rigorous process</h3>
+    <p>SREs stood up a production-like testing environment specifically so business-logic development could continue in parallel with real performance and resource-utilization measurement. Product development used that same environment for correctness validation — the new service's output had to match the existing live service's output <em>exactly</em>. Predictably, this surfaced real discrepancies from edge cases in the new data format, resolved iteratively, ad-by-ad. Meanwhile SRE handled the parallel operational track: provisioning production resources in a separate datacenter, standing up monitoring, training on-call engineers, and even directly building the release process (validation included) — a step usually owned by product development or dedicated release engineers, taken on here by SRE specifically to keep the migration moving faster.</p>
+    <div class="callout"><b>The outcome:</b> a fully live rollout, planned jointly, launched successfully with zero visible user impact — the direct payoff of splitting work along genuine expertise lines while explicitly designing the interface between those two halves before either side started building.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>SRE serves two masters</td><td>Strong accountability to the product team it supports, formal reporting through SRE as a whole — no single template fits every configuration</td></tr>
+      <tr><td>Production meetings are service-oriented</td><td>Everyone leaves with the *same* shared picture — not a round of individual status updates</td></tr>
+      <tr><td>Delete alerts that don't need attention</td><td>A non-pageable, non-actionable alert is pure noise that distracts from what actually matters</td></tr>
+      <tr><td>Chair on the smaller side of an imbalanced call</td><td>A small, practical trick that measurably improves lopsided video-conference dynamics</td></tr>
+      <tr><td>Viceroy: incentives created the duplication</td><td>Reward structures that favor local solutions over shared infrastructure predictably produce redundant, abandoned tooling</td></tr>
+      <tr><td>Not every merge attempt should succeed immediately</td><td>Parking an integration when the technical gap is genuinely too wide, then revisiting later, is a legitimate outcome — not a failure</td></tr>
+      <tr><td>Define the interface before building both sides</td><td>DFP/F1's SRE-infra / product-BL split worked because the boundary was agreed on before either team started coding independently</td></tr>
+      <tr><td>Early SRE involvement beats late retrofitting</td><td>Architecture decisions shaped during design are far cheaper to get right than fixing them after implementation</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 31, CC BY-NC-ND 4.0 · sre.google/sre-book/communication-and-collaboration</footer>
+</div>
+</body>
+</html>

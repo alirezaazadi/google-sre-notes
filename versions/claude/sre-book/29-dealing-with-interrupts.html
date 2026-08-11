@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.29 — Dealing with Interrupts</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/29-dealing-with-interrupts.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part IV — Management</div>
+    <h1 class="title">Chapter 29: Dealing with Interrupts</h1>
+    <p class="subtitle">Cognitive flow state, "polarized time," and why randomly assigning tickets to whoever's free is quietly disrespectful of your whole team's time.</p>
+    <div class="source-note">📖 Based on <em>Chapter 29</em> of Google's SRE book — <a href="https://sre.google/sre-book/dealing-with-interrupts/" target="_blank">sre.google/sre-book/dealing-with-interrupts</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="28-accelerating-sres-to-on-call-and-beyond.html">← Ch.28 Accelerating SREs to On-Call</a><a href="30-embedding-an-sre-to-recover-from-operational-overload.html">next: Ch.30 Embedding an SRE →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the taxonomy</div>
+    <h2>Three kinds of operational load — and they're not interchangeable</h2>
+    <p>The chapter opens with a plain, useful definition: <strong>operational load</strong> is whatever work a complex system needs just to stay functional — the same maintenance burden a car creates for its owner, translated to production services. It splits cleanly into three categories, each with its own rhythm and its own reasonable response-time expectations:</p>
+    <table class="recap">
+      <tr><th>Type</th><th>What it is</th><th>Typical SLO</th></tr>
+      <tr><td>Pages</td><td>Production alerts and their fallout — can be monotonous or genuinely deep, tactical work</td><td>Minutes</td></tr>
+      <tr><td>Tickets</td><td>Customer requests requiring action — from a trivial config review to a real design/capacity consult</td><td>Hours to weeks</td></tr>
+      <tr><td>Ongoing responsibilities</td><td>Team-owned rollouts, flag flips, ad hoc time-sensitive questions ("kicking the can down the road," or plain toil)</td><td>Often undefined, but still interrupts you</td></tr>
+    </table>
+    <p>Google manages each differently at the team level: pages typically fall to a single dedicated primary on-call (deliberately just one person — spreading page response across many people invites the bystander effect, where everyone assumes someone else will act); tickets get handled via a mix of models (on-call engineer picks them up, a dedicated non-on-call ticket person, or ad hoc distribution); ongoing responsibilities vary similarly, sometimes owned by whoever's currently on-call, sometimes assigned separately and carried past a single shift.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the psychology</div>
+    <h2>Cognitive flow state — the real cost interrupt-heavy metrics miss</h2>
+    <p>Before getting into concrete tactics, the chapter grounds everything in a genuinely important psychological concept: <strong>flow state</strong> — the mental zone people enter during sustained, focused concentration, marked by high productivity, real creativity, and a felt sense of control over the problem at hand. It's achievable across a huge range of task difficulty, from a repetitive video game to genuinely hard distributed-systems debugging — the mechanism is the same even though the tasks look completely different.</p>
+    <div class="callout"><b>The chapter's central warning:</b> most of the standard interrupt-management metrics — response time, backlog size, severity, frequency — are all optimized purely toward "respond as fast as possible." None of them account for the very real human and productivity cost of constantly breaking flow state. That cost is real, it's just much harder to measure than a response-time SLO, which is exactly why it tends to get ignored in favor of what's easy to put a number on.</div>
+
+    <h3>Two very different flavors of flow — and why both matter</h3>
+    <p>The chapter distinguishes two states worth naming separately:</p>
+    <ul>
+      <li><strong>"Creative and engaged"</strong> — deep project work, genuinely losing track of time, ignoring interrupts almost entirely. This is the flow state people usually mean by the term, and it's what most project-focused SRE work depends on to actually produce anything meaningful.</li>
+      <li><strong>"Angry Birds" flow</strong> — the chapter's own memorable name for a <em>different</em> kind of flow that on-call work itself can produce: chasing down root causes, fixing things, watching the system's health tangibly improve as tickets close and pages stop firing. This can genuinely be just as satisfying as project flow — <em>when it's the only thing someone's doing</em>.</li>
+    </ul>
+    <p>The trap the chapter names directly: engineers trying to split attention between projects and interrupts <em>simultaneously</em> get neither kind of flow — they're stuck in a state of constant <strong>interruptability</strong>, which the chapter describes as genuinely, acutely stressful, distinct from either flavor of flow on its own. Counterintuitively, when someone is fully, deliberately focused on interrupts with no competing project pressure, the interrupts themselves stop feeling like interruptions at all — they become the actual job for that stretch of time, with their own clear goals and immediate feedback (close a bug, stop getting paged). The real problem was never interrupts existing — it was mixing interrupts and project work in the same stretch of time.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the fix</div>
+    <h2>Polarize time — don't treat context switches as free</h2>
+    <p>The chapter's central practical prescription follows directly from the flow-state discussion: <strong>assign a real cost to context switches</strong>, because they're not free just because they're common. A single 20-minute interruption during focused project work doesn't cost 20 minutes — the chapter's estimate is a couple of <em>hours</em> of truly productive time lost, once you count the runway needed to re-enter flow afterward.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 200" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="200" fill="#FBF8EF"/>
+        <text x="20" y="24" font-size="13" font-weight="bold">a 20-minute interruption's real cost</text>
+        <rect x="30" y="45" width="240" height="50" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+        <text x="150" y="75" text-anchor="middle" font-size="13">deep project flow</text>
+        <rect x="290" y="45" width="80" height="50" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+        <text x="330" y="75" text-anchor="middle" font-size="12">20 min</text>
+        <text x="330" y="30" text-anchor="middle" font-size="10.5" fill="#B84B2A">the "interrupt" itself</text>
+        <rect x="390" y="45" width="240" height="50" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2" stroke-dasharray="4 3"/>
+        <text x="510" y="75" text-anchor="middle" font-size="13">ramping back into flow</text>
+        <text x="330" y="130" text-anchor="middle" font-size="13" fill="var(--ink-soft)">total real cost: ~2 hours, not 20 minutes</text>
+      </svg>
+      <div class="diagram-caption">sketch — why a brief interrupt costs far more than its own duration (original diagram)</div>
+    </div>
+    <p>The practical technique: <strong>polarize</strong> each person's time so that, on any given day, they know unambiguously whether they're doing <em>just</em> project work or <em>just</em> interrupts — never both simultaneously. A full week is ideal for this polarization; a single day or even a half-day still helps meaningfully if a full week isn't practical for a given team's staffing.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the walkthrough</div>
+    <h2>"Fred's Monday" — distractibility even on a supposedly clear day</h2>
+    <p>The chapter's worked example is deliberately mundane and instantly recognizable: Fred isn't on-call today, wants to work on his project, gets coffee, puts on noise-cancelling headphones — and still gets pulled away, repeatedly, by things that <em>feel</em> individually reasonable: an auto-assigned ticket randomly lands on him; a colleague on-call pages him directly because he's the resident expert on some component; a customer escalates the priority on an old ticket that's been sitting under his name since his last on-call week; a multi-week flag rollout he's nominally responsible for breaks and demands his immediate attention regardless of what he's doing.</p>
+    <div class="fails"><b>The point of the story isn't that Fred lacks discipline.</b> Some of these distractions genuinely are self-manageable (close email, mute chat) — but a meaningful number of them are caused by <em>team policy and structural assumptions</em>, not personal habits. A team can't fix Fred's willpower, but it absolutely can fix the structural assumptions that keep interrupting people who are supposedly "off" interrupts that day.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">concrete rules</div>
+    <h2>"Seriously, tell me what to do" — the chapter's direct, actionable guidance</h2>
+
+    <h3>General principle</h3>
+    <p>If interrupt volume for any category is too high for one person to sustainably absorb, <strong>add another person</strong> to that category — don't quietly spread the overflow across the whole team as background noise. This applies most obviously to tickets, but the same logic extends to pages: a primary can bump things to secondary, or downgrade a lower-severity page to a ticket, rather than absorbing everything solo.</p>
+
+    <h3>On-call</h3>
+    <div class="callout"><b>The chapter's single strongest, most unambiguous rule:</b> a primary on-call engineer should focus <em>solely</em> on on-call work — full stop. If someone is on-call this week, that week gets written off for project purposes entirely; it is never acceptable to expect meaningful project progress <em>and</em> full on-call responsibility from the same person in the same week. If a project is genuinely too important to lose a week of someone's time, the right fix is reassigning who's on-call that week — not asking one person to somehow do both.</div>
+    <p>Secondary's expected workload depends entirely on how demanding that role actually is at your team: if secondary is a pure fallback for missed pages, it's reasonable to also expect real project work from them in parallel. If secondary is expected to actively help primary during high page volume, they should be treated as doing genuine interrupt work too — not silently expected to also make project headway on the side.</p>
+    <p>A nice, practical aside the chapter includes: on-call time is never actually "wasted" between pages, even when the pager stays quiet — there's always documentation to update or configs to clean up, and doing that work now is a direct, tangible favor to whoever's on-call next.</p>
+
+    <h3>Tickets</h3>
+    <div class="fails"><b>Randomly auto-assigning tickets to whoever happens to be free is called out directly as disrespectful of your team's time</b> — and it runs directly counter to the whole polarized-time principle, since it guarantees unpredictable interruptions land on people who thought they were protected that day. The fix: make ticket-handling a genuine, dedicated, full-time role for whatever stretch of time is realistically sustainable — and if ticket volume outstrips what primary+secondary on-call can jointly absorb, add a second dedicated ticket-handling slot rather than diffusing the load across the entire team.</div>
+
+    <h3>Ongoing responsibilities</h3>
+    <p>Wherever possible, design roles so <em>any</em> team member can pick them up interchangeably — a well-documented, well-defined procedure for pushes or flag flips shouldn't require the original owner to personally shepherd it for its entire multi-week lifetime, especially once they've rotated off on-call. Formalizing a clean handover process (e.g., a defined "push manager" role, owned only for the duration of a given on-call/interrupt shift) is a small, cheap investment that directly protects everyone else's uninterrupted make-time.</p>
+
+    <h3>Be on interrupts, or don't be</h3>
+    <p>The chapter flags a subtle, easy-to-miss failure mode: people picking up tickets they weren't actually assigned, often just because it's an easy, visible way to look productively busy. This isn't harmless — it actively distorts your team's real signal on whether the ticket queue is genuinely manageable. If two or three unassigned people are quietly "helping" alongside the one person actually assigned, a queue that <em>looks</em> under control might really be masking an unsustainable load that nobody's noticing yet, because the workaround is hiding the true signal.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">reducing the load</div>
+    <h2>Don't just distribute interrupts better — reduce them</h2>
+
+    <h3>Actually analyze tickets, don't just survive the rotation</h3>
+    <p>The chapter's sharp critique of a common failure pattern: interrupt rotations frequently function like a gauntlet — you run it, survive it with relief, and hand it off, without ever investigating <em>why</em> the same class of ticket keeps recurring. Each successive person on rotation experiences the same annoyance fresh, with zero forward progress ever actually made on the underlying cause.</p>
+    <div class="callout"><b>The fix mirrors on-call handoff discipline directly:</b> conduct real handoffs and periodic scrubs for <em>tickets</em>, not just pages — most teams already do the latter, but the chapter notes very few extend the same rigor to ticket queues. When a scrub genuinely identifies a fixable root cause, a legitimate, disciplined move is to <em>temporarily silence</em> that class of interrupt until the fix is expected to land — this both gives the interrupt-handler real relief and creates a natural, enforced deadline for whoever's doing the actual fix.</div>
+
+    <h3>Respect yourself as well as your customers</h3>
+    <p>This section is aimed specifically at user-driven interrupts (tickets, requests), though the underlying principle generalizes: your team gets to set the actual level of service it provides, and it's legitimate — not rude — to push some of the effort back onto the requester rather than always absorbing it all yourself.</p>
+    <p>Two concrete moves the chapter suggests: if a particular tool is chronically flaky, has few developer resources behind it, and only serves a small, demanding user base, that pattern itself is a real signal worth acting on — consider deprecating it, replacing it, or explicitly handing the pager back to whoever's actually positioned to fix root causes, rather than absorbing the pain indefinitely with no path to it ever getting better. Second, if a request has steps that don't strictly require your privileges to complete, it's entirely reasonable to hand those specific steps back to the requester (prepare the config change yourself, then send it to us for review) rather than doing the entire thing end-to-end on their behalf.</p>
+    <div class="fails"><b>The chapter's necessary caveat:</b> this isn't license to be unhelpful. The guiding standard is that a request should be meaningful, reasonably scoped, and come with the information you genuinely need to act on it — and in return, your response should still be timely and genuinely helpful. Pushing back is about balance, not about deflecting legitimate work.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Three interrupt types, three rhythms</td><td>Pages, tickets, ongoing responsibilities have genuinely different SLOs and shouldn't be managed identically</td></tr>
+      <tr><td>Flow state has real, uncounted costs</td><td>Standard interrupt metrics (response time, backlog) never capture the human cost of broken concentration</td></tr>
+      <tr><td>"Angry Birds" flow</td><td>Full-time interrupt focus can itself be genuinely satisfying — the problem is mixing it with project work, not interrupts themselves</td></tr>
+      <tr><td>Polarize time</td><td>A person should know, per day (ideally per week), whether they're doing project work or interrupts — never both at once</td></tr>
+      <tr><td>Never expect project progress during on-call</td><td>The single hardest, clearest rule in the chapter — write off that week entirely for project purposes</td></tr>
+      <tr><td>Randomly auto-assigning tickets is disrespectful</td><td>It defeats polarized time and destroys anyone's ability to feel genuinely undistractible</td></tr>
+      <tr><td>Scrub tickets, not just pages</td><td>Without root-cause analysis, rotations become an endless gauntlet nobody actually fixes</td></tr>
+      <tr><td>It's OK to push work back to customers</td><td>Your team sets its own service level — respecting your own time is as legitimate as respecting theirs</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 29, CC BY-NC-ND 4.0 · sre.google/sre-book/dealing-with-interrupts</footer>
+</div>
+</body>
+</html>

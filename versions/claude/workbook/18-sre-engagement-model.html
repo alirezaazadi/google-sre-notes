@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.18 — SRE Engagement Model</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/18-sre-engagement-model.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part III — Processes</div>
+    <h1 class="title">Chapter 18: SRE Engagement Model</h1>
+    <p class="subtitle">Seven service-lifecycle phases, the New York Times' shared-goals model, and two real endings — one where a team named Ares built its way out of a job, one where a decade-long partnership had to be dissolved.</p>
+    <div class="source-note">📖 Based on <em>Chapter 18</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/engagement-model/" target="_blank">sre.google/workbook/engagement-model</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="17-identifying-and-recovering-from-overload.html">← Ch.17 Identifying and Recovering from Overload</a><a href="19-sre-reaching-beyond-your-walls.html">next: Ch.19 Reaching Beyond Your Walls →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the premise</div>
+    <h2>SRE can't cover everything — so where should it focus?</h2>
+    <p>SRE's core goal is maximizing developer engineering velocity while keeping products reliable — genuinely good for both users and the business. But even the best SRE team has real limits, and the microservices era makes this acute: a small company can easily run more microservices than any single SRE team could realistically support. Given a landscape too large to fully cover, an SRE team has to deliberately decide where to focus — a decision product development and SRE should make together, not one team unilaterally.</p>
+    <p>The chapter's framing is deliberately broader than "supporting a service" — real engagement means understanding what a developer and product team are actually trying to achieve, and finding the right way to support that goal, not just the literal service in front of you. And the advice scales down as easily as up: a "team" can start as a single person, though that person will stay quite busy.</p>
+  </section>
+
+  <section card class="card">
+    <div class="tab">the lifecycle</div>
+    <h2>Seven phases, each with a distinct SRE role</h2>
+    <p>An SRE team's contribution isn't confined to the period after it formally takes the pager — production knowledge applied early can substantially improve reliability well before that point. An engagement can genuinely begin at any phase, not just the "ideal" starting point.</p>
+    <table class="recap">
+      <tr><th>Phase</th><th>SRE's role</th></tr>
+      <tr><td>1. Architecture and design</td><td>Share best practices (resilience against known single points of failure), document infrastructure dos-and-don'ts from prior experience, provide early design consulting, or directly codesign parts of the system — fixing an architectural mistake only gets harder as development proceeds</td></tr>
+      <tr><td>2. Active development</td><td>"Productionizing" the service — capacity planning, redundancy, spike/overload handling, load balancing, and setting up sustainable monitoring, alerting, and performance tuning</td></tr>
+      <tr><td>3. Limited availability (Beta)</td><td>Define SLOs *before* GA, so the product team retains a genuine, objective option to withdraw a product that can't meet its target reliability; build a capacity model; ensure monitoring aligns with the coming SLOs; share incident response work with developers so both sides build real operational fluency together</td></tr>
+      <tr><td>4. General availability</td><td>SRE typically carries the operational majority, but the developer team should keep fielding a small, permanent slice of it — often via one developer permanently in the on-call rotation — so they never lose touch with real operational reality</td></tr>
+      <tr><td>5. Deprecation</td><td>SRE operates the legacy system largely without developer involvement while the team builds its replacement — meaning SRE is effectively supporting two full systems simultaneously, and staffing should be adjusted to reflect that real doubled load</td></tr>
+      <tr><td>6. Abandoned</td><td>The developer team resumes operational responsibility; SRE supports incidents only on a best-effort basis, and formally hands service management back to whichever team remains</td></tr>
+      <tr><td>7. Unsupported</td><td>No users remain, the service is shut down — SRE's last job is cleaning up remaining references in production configuration and documentation</td></tr>
+    </table>
+  </section>
+
+  <section class="card">
+    <div class="tab">the relationship</div>
+    <h2>Setting up SRE/developer collaboration deliberately</h2>
+    <p>Understanding a developer team's real business and product goals has to come before SRE can meaningfully help — SRE leadership ideally meets regularly with developer leadership as a genuine unit, sometimes with SRE leads directly joining the product leadership team itself. Because SRE is best positioned to see systemic reliability risk, it should actively surface those risks — with an honest, calibrated sense of likelihood and real impact, since disrupting the normal feature-development flow carries genuine cost to the product and the people building it.</p>
+    <div class="callout"><b>Both sides care about reliability, but SRE's incentives lean toward long-term service viability over immediate feature velocity — the healthy resolution is each side explicitly supporting the other's goal, not defending only their own.</b> SRE's stated commitment might read: "we will support you in releasing as quickly as is safe" — where "safe" means staying within error budget. In turn, developers commit real engineering time to fixing and preventing what's actually breaking reliability — resolving design-level issues, paying down technical debt, and looping SRE into new feature design conversations early rather than after the fact.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study</div>
+    <h2>Shared goals at the New York Times</h2>
+    <p>NYT's SRE function exists to empower product teams with tools and process that maximize reliability for applications supporting the newsroom — with SRE demand chronically exceeding available capacity, and its own backlog competing directly with incoming engagement requests. Their adopted fix: a <strong>shared goals model</strong>, deliberately balancing backlog reduction against new engagement — prioritizing incoming requests partly by whether a joint engagement would <em>also</em> chip away at SRE's own existing backlog (shared monitoring baselines, faster build pipelines, and similar reusable wins).</p>
+    <p>Engagements run either <strong>full-time</strong> (SRE embedded directly in a product team, maximizing mutual learning time as developers ramp up on SRE skills) or <strong>part-time</strong> for brief, tightly scoped projects — chosen based on actual SRE bandwidth, with long-term full-time engagements prioritized toward whatever best fits overall company strategy. Team maturity gets explicitly gauged, since different teams sit at very different starting points relative to SRE practice.</p>
+    <p>A handful of explicit, non-negotiable principles govern every engagement: application owners — not SREs — remain directly responsible for their own code changes; new tooling should benefit the whole company, not become a one-off bespoke script; developers get advance notice of any new process an engagement introduces (load testing, say); and — genuinely important — SREs are explicitly <em>not</em> traditional ops engineers, and don't perform manual operational work like running a deployment job by hand.</p>
+    <p>Goals are written jointly with the development team and broken into milestones (or Agile epics/stories), following a consistent roadmap: review the application's architecture, define shared goals together, hold a kickoff/planning session, run development cycles toward milestones, hold retrospectives for engagement feedback, conduct Production/Application Readiness Reviews, run further development cycles, then plan and execute the actual launch. Teams commit up front to an agreed feedback cadence — a biweekly retrospective or manager check-in is common — and, critically, teams are expected to plan a clean disengagement openly if an engagement genuinely isn't working, rather than let it quietly drag on.</p>
+    <div class="callout"><b>Measuring real impact borrows directly from Google's CRE practice: a point-in-time maturity assessment before the engagement starts, repeated after it ends.</b> Walking through a maturity matrix (observability, capacity planning, change management, incident response) with the partner team's leads before starting reveals real strengths, weaknesses, and blind spots the engagement should target — and running the same assessment again once the team is operating independently is what actually demonstrates the value SRE genuinely added, rather than relying on impression alone.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">ground rules</div>
+    <h2>Two goals — short-term stability, long-term self-sufficiency</h2>
+    <p>Every Google SRE team carries two simultaneous goals: short-term, fulfill the product's real business needs with an operationally stable, scalable, maintainable system; long-term, optimize operations to the point ongoing human intervention is no longer required at all — freeing the SRE team to move on to the next genuinely high-value engagement, rather than becoming permanent operational staff by default.</p>
+    <p>Concrete ground rules worth establishing explicitly, up front: a clear definition (and hard cap) on what counts as operational work; an agreed, measured SLO used to prioritize engineering work on <em>both</em> sides — the chapter is direct that skipping this at the start of a relationship reliably means backtracking to establish it later, at real cost; an agreed quarterly error budget governing release velocity and safety margins like spare capacity; and genuine developer involvement in daily operations, so ongoing issues stay visible and root-cause fixes stay prioritized rather than quietly deferred indefinitely.</p>
+    <p>Planning happens at two connected levels: setting priorities and publishing yearly roadmaps jointly with developer leadership, then regularly reviewing and refining those roadmaps into concrete, aligned quarterly goals. A missing roadmap in an otherwise stable environment is itself a real signal worth investigating — it may mean the SRE team should merge with another, hand work back to developers, expand its scope, or in some cases be dissolved outright.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">sustaining it</div>
+    <h2>Keeping the relationship healthy over time</h2>
+    <ul>
+      <li><strong>Invest deliberate time in the relationship itself.</strong> Regular meetings with counterpart developers, and periodically with other SRE teams that share infrastructure or send traffic — this is what lets escalation during a real incident happen quickly and confidently, because expectations were already set well before the pressure of an actual outage.</li>
+      <li><strong>Maintain formal, bidirectional information exchange.</strong> A quarterly "state of production" talk from SRE to product leadership; a periodic "state of the product" talk from developers to SRE — giving each side genuine visibility into what the other accomplished, and where things are headed next.</li>
+      <li><strong>Hold in-person service reviews at least annually.</strong> Sharing 12-18 month roadmaps together, and — genuinely valuable — a facilitated stop/keep/start retrospective exercise. The chapter notes this is often rated the single most useful part of the whole meeting, precisely because it surfaces detail specific enough to actually drive real service changes.</li>
+      <li><strong>Reassess actively when ground rules start slipping.</strong> Depending on urgency: pull specific engineers off lower-priority work to focus on the regression, run a joint "reliability hackathon" alongside normal priorities, declare an outright feature freeze, or — for acute risk — call a genuine all-hands-on-deck response.</li>
+      <li><strong>Let SLOs and error budget guide prioritization directly.</strong> A service at risk of missing SLO or already out of budget deserves high-priority joint attention — both tactical (overprovisioning) and strategic (caching, graceful degradation) fixes. A service comfortably within SLO with ample budget remaining is a signal to spend that slack on feature velocity, not on disproportionate additional service-improvement effort nobody's actually asking for.</li>
+    </ul>
+
+    <h3>Handling mistakes well</h3>
+    <p>Consistent with blameless postmortem culture, focus on system behavior, not individual blame. Concrete tactics that have worked in practice: <strong>sleep on it</strong> — avoid follow-up conversations while tired or emotionally activated, since written tone is easily misread under stress, and a video call across locations restores the facial expression and vocal tone that disambiguates intent; <strong>meet in person</strong> (or as close as practical) rather than letting disagreements drag out purely through code review comments or documentation threads; <strong>be positive</strong> — actively thanking good behavior (a thoughtful code review, a rigorous design review) reinforces exactly the collaboration you want more of; and <strong>understand each team's own internal communication norms</strong> rather than assuming everyone shares the same defaults.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">scaling up</div>
+    <h2>From one team, one service — to a whole organization</h2>
+    <p>Because SRE skills are specialized and genuinely scarce, Google maintains an SRE-to-developer ratio under 10% — meaning one SRE team commonly supports multiple developer teams within a product area. Scaling limited SRE resources across many services works best when those services share a single product (aligning cleanly with one coherent user experience), a similar tech stack (minimizing cognitive load and maximizing skill reuse), and the same small cluster of developer teams (keeping the number of relationships to actually manage small).</p>
+    <p>At true multi-team scale, Google's SRE organization typically shadows the developer organization's own hierarchy — shared priorities and best practices propagating at each level, with every product group ideally having both a product lead and a matching SRE lead. Grouping multiple SRE teams works two main ways: by product (limiting how many developer teams any one SRE team must coordinate with), or by technology stack (storage, networking, and similar). The chapter's explicit recommendation: organize by technology rather than developer reporting structure specifically to avoid SRE team churn every time the developer org reorganizes — many storage-adjacent systems, for instance, genuinely operate similarly regardless of which developer org they nominally sit under.</p>
+    <div class="callout"><b>When restructuring is genuinely needed, prefer sharding an existing team over building a brand-new one from scratch.</b> Splitting an overloaded team preserves its accumulated culture and grows existing leadership organically, rather than starting from zero — restructuring is inherently disruptive to the people involved, so it's worth doing only when genuinely necessary, not preemptively.</div>
+    <p>For genuine 24/7, globally distributed coverage, colocate teams by adjacency and by service/technology similarity rather than scattering arbitrarily — singleton, isolated teams tend to be both less effective and more vulnerable to disruption from reorgs happening elsewhere in the org, and should only be created when a clearly defined business need specifically calls for one after every other option's been considered. Even a modest two-building split benefits from deliberate structure. Periodic full-team, in-person gatherings (an org-wide summit every 12-18 months) help maintain a genuinely shared culture across distance. For narrow, specialized responsibilities that don't need everyone's ownership (test restores from backups, cross-company technical mandates), the chapter recommends either rotating single-location ownership on a defined cycle (yearly, say) or actively sharing the load across every site — but explicitly warns against permanently locking any one responsibility to a single location for years, since that pattern breeds an "us versus them" dynamic, hinders real knowledge distribution, and creates a genuine business-continuity risk if that one location becomes unavailable.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study: ares</div>
+    <h2>Building infrastructure until SRE's job dissolved on its own</h2>
+    <p>Google's Abuse SRE and Common Abuse Tool (CAT) teams protected most Google properties from abuse — CAT's own users, Googlers operating the defended properties, held genuinely high expectations for both efficacy and response speed. This created a real, structural tension: efficient abuse-fighting demands constant, rapid, adaptive change, which directly clashed with SRE's usual preference for careful, planned, well-reviewed feature development. CAT routinely needed to ship new protections fast against active attacks; Abuse SRE pushed back, requesting deeper analysis of each change's production impact — and time-constrained reviews only compounded the friction.</p>
+    <p>The resolution was a genuinely structural fix, not a process tweak: Abuse SRE and CAT leadership co-created <strong>Ares</strong>, a dedicated infrastructure team staffed by CAT engineers with real production-infrastructure experience, explicitly mandated to unify Google's abuse-fighting infrastructure. An exchange program transferred production-management knowledge directly from Abuse SRE into the new Ares team.</p>
+    <div class="callout"><b>Abuse SRE's core lesson to Ares: minimize the cognitive load a new service imposes by making systems as homogeneous as possible.</b> Deploying and managing a family of production services together lets them share the same release structure, capacity planning, and storage-access subservices — rather than each service reinventing its own version of the same underlying concerns.</div>
+    <p>Following that principle, Ares redesigned the entire abuse-fighting stack around microservices, and built a new abstraction layer that hid low-level production concerns (monitoring, logging, storage) from developers entirely. At that point, Ares itself began functioning as CAT's own de facto SRE team — while the original Abuse SRE team shifted focus toward the shared underlying infrastructure rather than CAT's day-to-day operations.</p>
+    <p>The concrete payoff: Abuse SRE no longer needed to vet every new feature integration (CAT's in-house infra experts could handle it directly), dramatically shortening time-to-production; the reduced review burden also meant Abuse SRE needed less deep knowledge of specific feature functionality, since infrastructure changes — the part that actually mattered to them — were now rarely required at all; and any product wanting to integrate with abuse-fighting infrastructure got faster, more predictable turnaround, since integration effort was now roughly equivalent to shipping an ordinary feature. Abuse SRE eventually disengaged from directly supporting CAT altogether — without compromising CAT's reliability or piling extra operational burden onto them, since the infrastructure itself had absorbed what SRE used to provide by hand. Ares still protects users across many Google properties today, built on a genuine sense of shared destiny between the two original teams.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study: data pipeline</div>
+    <h2>When a decade-long partnership had to end</h2>
+    <p>Sometimes the honest cost of maintaining an SRE relationship outweighs its actual value — and figuring out exactly when that line has been crossed is genuinely hard, especially after years of accumulated cooperation. Two Google teams supporting a revenue-critical data analysis pipeline faced exactly this, after roughly a decade working together.</p>
+    <p>Three years before the eventual turndown, both teams recognized the primary pipeline was hitting real scaling limits, and the developer team began designing its replacement with a small dedicated team. As that effort matured, large or risky changes to the <em>existing</em> system were increasingly deprioritized in favor of investing directly in the new one — a reasonable individual decision that, compounded over time, made even conservative changes to the aging system progressively harder to justify or execute, even as its usage kept growing rapidly regardless.</p>
+    <div class="fails"><b>Running an existing system while simultaneously designing, building, and launching its replacement is hard for any single engineering team — splitting that work organizationally between SRE (old system) and developers (new system) compounded the strain directly.</b> A gap in regular, open communication led to a genuine breakdown in the working relationship between the two teams, and it took real time to recognize the disconnect had become insurmountable.</div>
+    <p>The eventual, honest resolution: dissolve the organizational barrier entirely and give the developer team full, unified control over prioritizing both old and new systems together — with the two systems expected to coexist for 18-24 months before the legacy one fully phased out. Combining SRE and product development into a single team let upper management stay maximally responsive within one clear area of accountability, and let that unified team decide for itself how to balance ongoing operational needs against development velocity. Decommissioning two SRE teams was genuinely not a pleasant process — but it resolved the persistent, structural tension over where engineering effort should actually go.</p>
+    <p>A real, honest tradeoff followed: realigning ownership with the people who understood the service's internals most deeply meant faster troubleshooting and better-informed root-cause analysis going forward — but also unavoidable near-term pain while the developer team rapidly absorbed operational nuance SRE had previously carried. SRE's final responsibility was making that knowledge transfer as smooth as it could reasonably be, deliberately equipping the developer team to succeed on their own.</p>
+    <div class="callout"><b>The chapter's honest counterfactual: had the working relationship stayed healthier, SRE would likely have handed operations back only temporarily.</b> The more typical pattern — restabilize the system, harden it for expected growth, then have SRE reassume responsibility once it's genuinely healthy again — remained available in principle. This particular case escalated all the way to a full, permanent handback specifically because both teams failed to address the growing tension directly and early enough. Part of SRE's actual job is helping maintain production excellence through exactly this kind of changing business pressure — which sometimes means actively engaging developers to find a real solution, rather than letting organizational friction quietly harden into an unworkable relationship.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>SRE's role shifts with the service lifecycle</td><td>Early design influence, active productionizing, shared incident load pre-GA, majority ownership at GA, doubled load during deprecation</td></tr>
+      <tr><td>Define SLOs before general availability</td><td>Gives the product team a genuine, objective option to withdraw a service that can't meet its reliability target</td></tr>
+      <tr><td>Explicitly support the other team's goal, not just your own</td><td>"We'll support you shipping as fast as is safe" pairs directly with developers committing real time to reliability fixes</td></tr>
+      <tr><td>Shared goals models balance backlog reduction with new engagement</td><td>NYT's approach prioritizes requests partly by whether they also chip away at SRE's own existing work</td></tr>
+      <tr><td>Measure engagement impact with before/after maturity assessments</td><td>Demonstrates real added value rather than relying on subjective impression</td></tr>
+      <tr><td>Organize distributed SRE teams by technology, not developer org structure</td><td>Avoids team churn every time the developer organization reorganizes</td></tr>
+      <tr><td>Homogeneous infrastructure minimizes cognitive load</td><td>Ares' redesign let CAT absorb its own infrastructure needs, freeing Abuse SRE to fully disengage</td></tr>
+      <tr><td>Engagements can and should end when value no longer justifies cost</td><td>The data pipeline case shows a full handback is a legitimate, sometimes necessary outcome — not a failure in itself</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 18, CC BY-NC-ND 4.0 · sre.google/workbook/engagement-model</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.9 — Simplicity</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/09-simplicity.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part II — Principles (closing chapter)</div>
+    <h1 class="title">Chapter 9: Simplicity</h1>
+    <p class="subtitle">"Boring" is a compliment. Every line of code is a liability. And deleting code is one of the most satisfying — and reliability-positive — things an engineer can do.</p>
+    <div class="source-note">📖 Based on <em>Chapter 9</em> of Google's SRE book — <a href="https://sre.google/sre-book/simplicity/" target="_blank">sre.google/sre-book/simplicity</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="08-release-engineering.html">← Ch.8 Release Engineering</a><a href="10-practical-alerting-from-time-series-data.html">next: Ch.10 Practical Alerting →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the tension</div>
+    <h2>Stability vs. agility — the balance SRE is actually managing</h2>
+    <p>The chapter opens with a small but important observation: a software system is only ever perfectly stable if nothing about it ever changes — no new code, no new users, no underlying library updates. That's not a real option. So SRE's actual job, distilled to one sentence, is <strong>keeping agility and stability in balance</strong>, not maximizing either one in isolation.</p>
+    <p>Sometimes tilting toward agility is the right call — the chapter's own example is <em>exploratory coding</em>: writing throwaway code with an explicit "shelf life," deliberately skipping heavy test coverage and release rigor, because the code will never touch production or a real user. That's a legitimate, deliberate trade, not sloppiness — it's scoped precisely to code nobody depends on yet.</p>
+    <p>For the vast majority of production systems, though, the goal is a balanced mix — and the chapter makes a claim that's easy to miss on a first read: <strong>reliable process tends to increase agility, not trade against it.</strong> Fast, predictable rollouts make it easy to see exactly which change caused a problem, which means bugs get found and fixed faster — freeing developers to spend their attention on functionality and performance instead of firefighting mystery regressions.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the core value</div>
+    <h2>"Boring" is the highest compliment you can pay a system</h2>
+    <p>Software is one of very few domains where "boring" is unambiguously good. You don't want your production system to surprise you — you want it to do the same predictable thing every time, forever. Surprises in production are, in the chapter's framing, SRE's actual enemy.</p>
+    <p>To reason clearly about where complexity is worth fighting, the chapter borrows Fred Brooks' classic distinction:</p>
+    <ul>
+      <li><strong>Essential complexity</strong> — inherent to the problem itself, and can't be engineered away. Serving web pages fast is inherently nontrivial; that complexity is baked into the problem statement.</li>
+      <li><strong>Accidental complexity</strong> — complexity introduced by the specific tools or choices used to solve the problem, and <em>can</em> be reduced with engineering effort. Writing that same web server in a garbage-collected language can introduce GC-pause complexity that has nothing to do with serving pages per se — it's a side effect of the implementation choice.</li>
+    </ul>
+    <div class="callout"><b>What this means day-to-day for an SRE team:</b> push back when accidental complexity creeps into systems you're responsible for, and keep actively hunting for it in systems you already own — it's not a one-time cleanup, it's an ongoing posture.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">deleting code</div>
+    <h2>Every line of code is a liability, not an asset</h2>
+    <p>This is the chapter's most quotable — and most counterintuitive to most engineers' instincts — argument. For a service expected to run 24/7, every line of code that exists is something that can eventually break, and someone has to keep understanding, testing, and maintaining it. Code isn't valuable by default; it earns its keep only by actively serving a business goal.</p>
+    <p>The chapter specifically calls out three common instincts around removing old code, and rejects all three:</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="220" fill="#FBF8EF"/>
+        <g font-size="12">
+          <rect x="20" y="30" width="200" height="80" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="120" y="55" text-anchor="middle" font-weight="bold">"Comment it out,</text>
+          <text x="120" y="72" text-anchor="middle" font-weight="bold">just in case"</text>
+          <text x="120" y="94" text-anchor="middle" font-size="10.5">→ clutter + confusion</text>
+
+          <rect x="240" y="30" width="200" height="80" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="340" y="55" text-anchor="middle" font-weight="bold">"Gate it behind</text>
+          <text x="340" y="72" text-anchor="middle" font-weight="bold">a disabled flag"</text>
+          <text x="340" y="94" text-anchor="middle" font-size="10.5">→ untested time bomb</text>
+
+          <rect x="460" y="30" width="200" height="80" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="560" y="55" text-anchor="middle" font-weight="bold">"What if we</text>
+          <text x="560" y="72" text-anchor="middle" font-weight="bold">need it later?"</text>
+          <text x="560" y="94" text-anchor="middle" font-size="10.5">→ that's what source control is for</text>
+        </g>
+        <text x="340" y="150" text-anchor="middle" font-size="13" fill="var(--ink-soft)">source control already makes deletions reversible —</text>
+        <text x="340" y="170" text-anchor="middle" font-size="13" fill="var(--ink-soft)">just delete the code</text>
+      </svg>
+      <div class="diagram-caption">sketch — three tempting-but-wrong ways to avoid deleting code (original diagram)</div>
+    </div>
+    <p>The chapter's real-world stakes example is Knight Capital: a disabled, dead flag path left in production became exactly the kind of "time bomb" this section warns about, and detonated at enormous financial cost when it was inadvertently reactivated. The general point: untested, disabled code paths don't just sit there harmlessly — they're a latent risk waiting for the one condition that flips them back on.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the mindset</div>
+    <h2>"Negative lines of code" as a genuine metric to be proud of</h2>
+    <p>Every line added or changed is a new opportunity for a defect. A smaller codebase is easier to understand, easier to test, and — empirically — tends to have fewer bugs simply by having less surface area for them to hide in. The chapter frames this as a reason to be genuinely skeptical of the reflex to add new features, and treats deleting thousands of now-useless lines as some of the most satisfying, valuable engineering work there is — not busywork, not "cleanup," but a direct contribution to reliability.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">design discipline</div>
+    <h2>Minimal APIs and real modularity</h2>
+    <p>The chapter quotes Saint-Exupéry — "perfection is attained not when there is no longer more to add, but when there is no longer anything to take away" — and applies it directly to API design. Fewer methods and arguments means less surface area to understand, secure, and keep backward-compatible forever; a small, tightly scoped API is usually also a signal that the underlying problem is genuinely well understood, not just under-built.</p>
+    <p>That same instinct scales up from a single API to an entire distributed system:</p>
+    <ul>
+      <li><strong>Loose coupling between binaries and their configuration</strong> means a bug in one component can be fixed and shipped independently, without dragging the rest of the system along for the ride.</li>
+      <li><strong>API versioning</strong> matters because a single breaking API change can force every dependent system to rebuild simultaneously — a direct, cascading reliability risk. Versioning lets consumers upgrade on their own schedule instead of everyone being forced to move in lockstep.</li>
+      <li><strong>No "util" or "misc" binaries.</strong> The same reasoning that says "don't write a grab-bag utility class" in object-oriented design applies directly to production services: a well-designed distributed system is made of components each with one clear, well-scoped purpose — not a dumping ground service that quietly accretes unrelated responsibilities.</li>
+      <li><strong>Modularity extends to data formats too</strong> — Google's protocol buffers were explicitly designed for backward <em>and</em> forward compatibility, so that the wire format itself doesn't become a coupling point forcing synchronized deploys across every service that speaks it.</li>
+    </ul>
+  </section>
+
+  <section card class="card">
+    <div class="tab">releases</div>
+    <h2>Small releases are diagnosable releases</h2>
+    <p>The chapter closes its practical guidance with a direct callback to Chapter 8's high-velocity philosophy: ship one small, understandable change at a time rather than batching a hundred unrelated changes into a single release. If performance regresses after 100 simultaneous changes land together, isolating which one actually caused it is expensive — potentially requiring new instrumentation built after the fact just to untangle the mess.</p>
+    <div class="math">
+      Analogy the chapter draws directly: this is gradient descent.<br>
+      Small step → measure → keep if it's an improvement, revert if not → repeat.<br>
+      Large batched changes are the reliability equivalent of a huge, unmeasured step.
+    </div>
+    <p>Smaller releases let you move <em>faster</em> with more confidence precisely because each change can be evaluated on its own, in isolation, against the working system — the opposite of what intuition might suggest about "fewer, bigger releases being more efficient."</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Stability vs. agility</td><td>Not opposites to trade off once — reliable process actually tends to increase agility over time</td></tr>
+      <tr><td>Essential vs. accidental complexity</td><td>Only accidental complexity is worth actively fighting — essential complexity is inherent to the problem</td></tr>
+      <tr><td>Every line of code is a liability</td><td>Code only earns its place by serving a real business goal — dead code (even "just in case") is risk, not safety</td></tr>
+      <tr><td>Delete, don't comment-out or flag-gate</td><td>Source control already makes deletion reversible; disabled paths become untested time bombs</td></tr>
+      <tr><td>Minimal APIs + loose coupling</td><td>Smaller surface area, independent fixability, and safer, non-lockstep upgrades</td></tr>
+      <tr><td>Small releases, not batched ones</td><td>Isolating one change at a time makes cause-and-effect legible — like gradient descent for production changes</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 9, CC BY-NC-ND 4.0 · sre.google/sre-book/simplicity</footer>
+</div>
+</body>
+</html>

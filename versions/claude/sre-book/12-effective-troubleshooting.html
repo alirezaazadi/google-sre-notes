@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.12 — Effective Troubleshooting</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/12-effective-troubleshooting.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 12: Effective Troubleshooting</h1>
+    <p class="subtitle">Troubleshooting isn't a talent some people are born with — it's the hypothetico-deductive method, applied under pressure, with a "fly the plane first" rule bolted on.</p>
+    <div class="source-note">📖 Based on <em>Chapter 12</em> of Google's SRE book — <a href="https://sre.google/sre-book/effective-troubleshooting/" target="_blank">sre.google/sre-book/effective-troubleshooting</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="11-being-on-call.html">← Ch.11 Being On-Call</a><a href="13-emergency-response.html">next: Ch.13 Emergency Response →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the reframe</div>
+    <h2>Troubleshooting is learnable, not innate</h2>
+    <p>The chapter opens by pushing back directly on the "some people just have the knack" myth. Troubleshooting depends on two genuinely separable skills: a <strong>generic process</strong> that works regardless of which system you're looking at, and <strong>specific system knowledge</strong>. You can debug from first principles alone, but it's slower and less reliable than combining the process with real understanding of how the system is supposed to work — which is exactly why new SREs on an unfamiliar system feel slower at this, even when they're skilled troubleshooters in general.</p>
+
+    <h3>The theory: hypothetico-deductive method, applied to production</h3>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 190" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="190" fill="#FBF8EF"/>
+        <g font-size="12">
+          <rect x="10" y="60" width="130" height="60" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="75" y="85" text-anchor="middle" font-weight="bold">Problem report</text>
+          <text x="75" y="103" text-anchor="middle" font-size="10">"something's wrong"</text>
+          <path d="M140 90 L 170 90" stroke="#242121" stroke-width="2" marker-end="url(#a13)"/>
+
+          <rect x="170" y="60" width="130" height="60" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="235" y="85" text-anchor="middle" font-weight="bold">Examine</text>
+          <text x="235" y="103" text-anchor="middle" font-size="10">telemetry, logs, state</text>
+          <path d="M300 90 L 330 90" stroke="#242121" stroke-width="2" marker-end="url(#a13)"/>
+
+          <rect x="330" y="60" width="130" height="60" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="395" y="85" text-anchor="middle" font-weight="bold">Diagnose</text>
+          <text x="395" y="103" text-anchor="middle" font-size="10">hypothesize causes</text>
+          <path d="M460 90 L 490 90" stroke="#242121" stroke-width="2" marker-end="url(#a13)"/>
+
+          <rect x="490" y="60" width="180" height="60" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="580" y="85" text-anchor="middle" font-weight="bold">Test / Treat</text>
+          <text x="580" y="103" text-anchor="middle" font-size="10">confirm or refute, repeat</text>
+        </g>
+        <path d="M580 120 C 580 150, 235 150, 235 120" stroke="#B84B2A" stroke-width="2" stroke-dasharray="4 3" fill="none" marker-end="url(#a14)"/>
+        <text x="400" y="160" text-anchor="middle" font-size="12" fill="#B84B2A">loop until root cause is confirmed</text>
+        <defs>
+          <marker id="a13" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker>
+          <marker id="a14" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#B84B2A"/></marker>
+        </defs>
+      </svg>
+      <div class="diagram-caption">sketch — the troubleshooting loop (original diagram)</div>
+    </div>
+    <p>You test a hypothesis one of two ways: compare the observed state against what your theory predicts, or actively change the system in a controlled way and watch what happens. Either way, this loops until a root cause is confirmed — though fixing the immediate symptom doesn't have to wait for that full confirmation to happen first.</p>
+
+    <h3>Four traps that derail troubleshooting sessions</h3>
+    <ul>
+      <li><strong>Chasing irrelevant symptoms</strong> or misreading a metric — usually a knowledge gap, fixed by learning the system and common distributed-systems failure patterns.</li>
+      <li><strong>Testing hypotheses unsafely</strong> — not understanding how to safely perturb the system or its inputs to actually test a theory.</li>
+      <li><strong>Reaching for improbable causes</strong>, or assuming "it happened before, so it must be that again." The chapter borrows the medical aphorism directly: <em>"when you hear hoofbeats, think of horses, not zebras."</em> Prefer the simpler explanation (Occam's Razor) — while staying open to the idea that several small, common problems together might explain everything, rather than one dramatic rare cause.</li>
+      <li><strong>Chasing spurious correlations.</strong> Two things correlating doesn't mean either causes the other — they might share a hidden third cause (packet loss <em>and</em> failed hard drives both stemming from a power outage), or the correlation might be pure coincidence, which becomes statistically inevitable once you're tracking enough metrics simultaneously.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">problem reports</div>
+    <h2>Every investigation starts with a report — make it a good one</h2>
+    <p>A useful report states expected behavior, actual behavior, and ideally how to reproduce it. Google's practice: file a bug for <em>every</em> issue, even ones that arrived by chat or email — never let a report live only in a person's inbox. This isn't bureaucracy for its own sake: a bug creates a searchable investigation log, spreads visibility to the whole team (not just whoever the reporter happened to personally know), and routes the load to whoever's actually on duty instead of concentrating it on a few familiar faces.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">triage</div>
+    <h2>Resist the urge to root-cause immediately — stop the bleeding first</h2>
+    <p>This is the chapter's sharpest, most counterintuitive instruction, and it echoes straight back to Chapter 6's emphasis on symptoms: <strong>your first instinct in a major outage — to start hunting for the root cause right away — should be ignored.</strong> The priority is making the system work as well as it currently can: divert traffic away from a broken cluster, shed load wholesale to head off a cascading failure, disable a misbehaving subsystem.</p>
+    <div class="callout"><b>The chapter's own analogy:</b> novice pilots are taught their first responsibility in an emergency is to fly the airplane — troubleshooting is secondary to getting everyone down safely. If a bug risks unrecoverable data corruption, freezing the system might be the right move even before you understand exactly why it's happening.</div>
+    <p>This is explicitly called out as unsettling for engineers coming from a product-development background, where the instinct is usually to dig straight into "why." In an incident, severity assessment and stabilization come first — and preserving evidence (logs, current state) while stabilizing is still worth doing, since it costs little and pays off once root-causing does begin.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">examine</div>
+    <h2>The toolbox: metrics, logs, live introspection</h2>
+    <p>Time-series metrics (Chapter 10's territory) are usually the first stop — graphing them surfaces correlations that hint at where a problem began. Logging is the second pillar, and the chapter recommends a few concrete design choices that make logs actually useful mid-incident:</p>
+    <ul>
+      <li><strong>Adjustable verbosity, on the fly</strong> — inspect any operation in fine detail without restarting the process, then dial it back down once things are healthy again.</li>
+      <li><strong>A selection language</strong> — "show me operations where X" (payload under 1KB, latency over 10ms, calls to a specific function) turns a wall of log lines into a targeted query.</li>
+      <li><strong>Exposed live state</strong> — Google servers commonly expose endpoints showing recent RPCs sent/received, plus latency and error histograms per RPC type, so you can understand a server's behavior without ever opening an architecture diagram. Borgmon itself goes further, letting you trace a computed value step-by-step back to its raw source metrics.</li>
+    </ul>
+    <p>Distributed tracing (Google's internal Dapper) rounds this out — following a single request across every hop of a multi-service stack, which is often the only way to actually see where time or an error was introduced in a complex call chain.</p>
+
+    <h3>Worked example: "Shakespeare has a problem"</h3>
+    <p>The chapter's running toy example: a black-box probe alert fires because searching for a specific phrase has been failing intermittently. Manually curling the endpoint reproduces a 502 with no payload, but the response includes an <code>X-Request-Trace</code> header listing exactly which backend servers handled the request — turning "somewhere in this system is broken" into "these specific backends are the place to look next," without needing to guess.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">diagnose</div>
+    <h2>Generic techniques that work even without deep system knowledge</h2>
+    <ul>
+      <li><strong>Simplify and reduce.</strong> If components have clean, well-defined interfaces, you can inject known test data at each boundary and check whether the output matches expectations — a form of black-box testing applied component-by-component, ideally in a non-production environment where riskier experiments are safe to run.</li>
+      <li><strong>Divide and conquer.</strong> In a multilayer stack, work systematically from one end toward the other, checking each layer in turn. When the system is too large for a linear walk, <strong>bisection</strong> is faster: split it in half, determine which half is unhealthy, then repeat inside that half — the same algorithmic idea as binary search, applied to a system topology instead of a sorted array.</li>
+      <li><strong>Ask "what," "where," and "why" — repeatedly.</strong> This is a close cousin of the "Five Whys" technique from manufacturing. The chapter's own worked example: <em>Symptom</em> — a Spanner cluster has high latency and timeouts. <em>Why?</em> — servers are pegged at 100% CPU. <em>Where</em> is that CPU going? — profiling shows time spent sorting log entries during checkpointing. <em>Where</em> specifically? — evaluating a regular expression against log file paths. <em>Fix</em> — rewrite the regex to avoid backtracking, or switch to RE2, which guarantees linear-time matching instead of the exponential worst case a backtracking engine can hit.</li>
+      <li><strong>"What touched it last."</strong> Working systems tend to keep working until something external acts on them — a config change, a new load pattern, a deploy. Recent changes are disproportionately likely suspects, which is exactly why the chapter recommends annotating monitoring dashboards with deploy/config-change timestamps directly on the graph: seeing an error-rate spike line up with a deployment window collapses the search space immediately.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">test and treat</div>
+    <h2>Designing a good experiment, not just a plausible guess</h2>
+    <p>Once you have a short list of candidate causes, the goal shifts to actually ruling hypotheses in or out. A handful of practical design considerations for the tests themselves:</p>
+    <ul>
+      <li>Favor tests with <strong>mutually exclusive outcomes</strong> that cleanly separate hypotheses — rarely perfectly achievable, but worth aiming for.</li>
+      <li><strong>Test the likely, low-risk explanations first.</strong> Check basic network connectivity before chasing a subtle permissions regression.</li>
+      <li>Watch for <strong>confounding factors</strong> — pinging a database from your own workstation might fail due to a firewall rule scoped to your IP specifically, giving a false negative that has nothing to do with the actual hypothesis.</li>
+      <li><strong>Active tests can have side effects</strong> that contaminate later results — granting a process more CPU might speed things up but also make a latent race condition newly visible; turning on verbose logging might itself worsen a latency problem you're trying to diagnose.</li>
+      <li>Some results are only <strong>suggestive, not definitive</strong> — race conditions and deadlocks are notoriously hard to reproduce reliably, so you sometimes have to accept weaker evidence than you'd like.</li>
+    </ul>
+    <div class="callout"><b>Keep notes as you go.</b> A running, timestamped record of what you tried and what happened isn't just for the eventual postmortem — it prevents re-running the same test twice, and if you changed something active (like adding resources to a process), documented notes are what let you actually restore the system to its original state afterward instead of drifting into an undocumented, half-modified configuration.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">a sidebar worth keeping</div>
+    <h2>Negative results are magic, not failure</h2>
+    <p>A "negative result" is any experiment where the expected effect didn't show up — a design that didn't help, a heuristic that didn't improve anything. The chapter argues forcefully these deserve to be published, not buried:</p>
+    <ul>
+      <li>They're <strong>conclusive</strong> — they tell you something certain about the system's actual limits, which the next team doesn't have to rediscover from scratch. The chapter's example: a team learns a given web server tops out around 800 connections due to lock contention, well short of the 8,000 they need. The next team evaluating web servers can skip straight to asking "do we need fewer than 800?" or "has this lock contention since been fixed?" instead of re-running the whole benchmark blind.</li>
+      <li><strong>Tooling built for a negative-result experiment often outlives the experiment itself</strong> — a load-testing harness built to disprove one theory is just as reusable on the next project's very different question.</li>
+      <li><strong>Publishing them reduces industry-wide bias</strong> in what gets reported — the same instinct that already makes blameless postmortems valuable applies just as much to "we tried this and it didn't work."</li>
+    </ul>
+    <div class="fails"><b>The chapter's blunt closing line:</b> be skeptical of any design document or performance review that never mentions a failed avenue — it's either been over-filtered, or the process behind it wasn't actually rigorous.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">cure</div>
+    <h2>Why "the" root cause is often a convenient fiction</h2>
+    <p>Proving a single factor definitively <em>caused</em> a production failure — by reliably reproducing it on demand — is often genuinely hard, for two structural reasons: real systems are frequently <strong>path-dependent</strong> (a specific sequence of prior states has to occur before a failure is even possible), and multiple factors can be individually harmless but jointly causal — no single one of them would have caused the problem alone. Reproducing the exact failure state in live production may also simply not be safe or acceptable to attempt. Practically, this often means settling for the most probable causal factors rather than an airtight, single, provable root cause — and documenting that reasoning honestly in the postmortem rather than overstating certainty.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study</div>
+    <h2>App Engine: a real investigation with a genuine plot twist</h2>
+    <p>A customer's app suddenly saw latency, CPU, and process count roughly quadruple — with no code change and no traffic increase, over a Saturday when nothing should have been deploying. Two obvious first suspects (a traffic spike, a recent config/code change) were ruled out almost immediately by simply checking the graphs and deploy logs.</p>
+    <p>A promising early lead — a correlated spike in <code>merge_join</code> datastore calls, suggesting a missing index — turned out to be a <strong>spurious correlation</strong>: static image requests that never touched the datastore at all were <em>also</em> slow, which flatly contradicted the indexing theory. That's the chapter's own "correlation isn't causation" warning playing out in a real investigation, not just a cautionary aside.</p>
+    <p>Distributed tracing (Dapper) then revealed something stranger: a ~250ms gap in every request where the app was doing <em>something</em> before making any RPC calls at all — invisible to a tracer that only sees RPC boundaries. Rather than chase that mystery indefinitely with a customer launch bearing down, the team applied Chapter 12's own triage lesson in miniature: mitigate first (bump the app to a more CPU-rich instance type, bringing latency back to acceptable), and let the customer launch safely — <em>then</em> keep investigating at leisure.</p>
+    <p>The eventual root cause: a long-standing access-control bug meant a specific path, when hit, created a new "whitelist" object in the datastore. A pre-launch security scanner had hammered that exact path for half an hour, generating thousands of these objects — every one of which then had to be checked, in-memory, on <em>every subsequent request</em>, with no RPC calls involved at all (which is exactly why tracing couldn't see it). Fixing the underlying bug and clearing the accumulated junk objects restored normal performance.</p>
+    <div class="callout"><b>Why this case study earns its place in the chapter:</b> it shows nearly every technique from the chapter operating together in a real setting — ruling out the obvious causes fast, catching a spurious correlation before it wasted more time, hitting a genuine tooling blind spot (Dapper can't see non-RPC work), and making the deliberate, documented call to mitigate now and root-cause later rather than block a real business deadline on an unsolved mystery.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">systemic fixes</div>
+    <h2>Make future troubleshooting easier by design, not by heroics</h2>
+    <p>The chapter's parting advice is architectural, not procedural: build observability (white-box metrics, structured logs) into every component from day one, and design clean, genuinely observable interfaces between components. One concrete, high-leverage practice singled out: propagate a <strong>single unique request ID</strong> through every RPC hop a request touches — it eliminates the tedious, error-prone work of manually matching an upstream log line to the right downstream one during an incident.</p>
+    <p>The chapter's closing observation ties directly back to its opening claim: most troubleshooting need traces back to some change (code or environment) not correctly representing reality. Simplifying, controlling, and logging changes carefully doesn't just make troubleshooting faster when it happens — it reduces how often serious troubleshooting is needed at all.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Hypothetico-deductive loop</td><td>Examine → diagnose → test/treat → repeat until confirmed; a learnable process, not innate talent</td></tr>
+      <tr><td>Triage before root-cause</td><td>Stabilize the system first ("fly the plane") — root-causing is secondary to stopping active harm</td></tr>
+      <tr><td>Bisection for large systems</td><td>Binary-search the system topology instead of walking every component linearly</td></tr>
+      <tr><td>What-where-why</td><td>A Five-Whys-style drill-down that works even without deep system expertise</td></tr>
+      <tr><td>Beware spurious correlation</td><td>Shared causes and pure coincidence both look like causation on a graph — the App Engine case shows this directly</td></tr>
+      <tr><td>Negative results are worth publishing</td><td>Conclusive, reusable, and a sign of a rigorous process rather than a failure to hide</td></tr>
+      <tr><td>Build observability in from the start</td><td>Unique request IDs, adjustable log verbosity, and exposed live state cut future investigation time dramatically</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 12, CC BY-NC-ND 4.0 · sre.google/sre-book/effective-troubleshooting</footer>
+</div>
+</body>
+</html>

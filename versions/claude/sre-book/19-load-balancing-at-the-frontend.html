@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.19 — Load Balancing at the Frontend</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/19-load-balancing-at-the-frontend.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 19: Load Balancing at the Frontend</h1>
+    <p class="subtitle">Why a bigger, faster machine can never be the answer — and how a request gets steered to the right datacenter before the user's connection even starts.</p>
+    <div class="source-note">📖 Based on <em>Chapter 19</em> of Google's SRE book — <a href="https://sre.google/sre-book/load-balancing-frontend/" target="_blank">sre.google/sre-book/load-balancing-frontend</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="18-software-engineering-in-sre.html">← Ch.18 Software Engineering in SRE</a><a href="20-load-balancing-in-the-datacenter.html">next: Ch.20 Load Balancing in the Datacenter →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">why not just go bigger</div>
+    <h2>Power isn't the answer</h2>
+    <p>The chapter opens with a deliberately provocative thought experiment: imagine an infinitely powerful single machine on a network that never fails. Would that be enough for Google's needs? No — and not for a subtle reason, but a physical one: <strong>the speed of light itself caps how fast a signal can travel</strong> down a fiber link, which puts a hard floor under latency purely as a function of distance. No amount of raw compute power fixes physical distance. And separately, any single-machine design is a single point of failure — unacceptable regardless of how powerful that one machine is.</p>
+    <p>So the real problem isn't "how do we get a faster machine" — it's <strong>"how do we decide which of many machines, in many places, should handle this particular request"</strong> — and the chapter is upfront that "optimal" here has no single universal answer. It depends on the level you're looking at (global vs. local), the layer (hardware vs. software), and the nature of the traffic itself.</p>
+
+    <h3>Two traffic types, two different definitions of "optimal"</h3>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 190" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="190" fill="#FBF8EF"/>
+        <rect x="30" y="30" width="280" height="130" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.5"/>
+        <text x="170" y="58" text-anchor="middle" font-weight="bold" font-size="14">Search request</text>
+        <text x="170" y="82" text-anchor="middle" font-size="12">cares about: latency</text>
+        <text x="170" y="105" text-anchor="middle" font-size="12">→ route to nearest</text>
+        <text x="170" y="122" text-anchor="middle" font-size="12">datacenter by round-trip time</text>
+
+        <rect x="350" y="30" width="280" height="130" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2.5"/>
+        <text x="490" y="58" text-anchor="middle" font-weight="bold" font-size="14">Video upload</text>
+        <text x="490" y="82" text-anchor="middle" font-size="12">cares about: throughput</text>
+        <text x="490" y="105" text-anchor="middle" font-size="12">→ route via an underused link,</text>
+        <text x="490" y="122" text-anchor="middle" font-size="12">even if farther / slower to start</text>
+      </svg>
+      <div class="diagram-caption">sketch — the same infrastructure, two very different routing goals (original diagram)</div>
+    </div>
+    <p>At the <em>global</em> level, these two traffic types genuinely want different things — a search request wants the nearest datacenter by round-trip time, an upload wants whichever path currently has spare throughput, even at a latency cost. At the <em>local</em> level, inside a single datacenter, the calculus flips: all machines are roughly equidistant from the user, so the goal shifts to pure resource utilization and keeping any one server from becoming overloaded (that's Chapter 20's focus).</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">layer 1</div>
+    <h2>DNS load balancing: the cheapest lever, pulled first</h2>
+    <p>Before an HTTP request can even be sent, the client typically has to resolve a domain name via DNS — which makes DNS the very first opportunity to steer traffic. The naive approach — return several A/AAAA records and let the client pick arbitrarily — is trivial to implement but gives almost no real control: each address gets roughly equal traffic regardless of which is actually best for that specific client.</p>
+
+    <h3>Three problems the "DNS middleman" creates</h3>
+    <p>End users almost never talk directly to Google's authoritative nameservers — a recursive resolver (often run by their ISP) sits in between, and that middleman creates three distinct headaches:</p>
+    <ul>
+      <li><strong>Recursive resolution hides the real client.</strong> The authoritative nameserver only ever sees the <em>resolver's</em> IP, not the user's — so "route based on shortest distance" ends up optimizing distance to the wrong endpoint. The chapter's fix: the EDNS0 extension, which lets a resolver forward a hint of the client's actual subnet — not yet an official standard at time of writing, but already adopted by major resolvers like Google's own and OpenDNS specifically because the benefit is so clear.</li>
+      <li><strong>One resolver can represent wildly different geography.</strong> The chapter's concrete example: a national ISP might run all its nameservers from a single datacenter while still having real network interconnects spread across every metro area it serves — meaning the "optimal" answer computed from the resolver's location can be actively wrong for most of the actual users behind it.</li>
+      <li><strong>Caching makes impact hard to predict.</strong> An authoritative reply gets cached and reused by the resolver for as long as its TTL allows, so a single DNS answer might reach one user, or genuinely might reach thousands, with no way to know which in advance.</li>
+    </ul>
+    <p>Google's practical mitigation for the last two: continuously track the approximate user population and estimate the geographic spread <em>behind</em> each known resolver, so routing decisions can be made against real observed behavior rather than resolver identity alone. When a resolver's user base is spread across a huge region, this becomes an explicit trade-off — optimize for the majority, accept a worse outcome for the geographic tail.</p>
+
+    <h3>"Best location" means more than "nearest"</h3>
+    <p>Distance alone isn't sufficient — the chosen datacenter also needs enough spare capacity to actually absorb the incoming load, and needs to be structurally healthy (no active power or network issues). This is only possible because the authoritative DNS server is integrated directly with Google's real-time traffic, capacity, and infrastructure-health control systems — DNS load balancing isn't a static config, it's a live decision informed by current system state.</p>
+    <div class="fails"><b>DNS load balancing's hard ceiling:</b> DNS replies are capped at 512 bytes by RFC 1035, which bounds how many addresses can fit in a single answer — and that number is nowhere close to the number of actual backend servers available. DNS gets traffic roughly to the right neighborhood before a connection even opens, but it can't be the whole solution — a second layer is required.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">layer 2</div>
+    <h2>Virtual IPs: hiding "how many machines" behind one address</h2>
+    <p>A Virtual IP (VIP) isn't bound to any single network interface — from the outside it looks like one ordinary IP, while a <strong>network load balancer</strong> actually distributes incoming packets across many real backend machines behind it. This is what lets Google add capacity, remove a failed machine, or perform maintenance completely invisibly to users.</p>
+
+    <h3>Picking a backend without keeping expensive state</h3>
+    <p>The intuitive approach — always send the next request to whichever backend is currently least loaded — sounds ideal, but breaks down for stateful protocols, where every packet in a connection has to keep landing on the <em>same</em> backend. That would require the balancer to track every open connection.</p>
+    <p>The stateless alternative: derive a connection ID directly from the packet (e.g., a hash of source/destination info) and pick a backend with <code>id(packet) mod N</code>. No per-connection memory required — until a backend fails and drops out of the pool. The moment N becomes N−1, <em>almost every</em> packet's modulo result changes, remapping nearly all active connections to a different backend all at once and forcing a mass connection reset.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 190" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="640" height="190" fill="#FBF8EF"/>
+        <text x="20" y="24" font-size="13" font-weight="bold">plain modulo hashing: one backend dies, nearly everything remaps</text>
+        <g font-size="11">
+          <rect x="30" y="45" width="70" height="35" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="1.8"/>
+          <text x="65" y="67" text-anchor="middle">B0</text>
+          <rect x="110" y="45" width="70" height="35" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="1.8"/>
+          <text x="145" y="67" text-anchor="middle">B1</text>
+          <rect x="190" y="45" width="70" height="35" fill="#F4E1D6" stroke="#B84B2A" stroke-width="1.8" stroke-dasharray="3 3"/>
+          <text x="225" y="67" text-anchor="middle">B2 (dies)</text>
+          <rect x="270" y="45" width="70" height="35" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="1.8"/>
+          <text x="305" y="67" text-anchor="middle">B3</text>
+          <text x="380" y="67" font-size="11">N=4 → N=3</text>
+        </g>
+        <text x="320" y="115" text-anchor="middle" font-size="12" fill="#B84B2A">id(packet) mod 4  ≠  id(packet) mod 3, for almost every packet</text>
+        <text x="320" y="140" text-anchor="middle" font-size="12" fill="var(--ink-soft)">→ consistent hashing exists specifically to avoid this</text>
+      </svg>
+      <div class="diagram-caption">sketch — why naive modulo hashing shatters on a single backend failure (original diagram)</div>
+    </div>
+
+    <p><strong>Consistent hashing</strong> (1997) is the fix: a mapping scheme designed so that adding or removing a backend only remaps the small fraction of connections that were actually assigned to that specific backend, leaving everything else untouched. Google's practical approach layers both: simple connection tracking in the common case, falling back to consistent hashing specifically when the system is under pressure — such as during an active denial-of-service attack, exactly when connection churn is highest and stability matters most.</p>
+
+    <h3>Actually getting the packet to the backend</h3>
+    <p>Three approaches, in the order the chapter presents their trade-offs:</p>
+    <ul>
+      <li><strong>Network Address Translation</strong> — works, but requires a connection-tracking table entry per flow, which rules out a fully stateless fallback.</li>
+      <li><strong>Direct Server Response (DSR)</strong> — the balancer rewrites the destination MAC address at layer 2 only, leaving IP addresses untouched, so the backend can reply <em>directly</em> to the client without routing the (often much larger) response back through the balancer. Huge savings for typical HTTP traffic where requests are small and responses are large — and it needs zero state on the balancer. The catch: every balancer and every backend must be reachable at the data-link layer, meaning they all have to share one broadcast domain — a constraint Google eventually outgrew entirely at scale.</li>
+      <li><strong>Packet encapsulation (current solution)</strong> — wraps the forwarded packet inside another IP packet using GRE, addressed to the backend. The backend strips the outer layer and processes the inner packet exactly as if it arrived directly. This fully decouples balancer and backend — they no longer need to share a broadcast domain, or even a continent, as long as a route exists between them. The cost: GRE encapsulation adds real overhead (24 bytes for IPv4+GRE specifically), which can push a packet's size past the network's MTU and force fragmentation — mitigated within the datacenter by supporting a larger internal MTU, at the cost of requiring network hardware that can actually handle those larger frames.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Power isn't the answer</td><td>The speed of light and single-point-of-failure risk make a single powerful machine fundamentally insufficient</td></tr>
+      <tr><td>Latency vs. throughput routing</td><td>Search wants the nearest datacenter; uploads want the least-congested path, even if farther</td></tr>
+      <tr><td>The DNS middleman problem</td><td>Recursive resolvers hide the real client, span unpredictable geography, and cache unpredictably — EDNS0 partially fixes the first</td></tr>
+      <tr><td>512-byte DNS reply limit</td><td>Caps how much control DNS alone can exert — a second load-balancing layer is required</td></tr>
+      <tr><td>Consistent hashing</td><td>Prevents a single backend failure from remapping (and resetting) nearly every active connection</td></tr>
+      <tr><td>Direct Server Response</td><td>Big bandwidth savings by skipping the balancer on the (usually larger) reply path — at the cost of a shared broadcast domain</td></tr>
+      <tr><td>GRE encapsulation</td><td>Decouples balancer and backend location entirely, at the cost of packet overhead and possible fragmentation</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 19, CC BY-NC-ND 4.0 · sre.google/sre-book/load-balancing-frontend</footer>
+</div>
+</body>
+</html>

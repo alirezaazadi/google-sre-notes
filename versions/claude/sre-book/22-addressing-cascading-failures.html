@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.22 — Addressing Cascading Failures</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/22-addressing-cascading-failures.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 22: Addressing Cascading Failures</h1>
+    <p class="subtitle">"Back off exponentially — and don't forget the jitter." How one failed cluster becomes a global outage, and the concrete engineering that stops it.</p>
+    <div class="source-note">📖 Based on <em>Chapter 22</em> of Google's SRE book — <a href="https://sre.google/sre-book/addressing-cascading-failures/" target="_blank">sre.google/sre-book/addressing-cascading-failures</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="21-handling-overload.html">← Ch.21 Handling Overload</a><a href="23-managing-critical-state-distributed-consensus-for-reliability.html">next: Ch.23 Managing Critical State →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the definition</div>
+    <h2>A cascading failure is positive feedback, not just a big failure</h2>
+    <p>A cascading failure grows over time because failure in one part of the system makes failure <em>elsewhere</em> more likely — a genuine feedback loop, not just "lots of things broke at once." The canonical shape: one replica fails from overload, its load redistributes to the survivors, which now have <em>more</em> load than before and are correspondingly more likely to fail too — a domino chain that can take out an entire service.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 180" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="640" height="180" fill="#FBF8EF"/>
+        <text x="20" y="24" font-size="13" font-weight="bold">the worked example: cluster B fails, cluster A inherits the traffic</text>
+        <rect x="30" y="50" width="180" height="60" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+        <text x="120" y="75" text-anchor="middle" font-weight="bold">Cluster A</text>
+        <text x="120" y="95" text-anchor="middle" font-size="11.5">1,000 QPS → 1,200 QPS</text>
+        <rect x="240" y="50" width="180" height="60" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2" stroke-dasharray="4 3"/>
+        <text x="330" y="75" text-anchor="middle" font-weight="bold">Cluster B</text>
+        <text x="330" y="95" text-anchor="middle" font-size="11.5">fails, sheds all traffic</text>
+        <path d="M330 80 C 380 40, 250 20, 210 60" stroke="#B84B2A" stroke-width="2" fill="none" marker-end="url(#a18)"/>
+        <text x="500" y="80" font-size="11.5" fill="var(--ink-soft)">A can't absorb</text>
+        <text x="500" y="97" font-size="11.5" fill="var(--ink-soft)">+200 → A crashes too</text>
+        <defs><marker id="a18" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#B84B2A"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — how one failed cluster's traffic can crash the next (original diagram)</div>
+    </div>
+    <p>The chapter's own numbers are sobering about how fast this compounds: A can't absorb the extra 200 QPS, so its success rate drops too, load balancers redirect even more traffic elsewhere, and the whole thing can unfold globally within a couple of minutes — fast enough that automated load-balancing and scheduling systems can spread the failure faster than a human could ever manually intervene.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">root causes</div>
+    <h2>Resource exhaustion: the mechanism underneath most cascades</h2>
+    <p>Running out of a resource is supposed to be graceful — higher latency, more errors, degraded results — that's the intended safety valve. The danger is when it instead crashes the server outright, which just hands its load to everyone else.</p>
+    <table class="recap">
+      <tr><th>Resource</th><th>What exhaustion looks like</th></tr>
+      <tr><td>CPU</td><td>Requests slow down → more concurrently in-flight → longer queues → thread starvation → missed RPC deadlines → wasted work when clients give up and retry</td></tr>
+      <tr><td>Memory</td><td>Tasks get killed for exceeding limits; in Java, the "GC death spiral" (less CPU → slower requests → more RAM held → more GC → even less CPU); reduced cache hit rate pushes more load onto backends</td></tr>
+      <tr><td>Threads</td><td>Starvation causes direct errors or failed health checks; unbounded thread creation can itself exhaust RAM or even process IDs</td></tr>
+      <tr><td>File descriptors</td><td>Can't open new network connections, which then fails health checks too</td></tr>
+    </table>
+    <p>The chapter's worked example shows how these compound into a genuinely hard-to-diagnose chain: poorly tuned Java GC → CPU exhaustion under normal peak load → slower requests → more RAM held by in-flight requests → less RAM for cache → lower cache hit rate → more requests fall through to the backend → backend runs out of CPU/threads → backend health checks fail → cascading failure begins. <strong>The team debugging this live is very unlikely to trace the backend crash all the way back to a frontend cache-size symptom</strong> — especially if frontend and backend have different owners, which is exactly the situation SRE teams often find themselves in.</p>
+    <div class="fails"><b>Why crash-looping is so hard to escape once started:</b> a service healthy at 10,000 QPS that starts crashing at 11,000 QPS will very likely keep crashing even after load drops to 9,000 QPS — because it's now trying to handle near-normal demand with drastically reduced healthy capacity. If only 10% of servers are healthy enough to survive, recovery might actually require dropping load all the way down to ~1,000 QPS before the system can stabilize and climb back out.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">preventing overload</div>
+    <h2>Five defenses, in priority order</h2>
+    <ol>
+      <li><strong>Load test to find the actual breaking point, and test the failure mode itself.</strong> The chapter calls this the single most important exercise — without realistic testing, you genuinely can't predict which resource fails first or how.</li>
+      <li><strong>Serve degraded results.</strong> Cheaper, lower-quality output beats no output at all — service-specific, but almost always available in some form.</li>
+      <li><strong>Instrument servers to reject requests when overloaded.</strong> Fail fast and cheap at both frontend and backend layers, rather than trying to serve everything and collapsing.</li>
+      <li><strong>Instrument higher-level systems to reject requests before they even reach overloaded servers.</strong> Rate limiting at reverse proxies, load balancers, or individual tasks — though the chapter notes this has a real blind spot: naive rate limiting often ignores overall service health, so it can't necessarily stop a cascade that's <em>already</em> in progress, and simple implementations tend to leave real capacity unused.</li>
+      <li><strong>Capacity planning.</strong> Reduces the <em>probability</em> of triggering a cascade — but the chapter is explicit this alone can't prevent one. Losing major infrastructure (planned or not) can create pockets of overload no amount of planning anticipated.</li>
+    </ol>
+
+    <h3>Queue management: small queues, on purpose</h3>
+    <p>A queued request costs both memory and latency — the chapter's concrete math: if the queue holds 10x the thread pool size and each request takes 100ms on a thread, a request that lands at the back of a full queue waits 1.1 seconds, nearly all of it just sitting in line. For steady, predictable traffic, the chapter recommends keeping queues <em>small</em> relative to the thread pool (50% or less) — reject early rather than let latency balloon. Gmail, notably, runs largely queueless, relying on failover to other tasks instead. Bursty traffic patterns are the exception where a larger, more adaptive queue can genuinely help.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">load shedding</div>
+    <h2>Dropping the right work, on purpose, before you're forced to</h2>
+    <p><strong>Load shedding</strong> proactively drops some traffic as a server approaches its limit, specifically to avoid the much worse failure modes (OOM kill, failed health checks, catastrophic latency). A simple version: per-task throttling on CPU, memory, or queue length — e.g., return HTTP 503 once in-flight requests exceed a threshold.</p>
+    <p>A genuinely clever refinement: switch queue discipline from FIFO to LIFO, or use an algorithm like CoDel. The insight is blunt but correct — if a request has already waited 10 seconds in queue, the user has very likely already given up and refreshed, meaning <em>completing</em> that request is pure wasted effort. Processing the newest request first (LIFO) means you're spending effort on requests actually likely to still matter.</p>
+    <p><strong>Graceful degradation</strong> goes further — actually reducing the work required per request (searching a smaller in-memory subset instead of the full on-disk index; a faster but less accurate ranking algorithm). Three practical warnings the chapter attaches to this:</p>
+    <ul>
+      <li><strong>It should trigger rarely</strong> — normally only from a genuine capacity-planning miss or unexpected load shift. Keep it simple specifically <em>because</em> it's rarely exercised.</li>
+      <li><strong>Untested code paths tend not to work.</strong> Since degraded mode is rare by design, it accumulates far less real-world operational mileage — which paradoxically makes it <em>riskier</em>, not safer. The fix: deliberately run a small slice of production near-overload regularly, just to keep this path genuinely exercised.</li>
+      <li><strong>Complexity here can itself cause outages</strong> — an overly elaborate degradation system can trip into degraded mode when it shouldn't, or oscillate in unwanted feedback cycles. Keep a fast, reliable manual override available to disable or tune it in an emergency.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">the retry trap</div>
+    <h2>How well-intentioned retries turn a small overload into a meltdown</h2>
+    <p>This is one of the chapter's most concrete, mechanism-level sections. Consider a frontend calling a backend at a fixed rate, retrying failures up to 10 times. If the backend's real limit is 10,000 QPS and the frontend sends 10,100 QPS:</p>
+    <div class="math">
+      100 QPS overflow gets rejected → retried → adds back onto the *same* backend<br>
+      backend now sees 10,200 QPS, 200 of which fail → retried → 10,300 QPS...<br>
+      retry volume compounds: fewer and fewer requests succeed on their *first* attempt
+    </div>
+    <p>If the backend is spending real resources even on requests it ultimately rejects, the retries themselves can keep it pinned in an overloaded state — and reducing the frontend's call rate back to pre-meltdown levels (say, 9,000 QPS) may not be enough to recover, because the backend's <em>effective</em> load now includes a self-sustaining retry storm on top of legitimate traffic.</p>
+    <h3>Six concrete rules for retries that don't do this</h3>
+    <ul>
+      <li><strong>Always use randomized exponential backoff</strong> — without randomization ("jitter"), a small perturbation like a brief network blip can synchronize a wave of retries that all land at once, amplifying rather than smoothing the disturbance. (This is the chapter epigraph's actual point.)</li>
+      <li><strong>Cap retries per request.</strong> Never retry indefinitely.</li>
+      <li><strong>Use a server-wide retry budget</strong> — e.g., cap total retries to 60/minute per process; once exceeded, fail immediately instead of retrying. This alone can be the difference between a contained capacity miss and a global cascade.</li>
+      <li><strong>Don't retry at every layer independently.</strong> The chapter's math here is the sharpest illustration in the chapter: if frontend, backend, and a JavaScript client each independently retry 3 times (4 attempts total per layer), one user action can generate <code>4³ = 64</code> attempts against the database — a multiplicative, not additive, amplification.</li>
+      <li><strong>Distinguish retriable from non-retriable errors.</strong> Malformed requests and permanent errors will never succeed no matter how many times you retry — don't.</li>
+      <li><strong>Return a distinct "overloaded, don't retry" status</strong> so that clients and every intermediate layer can back off cleanly instead of compounding an already-bad situation.</li>
+    </ul>
+    <div class="callout"><b>A genuinely tricky diagnostic trap:</b> during a live incident, elevated retry rates can look like a symptom of the outage rather than its actual amplifying cause — making misdiagnosis easy exactly when speed matters most.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">latency and deadlines</div>
+    <h2>Deadlines: don't do work nobody will ever collect</h2>
+    <p>An RPC deadline caps how long a frontend will wait before giving up. Too high, and a backend can burn resources on requests whose caller has already abandoned them — literally wasted work, since "you don't get credit for late assignments." Too short, and legitimately expensive-but-valid requests fail reliably. Getting this balance right is, in the book's own words, "something of an art."</p>
+
+    <h3>Deadline propagation</h3>
+    <p>Rather than each layer inventing its own fresh deadline, propagate the <em>remaining</em> time down the call chain. If server A sets a 30-second deadline and spends 7 seconds before calling B, B's RPC gets 23 seconds remaining — not a fresh 30. Without this, the chapter shows a scenario where server C happily processes a request believing it has 15 seconds left, when the original caller gave up 15 seconds ago — genuinely wasted work that correct propagation would have prevented entirely by letting C bail out immediately.</p>
+
+    <h3>Cancellation propagation</h3>
+    <p>The complementary idea: when a request is abandoned partway (e.g., a "hedged request" pattern gets a faster response from a duplicate call and cancels the slower one), that cancellation should propagate through the <em>entire</em> downstream call tree, not just the immediate caller — otherwise downstream services keep working on effort nobody will ever use.</p>
+
+    <h3>Bimodal latency — the chapter's sharpest worked example</h3>
+    <p>Imagine a frontend with 1,000 total worker threads, normally handling 1,000 QPS at 100ms latency (so ~100 threads occupied at any time). Now suppose 5% of requests become permanently unservable (say, an unavailable Bigtable keyspace) and simply hang until their deadline — set, unwisely, to 100 seconds.</p>
+    <div class="math">
+      5% of 1,000 QPS = 50 QPS hitting the full 100s deadline<br>
+      50 QPS × 100s = 5,000 threads worth of demand — but only 1,000 threads exist<br>
+      → available capacity: 1,000 / (5,000 + 95) ≈ 19.6% of requests succeed<br>
+      → 80.4% error rate, from a problem that only actually affected 5% of traffic
+    </div>
+    <p>This is the chapter's central lesson about deadlines: a deadline that's <em>orders of magnitude</em> larger than typical latency turns a small, contained problem into an almost-total outage, purely through thread exhaustion. The fixes: fail fast rather than hang to the deadline when a dependency is known-unavailable; watch the full <em>latency distribution</em>, not just the mean, since bimodal problems are invisible in averages; and be very wary of deadlines set far beyond typical latency. Limiting how many threads any single problematic keyspace or client can occupy (e.g., capping any one client at 25% of thread capacity) is a concrete, general defense against exactly this shape of failure.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">cold starts</div>
+    <h2>Slow startup and cold caches — the danger of scaling up during an incident</h2>
+    <p>Freshly started processes are often genuinely slower than steady-state — required connection setup, JIT warmup on platforms like Java, and especially <strong>cold caches</strong>. A service normally running mostly out of cache can see essentially 100% of requests become expensive the moment that cache is empty — a brand-new cluster, a cluster returning from maintenance, or any large batch of restarts can all trigger this.</p>
+    <div class="callout"><b>The critical distinction: latency cache vs. capacity cache.</b> A <em>latency</em> cache makes things faster but the service can still survive its expected load with the cache empty. A <em>capacity</em> cache is a hard dependency — the service genuinely <em>cannot</em> sustain expected load without it. The chapter's warning: caches often get added purely to improve performance and quietly evolve into unacknowledged capacity dependencies nobody explicitly signed up for.</div>
+    <p>Practical mitigations: overprovision deliberately if you know you're running a capacity cache; apply the same general cascading-failure defenses (reject when overloaded, test post-restart behavior explicitly); and when adding load to a cluster, ramp it up gradually so the cache has a chance to warm before full traffic arrives — rather than flipping straight to nominal load on a cold service.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">architecture</div>
+    <h2>Always go downward in the stack — never sideways</h2>
+    <p>In a clean layered architecture (frontend → backend → storage), a problem in storage affects the layers above it, but fixing storage fixes everyone downstream of the fix too — a clean, one-directional dependency. <strong>Intra-layer communication</strong> — backends proxying requests to <em>other</em> backends at the same layer — breaks this cleanliness in genuinely dangerous ways:</p>
+    <ul>
+      <li><strong>Distributed deadlock risk.</strong> If backend A's thread pool is already full, and backend B calls A while holding one of B's own threads waiting on that call, thread-pool saturation can literally propagate backward across the same layer.</li>
+      <li><strong>Load-triggered communication spikes make things worse exactly when they're most dangerous.</strong> The chapter's scenario: a primary backend proxying to a hot-standby secondary specifically <em>because</em> of heavy load — meaning the proxying itself increases precisely when the system is already under the most stress, adding load on top of load.</li>
+    </ul>
+    <p>The chapter's stated fix is architectural discipline: avoid intra-layer communication in the request path entirely. If a frontend guesses the wrong backend, the right answer is for the backend to tell the frontend to retry against the correct one — not for the backend to silently proxy the request sideways itself. Keep dependency flow strictly downward.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">triggers</div>
+    <h2>What actually kicks a cascade off</h2>
+    <table class="recap">
+      <tr><th>Trigger</th><th>Why it matters</th></tr>
+      <tr><td>Process death</td><td>A "query of death" or assertion failure can take down tasks — a small event on an already-marginal service can be the final push</td></tr>
+      <tr><td>Process updates</td><td>Pushing many tasks simultaneously reduces available capacity mid-rollout — push off-peak, or scale in-flight update count to current load</td></tr>
+      <tr><td>New rollouts</td><td>Changed request profiles, resource usage, or dependencies — during an active cascade, checking (and reverting) recent changes is a genuinely high-value first move</td></tr>
+      <tr><td>Organic growth</td><td>No single change triggers it — usage simply outgrew capacity without anyone explicitly re-provisioning</td></tr>
+      <tr><td>Planned drains/maintenance</td><td>Reduces available multihomed capacity, or forces longer routes to more distant clusters</td></tr>
+      <tr><td>Resource limit assumptions</td><td>"Slack" overcommitted CPU can vanish suddenly if another team's job (e.g., a big MapReduce) claims it — never treat opportunistic slack as a real safety margin</td></tr>
+    </table>
+  </section>
+
+  <section class="card">
+    <div class="tab">testing</div>
+    <h2>You can't reason your way to knowing your breaking point — you have to find it</h2>
+    <p>The chapter is direct that cascading failure modes are genuinely hard to predict from first principles — testing is how you actually find them, not a nice-to-have. Load test each component <em>individually</em> until it breaks (different components will hit their limits at different points, and you want to know each one's specific behavior past the edge, not just the system's aggregate behavior). Test both gradual ramp-up and sudden impulse load, since caching effects mean these can produce genuinely different results. Test recovery too, not just failure — does a degraded component recover on its own once load drops, or does it need a manual kick?</p>
+    <p>For teams confident in their protections, the chapter recommends deliberately staged failure tests in a small slice of real production traffic — synthetic load doesn't always reveal what real traffic does, though obviously with real user-visible risk, so extra headroom and a manual fallback plan are essential before attempting this. Concrete production tests suggested: rapidly or gradually reducing task counts beyond expected patterns, simulating the sudden loss of an entire cluster's capacity, or deliberately blackholing specific backends.</p>
+    <p>Two more targeted testing recommendations: understand how your <em>largest clients</em> actually behave under your failure (do they queue gracefully? use randomized backoff? have a hidden trigger that could cause a synchronized retry storm?) — and separately, test your <em>noncritical</em> backends specifically for the "blackholing" failure mode, not just outright unavailability, since a noncritical dependency that hangs indefinitely (rather than failing fast) can still consume frontend resources and cause real harm despite being labeled "noncritical."</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">in the moment</div>
+    <h2>What to actually do once you're in a cascade</h2>
+    <ul>
+      <li><strong>Add resources</strong> — the fastest fix if you have idle capacity and haven't yet entered a full death spiral. Once a genuine death spiral is underway, though, more resources alone may not be enough.</li>
+      <li><strong>Stop health-check-driven deaths.</strong> A subtle, genuinely counterintuitive failure mode: if the cluster scheduler is killing "unhealthy" tasks while half the fleet is still starting up and the other half is failing health checks purely from overload, the health-checking mechanism itself can be actively making things worse. Temporarily disabling automated restarts can let the system stabilize. The chapter's underlying fix: keep <em>process</em> health checking ("is this binary alive at all") conceptually separate from <em>service</em> health checking ("can it serve this class of request right now") — conflating the two is what causes this trap.</li>
+      <li><strong>Restart wedged servers</strong> — appropriate for a GC death spiral, deadlocked threads, or requests stuck with no deadline consuming resources forever. But identify the actual root cause first, and canary the restart slowly — if the real issue is a cold cache, restarting can make things worse, not better, by resetting exactly the state you needed to keep warm.</li>
+      <li><strong>Drop traffic — the big hammer.</strong> When servers crash the instant they come back healthy, the fix is aggressive: cut traffic drastically (the chapter's own example: allow just 1% through), let the surviving fleet stabilize, then ramp back up gradually so caches and connections can warm properly. This causes real, visible user harm, so it's reserved for genuine last resort — and critically, it only actually solves anything if the underlying trigger (insufficient capacity, a bad push) gets fixed at the same time; otherwise the cascade simply restarts the moment full traffic returns.</li>
+      <li><strong>Enter degraded modes deliberately</strong> — only possible if graceful degradation was actually engineered in ahead of time (see above).</li>
+      <li><strong>Eliminate non-critical batch load</strong> — index updates, data copies, statistics gathering competing for the same serving-path resources are often safe to pause entirely during an active incident.</li>
+      <li><strong>Eliminate bad traffic</strong> — block or filter specific "query of death" patterns directly if they're identifiable.</li>
+    </ul>
+
+    <h3>The Shakespeare walkthrough: a cascade that mostly worked as designed</h3>
+    <p>A Japanese documentary drives a traffic surge to Google's Asian datacenter for the Shakespeare service, colliding with an unrelated major update rolling out in that same datacenter simultaneously. Several defenses were already in place from an earlier Production Readiness Review: graceful degradation (dropping images and maps under pressure) and disciplined retry behavior (no retry for droppable content, randomized exponential backoff for the rest). Despite that, tasks still failed one by one, and Borg's automatic restarts actually drove healthy task count down <em>further</em> in the moment — the same health-check trap described above.</p>
+    <p>SRE's actual fix was direct: temporarily add task capacity to the Asian cluster. The postmortem afterward yielded two durable, structural fixes rather than just resolving this one incident — GSLB configured to redirect overflow traffic to neighboring datacenters automatically, and autoscaling enabled so future task counts adjust to traffic without needing a human to notice and intervene.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the closing thesis</div>
+    <h2>Something has to give — the goal is choosing what, deliberately</h2>
+    <p>The chapter's final framing is the whole chapter distilled: once a service passes its true breaking point, some user-visible errors or degraded results are <em>better</em> than trying to fully serve every request and collapsing entirely. Knowing exactly where that breaking point sits, and how the system behaves once past it, is what separates a contained, controlled degradation from an uncontrolled cascade.</p>
+    <div class="fails"><b>The chapter's last, sharpest warning:</b> changes made purely to improve the steady-state case — retrying failures, shifting load off unhealthy servers, killing and restarting unhealthy tasks, adding caches for latency — can each independently increase the risk of a much bigger, rarer failure. Every one of these techniques appeared elsewhere in this very chapter as a genuine fix — the point isn't "don't do them," it's evaluate each change against both the common case <em>and</em> the tail case, so you don't quietly trade a smaller, contained failure mode for the possibility of a much larger one.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Cascading failure = positive feedback</td><td>One failure makes others more likely — not just simultaneous failures, but a compounding chain</td></tr>
+      <tr><td>Resource exhaustion chains</td><td>CPU → memory → cache → backend can all compound into a hard-to-trace failure across ownership boundaries</td></tr>
+      <tr><td>Retries without backoff/jitter/budget</td><td>Can turn a small overflow into a self-sustaining retry storm — cap retries per request AND per process</td></tr>
+      <tr><td>Deadline propagation</td><td>Prevents downstream layers from doing work the original caller has already abandoned</td></tr>
+      <tr><td>Bimodal latency</td><td>A small % of hung requests can consume nearly all thread capacity if deadlines are far larger than typical latency</td></tr>
+      <tr><td>Latency cache vs. capacity cache</td><td>Know which one you have — an unacknowledged capacity cache is a hidden hard dependency</td></tr>
+      <tr><td>Always go downward in the stack</td><td>Intra-layer proxying risks distributed deadlock and load-triggered communication spikes</td></tr>
+      <tr><td>Drop traffic deliberately, then ramp up gradually</td><td>The last-resort recovery move — only works if the root cause is fixed at the same time</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 22, CC BY-NC-ND 4.0 · sre.google/sre-book/addressing-cascading-failures</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.13 — Data Processing Pipelines</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/13-data-processing-pipelines.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part II — Practices</div>
+    <h1 class="title">Chapter 13: Data Processing Pipelines</h1>
+    <p class="subtitle">Two-phase mutations, a pipeline "maturity matrix" scored 1 to 5, and Spotify's event delivery system — the postal service that promises your mail arrives on time, intact, and unopened.</p>
+    <div class="source-note">📖 Based on <em>Chapter 13</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/data-processing/" target="_blank">sre.google/workbook/data-processing</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="12-introducing-non-abstract-large-system-design.html">← Ch.12 Non-Abstract Large System Design</a><a href="14-configuration-design-and-best-practices.html">next: Ch.14 Configuration Design →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the applications</div>
+    <h2>Three shapes pipelines commonly take</h2>
+    <p><strong>ETL (Extract, Transform, Load)</strong> pipelines pull data from one or more sources, transform it (reformatting, aggregating, indexing), and load it into a new destination — powering everything from billing reports to the indexing behind Google's own web search. <strong>Data analytics/business intelligence</strong> pipelines aggregate data across many users or devices to surface patterns — the chapter's fictional "Shave the Yak" mobile game example runs a job triggered whenever new BigQuery data lands, feeding a daily aggregate table for monthly feature-usage reports. <strong>Machine learning</strong> pipelines run through a distinct five-stage lifecycle: extract features and labels, train a model, evaluate against a test set, serve the model, and let downstream systems act on its output.</p>
+
+    <h3>Worked example: Dressy's recommendation pipeline</h3>
+    <p>The fictional online dress retailer wants new products incorporated into recommendations within 12 hours, eventually near-real-time. Because incoming product data arrives with wildly inconsistent labeling from different vendors, a streaming Dataflow pipeline first normalizes images into structured labels via an image-classification service. A second pipeline joins that product data with customer purchase history from BigQuery to train a TensorFlow model, which must pass accuracy checks against a held-out test set before being promoted to production; the trained model binary lives in Cloud Storage, served through Cloud ML's online prediction service.</p>
+    <div class="callout"><b>Dressy's real, recognizable failure mode:</b> new models occasionally failed to publish for over 24 hours, with intermittent recommendation errors in the meantime — a common first-deployment issue. The chapter's diagnostic checklist for this exact symptom: is data stuck before preprocessing? Is the model itself poor (a software bug, spam-polluted training data, badly chosen features)? Or is a stale model version still running in production because the new one silently failed to roll out?</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">best practices</div>
+    <h2>Running a pipeline as a genuine service, not a one-off script</h2>
+
+    <h3>Define and measure SLOs — three flavors specific to pipelines</h3>
+    <ul>
+      <li><strong>Data freshness</strong> — typically phrased as "X% of data processed within Y minutes," "oldest data is no older than Y," or "the job completed successfully within Y." The chapter's example: Shave the Yak targeting 99% of score-affecting user actions reflected on the scoreboard within 30 minutes.</li>
+      <li><strong>Data correctness</strong> — genuinely harder to measure, since there's often no predefined "correct" answer to check against. The chapter's fix: generate "golden data" using test accounts with a known expected output, then compare real production output against it continuously. A separate, backward-looking correctness SLO (e.g., "no more than 0.1% of invoices incorrect per quarter") is also common, especially for financially sensitive pipelines.</li>
+      <li><strong>Data isolation/load balancing</strong> — when some data segments are higher priority, the pipeline needs a real mechanism (separate queues, separate worker pools with different resource tiers) to guarantee high-priority data gets processed first under resource constraint, not just "usually."</li>
+    </ul>
+    <div class="fails"><b>Per-stage SLOs alone miss what customers actually experience — and can hide real correctness bugs.</b> Measuring each pipeline stage in isolation misses the end-to-end latency the customer actually feels, and can force needlessly tight per-component alerting that doesn't reflect real user impact. Worse: a subtle data-corruption bug can hide entirely behind per-stage monitoring — imagine one stage adds a field a downstream stage doesn't expect and silently drops. Both stages report "all is well" individually, yet the data the user needed never actually arrives.</div>
+
+    <h3>Plan for dependency failure, deliberately</h3>
+    <p>Once you know your own SLO, check whether you're implicitly depending on a stricter guarantee than your own dependencies actually promise. If a pipeline needs tighter durability than Cloud Storage's advertised single-region uptime, cross-region replication (at real extra cost) may be the honest fix — or, just as legitimately, accepting a looser SLA yourself rather than promising something your dependencies can't actually back. Google's own DiRT program regularly simulates full regional outages specifically to force this planning to happen ahead of time — pipelines that planned for it fail over automatically; those that didn't wait for a human to notice and manually trigger failover, with real risk that continued processing on stale data corrupts anything downstream in the meantime.</p>
+
+    <h3>Documentation: three genuinely distinct categories</h3>
+    <p><strong>System diagrams</strong> should show every component, every transformation step, and link directly to live monitoring for each stage — since any stage can get stuck or introduce a correctness bug, and a good diagram is what lets an on-call engineer quickly localize where to look. <strong>Process documentation</strong> covers both routine tasks (releasing a new pipeline version) and rare manual ones (initial turnup, final turndown in a new region) — with automation as the natural next step once a manual process is well-documented enough to actually automate. <strong>Playbook entries</strong>, linked directly from the alert itself, give on-call a concrete recovery path the moment a page fires.</p>
+
+    <h3>The development lifecycle: prototype → dry run → staging → canary → partial deployment → production</h3>
+    <p>Prototyping verifies the business logic is expressible at all, and is a good moment to compare programming models (batch vs. streaming, Dataflow vs. MapReduce) before committing. A small <strong>1% dry run</strong> against real production data in a non-production environment, scaled up gradually while watching for bottlenecks, catches issues unit tests alone would miss. <strong>Staging</strong> runs the full system against data as close to real production data as practical, since integration bugs only surface once data actually flows end-to-end. <strong>Canarying</strong> a pipeline is genuinely harder than canarying a stateless service — data is persisted, transformations are often complex, and a full processing cycle usually has to complete before a customer-impacting issue becomes visible at all; multihomed pipeline technologies (Dataproc, Dataflow) often can't be canaried one region at a time the way a stateless serving job could, forcing a dry-run-first or percentage-of-data-first approach instead. A <strong>partial deployment</strong> — gating a risky change behind a flag that processes a growing sample of real accounts (roughly 1% → 10% → 50% → 100%) — catches issues in input data, processing logic, or the storage layer before they reach every user.</p>
+
+    <h3>Hotspotting — when part of the data becomes the bottleneck</h3>
+    <p>Hotspotting happens when concentrated access overloads one narrow resource — too many workers hitting one serving task, CPU exhaustion from concurrent access to data that only lives on one machine (a single overloaded Spanner tablet, even while the rest of storage is perfectly healthy), row-level lock contention, or physical disk-head contention on spinning media (SSDs help here directly). Concrete mitigations: dynamic rebalancing that breaks an oversized work unit into smaller pieces automatically; a genuine emergency kill switch — a flag or pushed config letting you skip input matching a specific problematic pattern or user immediately; restructuring data or access patterns to spread load more evenly; and, where genuinely necessary, reducing lock granularity to cut down on contention directly.</p>
+
+    <h3>Autoscaling and resource planning</h3>
+    <p>Constantly provisioning for peak load is wasteful; autoscaling (Chapter 11) lets idle workers scale down — especially valuable for streaming and variable-load pipelines, though batch pipelines running concurrently will still consume whatever's available. Resource planning needs to account for costs beyond the compute itself — storage and network costs for cross-region replication, and storage-server-side compute costs that don't scale linearly with raw byte count for some data stores. The chapter's practical tip: track per-stage resource usage even though the *effectiveness* SLO is end-to-end — if BigQuery costs spike after a release, per-stage tracking is what lets you pinpoint which specific job is responsible.</p>
+
+    <h3>Access control and escalation</h3>
+    <p>Avoid storing PII in temporary storage (encrypt it if you genuinely must); grant each pipeline stage only the minimal access it needs to read the previous stage's output, not broad blanket access; and set explicit TTLs on logs and PII rather than retaining indefinitely by default. On escalation: a well-designed pipeline should be resilient enough that ordinary machine or zonal failure never triggers a page at all — by the time a human actually gets paged, every automated remedy should already have been exhausted, meaning genuine manual intervention is truly required.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">design patterns</div>
+    <h2>Concrete techniques for correctness and recoverability</h2>
+
+    <h3>Idempotent and two-phase mutations</h3>
+    <p>An <strong>idempotent</strong> mutation produces the same result no matter how many times it's applied — essential since pipeline failures routinely force reprocessing, and reprocessing shouldn't risk duplicating or corrupting already-written data. <strong>Two-phase mutations</strong> go a step further, specifically to support safe canarying: rather than writing a transformation's output directly, write the *proposed* mutation to a temporary location first, run a separate verification step against it, and only apply it to the real destination once it passes validation — letting a canary run against real production data without any risk of its output actually reaching production storage before it's confirmed safe.</p>
+
+    <h3>Checkpointing</h3>
+    <p>Long-running pipelines (especially ML training, where each iteration depends on the last) lose all progress if terminated early without special handling. Checkpointing periodically persists partial state so a pipeline can resume rather than restart from zero — useful not just for failure recovery, but for planned preemption too (a job cleanly shuts down for a resource-limit change, then resumes exactly where it left off) and for skipping already-completed, potentially expensive work on any rerun.</p>
+
+    <h3>Reusable code and the microservice approach</h3>
+    <p>Shared instrumentation libraries let a new metric or monitoring capability be added once and reused across every pipeline built on that library — consistent cross-pipeline insight, shared analytics tooling, and identical alerting logic (a generic data-freshness alert) without reimplementing it per pipeline. The same microservices instinct that favors "one service, one job, done well" applies directly to pipelines too: several smaller, independently releasable and monitorable pipelines built on shared core libraries beat one large, monolithic pipeline application that couples unrelated concerns together.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">maturity matrix</div>
+    <h2>A structured self-assessment, scored 1 to 5</h2>
+    <p>Mirroring the Production Readiness Review from Chapter 18, Google uses a <strong>pipeline maturity matrix</strong> when consulting on pipeline technology choices — five characteristics, each scored from 1 ("Chaotic": unplanned, ad hoc, fully manual) to 5 ("Continuous improvement").</p>
+    <table class="recap">
+      <tr><th>Characteristic</th><th>What "5" looks like</th></tr>
+      <tr><td>Failure tolerance</td><td>Multihomed with automatic failover; warm/warm/warm processing distributed and centrally tracked across regions; automatic retry and quarantine of failed work units</td></tr>
+      <tr><td>Scalability</td><td>Built-in autoscaling and dynamic resharding with no external tooling; easy work-unit prioritization; workers that understand and gracefully handle preemption</td></tr>
+      <tr><td>Monitoring and debugging</td><td>Fine-grained execution-map visualization, delay tracking per stage, automatic quarantine-and-replay of failed work units, preserved historical run statistics</td></tr>
+      <tr><td>Transparency and ease of implementation</td><td>Automatic discoverability via a global registry; machine-readable, near-zero-config setup; comprehensive, current documentation with training examples</td></tr>
+      <tr><td>Unit and integration testing</td><td>Sanitizer support, minimal build dependency graph, built-in test-data generation, decoupled-but-reusable test configuration</td></tr>
+    </table>
+    <p>The recommended process: score honestly against each milestone (splitting the difference at 2 or 4 if a system straddles two levels), then deliberately invest in whichever characteristics score weakest — preferring existing products and open-source tooling over building bespoke solutions wherever a reasonable option already exists.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">failure modes</div>
+    <h2>Delayed data, corrupt data, and what actually causes each</h2>
+    <div class="callout"><b>The chapter's central principle for handling delay:</b> stale data is almost always better than incorrect data. If a pipeline stalls, waits for missing input, and resumes cleanly once it arrives, data quality stays intact — the cost is only in freshness, not correctness. Batch pipelines wait for a full predecessor stage to finish; event-time streaming systems (Dataflow) can let a downstream stage begin processing whichever portions of upstream data have already completed, rather than blocking on the entire batch.</div>
+    <p><strong>Corrupt data</strong> is the more dangerous failure mode, since it can silently propagate to every downstream consumer before anyone notices. Fixing it is a two-step process: first mitigate by preventing further corrupt data from entering the system (draining a bad region, rolling back a buggy binary), then restore from a known-good backup or reprocess to actually repair what's already corrupted. <strong>Selective reprocessing</strong> — reprocessing only the specific accounts or records actually affected, rather than the entire dataset — meaningfully reduces recovery cost when the blast radius is well understood.</p>
+    <table class="recap">
+      <tr><th>Cause</th><th>What to check</th></tr>
+      <tr><td>Pipeline dependencies</td><td>Is a downstream sink refusing writes? Is there a hotspot data range? A bug in the storage layer itself?</td></tr>
+      <tr><td>Application/config bug</td><td>CPU-intensive regression, out-of-memory failure, misconfigured input/output location, data prone to hotspotting — the *most common* root cause overall</td></tr>
+      <tr><td>Unexpected resource growth</td><td>A sudden load spike straining not just the pipeline but everything downstream of it too — plan for the process of requesting emergency resources ahead of time, since it's often slow</td></tr>
+      <tr><td>Region-level outage</td><td>Singly-homed pipelines simply stop until the region recovers; multihomed pipelines can drain the affected region and continue elsewhere</td></tr>
+    </table>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study</div>
+    <h2>Spotify: event delivery as a postal service</h2>
+    <p>Spotify's <strong>event delivery system</strong> reliably collects instrumentation data — every song play, ad click, playlist follow — generated by hundreds of billions of daily events, and delivers it to persistent storage. This system underlies nearly all of Spotify's downstream data processing, from A/B testing to personalized recommendations, and — critically — from artist royalty payments, which is exactly why reliability here carries real financial stakes.</p>
+
+    <h3>Architecture: decoupling collection from delivery</h3>
+    <p>Events are partitioned by type and publishing hour into <strong>hourly buckets</strong> on Google Cloud Storage — the only interface downstream data jobs actually interact with, and the natural unit SLOs are measured against. Spotify deliberately decoupled data <em>collection</em> from data <em>delivery</em> using Google Cloud Pub/Sub as an intermediate persistent queue — meaning a failure in one half doesn't automatically cascade into the other, since each now constitutes its own independent failure domain. An ETL process handles delivery in three cleanly separated steps: a microservice consumes the event stream, a second microservice assigns events to their correct hourly partition, and a Dataproc batch job deduplicates and persists them to final storage.</p>
+    <p>Customers (internal Spotify teams) enable or disable delivery per event type via simple configuration — and because Spotify can't predict in advance how much resource capacity a newly enabled event type will actually need, GCE Autoscaler dynamically provisions and releases compute as delivery is toggled on and off, rather than requiring manual capacity estimation for every new event type.</p>
+
+    <h3>Three SLOs, each measuring something genuinely distinct</h3>
+    <table class="recap">
+      <tr><th>SLO</th><th>Definition</th></tr>
+      <tr><td>Timeliness</td><td>Maximum delay delivering an hourly bucket — measured from the earliest theoretical bucket-close time, split into high/normal/low priority tiers customers configure per event type</td></tr>
+      <tr><td>Skewness</td><td>Max percentage of data misplaced into the wrong hourly bucket daily — happens when delivery heuristics guess a bucket boundary incorrectly, causing under- then over-reporting for affected periods</td></tr>
+      <tr><td>Completeness</td><td>Percentage of successfully published events that are actually delivered — tracked via a daily internal audit comparing published vs. delivered counts</td></tr>
+    </table>
+    <p>Skewness and completeness SLOs are only offered for events explicitly marked "financial-bearing" by the customer — for everything else, best-effort delivery is genuinely sufficient, and exposing a formal SLO there would just add unnecessary complexity for no real customer benefit. Timeliness is tracked using an internal visualization tool, <strong>Datamon</strong>, which renders each hourly bucket as a colored rectangle (on-time, not-yet-delivered, or SLO-violating) across a calendar grid, collapsing fully successful days into a single green marker for quick scanning.</p>
+    <div class="callout"><b>The deliberate boundary Spotify draws:</b> the event delivery system offers zero guarantees about data *quality* or *accuracy* — only about delivery itself. The team's own explicit framing: event delivery should behave exactly like a postal service — your mail arrives on time, intact, and unopened, but what's actually written inside is the sender's responsibility, not the postal service's. Keeping this boundary sharp is what let the system scale cleanly to many internal customers without becoming entangled in every team's own business logic.</div>
+
+    <h3>Customer-facing simplicity, by deliberate design</h3>
+    <p>The system is offered as a fully managed service with deliberately limited functionality — a single supported event format, delivery only to hourly buckets in one serialization format — trading flexibility for genuine simplicity. Enabling delivery of any new event type requires explicitly declaring whether it's financial-bearing and its timeliness tier, and explicitly naming an owning team — both a data-quality lever (accountable owners produce better data) and a practical one (a clear point of contact exists automatically during any incident).</p>
+
+    <h3>Capacity planning, and a genuine Autoscaler near-miss</h3>
+    <p>Most components are provisioned for 50% CPU utilization at peak, leaving real headroom to absorb traffic bursts. The team learned a sharp, specific lesson about Autoscaler's core assumption: it depends on CPU usage genuinely correlating with real work performed. If that correlation breaks — a CPU-hungry daemon added to every instance, or a component instance burning CPU while doing no useful work at all — Autoscaler will happily scale indefinitely, consuming all available quota chasing a signal that no longer means what it's supposed to mean. Concrete guardrails Spotify added directly in response: a hard cap on maximum instance count, tight restrictions on daemon CPU usage across every instance, and aggressive throttling the moment a component is detected doing no useful work.</p>
+
+    <h3>Staged, conservative deployment</h3>
+    <p>Development follows CI/CD with a genuine testing pyramid — many unit tests per component, fewer integration tests against public APIs, and a smaller number of full end-to-end tests treating every component as a black box resembling production as closely as possible. Because this system is critical enough that its failure would stall <em>all</em> of Spotify's downstream data processing, deployment is deliberately conservative: staging first (mirroring a representative slice of real production traffic without touching production), then a canary subset of real production instances, and only then a full rollout — each stage requiring explicit manual approval before proceeding to the next.</p>
+
+    <h3>Incident handling, and what breaks in practice</h3>
+    <p>During an active incident, the team's default is to avoid deploying further changes — the one deliberate exception is rolling back immediately if a recently deployed change is the suspected cause. The most common real operational failures trace back to either an internal software regression, or an external dependency breaking its own SLA (a non-backward-compatible API update, say) — with a dedicated on-call arrangement specifically for issues traced to external providers, since Spotify's own team genuinely can't mitigate those directly and communicating the issue to a third party itself costs valuable incident time. A broken freshness SLO requires no customer-facing action beyond waiting; a broken skewness or completeness SLO, by contrast, genuinely compromises data quality and requires manual redelivery (for incompleteness) or manual reshuffling of already-delivered events into their correct buckets (for skewness) — both explicitly manual processes, with strong encouragement for affected customers to reprocess their own downstream data afterward.</p>
+    <div class="callout"><b>The team's own summary of the payoff:</b> earlier iterations of this system paged engineers every few nights, with most development time consumed by incident remediation rather than genuine feature work. The current, modular, single-purpose-per-component design — paired with clearly defined SLOs that set honest customer expectations — freed the team to spend their time pushing completeness, skewness, and timeliness targets forward, rather than firefighting the basics on a recurring, exhausting cycle.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Stale data beats incorrect data</td><td>A pipeline that waits and resumes cleanly preserves correctness; one that plows ahead on incomplete input risks silent corruption</td></tr>
+      <tr><td>Measure end-to-end, not just per-stage</td><td>Per-stage-only SLOs can hide a genuine correctness bug where every individual stage reports "all is well"</td></tr>
+      <tr><td>Two-phase mutations enable safe canarying</td><td>Verify proposed mutations before they ever reach real production storage</td></tr>
+      <tr><td>Checkpointing turns restarts into resumes</td><td>Critical for long-running jobs like ML training, where every iteration depends on the last</td></tr>
+      <tr><td>The maturity matrix gives a structured, honest self-assessment</td><td>Five characteristics scored 1-5 point directly at where to invest, rather than guessing</td></tr>
+      <tr><td>Plan for dependencies breaking their own SLAs</td><td>Google's DiRT drills force this planning ahead of time, rather than discovering the gap live</td></tr>
+      <tr><td>Autoscaler assumes CPU correlates with real work</td><td>Spotify's near-miss shows what happens when that assumption silently breaks</td></tr>
+      <tr><td>Event delivery is a postal service, not a quality inspector</td><td>Spotify's sharp boundary — deliver reliably, leave data quality to the owning team — is what let it scale to many customers cleanly</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 13, CC BY-NC-ND 4.0 · sre.google/workbook/data-processing</footer>
+</div>
+</body>
+</html>

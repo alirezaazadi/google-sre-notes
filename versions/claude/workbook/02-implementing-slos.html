@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.2 — Implementing SLOs</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/02-implementing-slos.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part I — Foundations</div>
+    <h1 class="title">Chapter 2: Implementing SLOs</h1>
+    <p class="subtitle">"Possibly the most important chapter in this book" — a genuine step-by-step recipe for turning a mobile game's architecture into real, defensible SLOs and an error budget.</p>
+    <div class="source-note">📖 Based on <em>Chapter 2</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/implementing-slos/" target="_blank">sre.google/workbook/implementing-slos</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="01-how-sre-relates-to-devops.html">← Ch.1 How SRE Relates to DevOps</a><a href="03-slo-engineering-case-studies.html">next: Ch.3 SLO Engineering Case Studies →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">why this matters</div>
+    <h2>Without SLOs, there's arguably no need for SRE</h2>
+    <p>The chapter opens with a genuinely strong claim: SRE's day-to-day work isn't fundamentally "automate everything and hold the pager" — it's <em>driven</em> by defending SLOs short-term and sustaining them medium-to-long-term. Engineers are a scarce resource everywhere, even at Google — and the hard, constant question is how much time to spend on features that win customers versus reliability that keeps them. A well-adopted SLO is the tool that turns that tradeoff from a political argument into a data-informed decision.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the starting checklist</div>
+    <h2>What "adopting an error budget approach" actually requires</h2>
+    <p>Most services sit at one of three maturity levels: greenfield with nothing deployed yet; running in production with monitoring but no formal target and an unspoken "100% uptime" expectation; or already carrying an SLO below 100% that nobody actually treats as meaningful — what the chapter calls "an SLO without teeth."</p>
+    <p>To genuinely adopt an error-budget approach (not just report a number), four things have to be true simultaneously:</p>
+    <ul>
+      <li>SLOs exist that <em>all</em> stakeholders have actually approved as fit for the product.</li>
+      <li>The people responsible for defending the SLO agree it's achievable under normal conditions.</li>
+      <li>The organization has formally committed to using the error budget for real prioritization decisions — codified in a written error budget policy.</li>
+      <li>A process exists for refining the SLO over time.</li>
+    </ul>
+    <div class="fails"><b>Skip any one of these, and SLO compliance quietly degrades into just another KPI</b> — a number to report upward, not a decision-making tool anyone actually uses.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">why not 100%</div>
+    <h2>Four separate, independent reasons 100% is the wrong target</h2>
+    <p>This directly extends Chapter 3 of the original SRE book, with sharper detail:</p>
+    <ul>
+      <li><strong>It's not achievable even in principle.</strong> Even with redundancy, health checks, and fast failover, there's always a nonzero chance multiple components fail simultaneously.</li>
+      <li><strong>Users wouldn't experience it even if you achieved it.</strong> The chain of systems between your service and the user is long — their ISP, their device, their WiFi — and any link can fail regardless of what you do on your end. Each additional "nine" past a point costs more while delivering marginal utility that approaches zero.</li>
+      <li><strong>It freezes you in place.</strong> The single biggest cause of outages is <em>change</em> — new features, security patches, hardware deployments, scaling. A genuine 100% target means never touching the system again, which means stagnating while competitors move.</li>
+      <li><strong>It's an operations-team SLO, not an engineering-culture SLO.</strong> At 100%, all you can do is react to inevitable failure — there's no room for anything else.</li>
+    </ul>
+    <p>Once you accept a target below 100%, someone in the org needs to actually <em>own</em> it — empowered to trade off feature velocity against reliability. In a small org, that might be the CTO directly; in a larger one, typically the product owner.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">choosing SLIs</div>
+    <h2>The "good events over total events" pattern — and why it's genuinely useful</h2>
+    <p>The chapter's recommended default: express nearly every SLI as a simple ratio — good events divided by total events. Concrete examples given directly: successful HTTP requests / total requests; gRPC calls completing under 100ms / total gRPC calls; search results using the full corpus / total results including gracefully degraded ones; "good user minutes" (by some agreed criteria) / total user minutes.</p>
+    <div class="math">
+      SLI range: 0% (nothing works) to 100% (nothing broken)<br>
+      Error budget = 100% − SLO<br><br>
+      99.9% SLO, 3,000,000 requests over 4 weeks<br>
+      → budget = 0.1% × 3,000,000 = 3,000 allowed errors<br>
+      A single outage causing 1,500 errors = 50% of the whole budget, gone
+    </div>
+    <p>Beyond intuitiveness, this consistent shape has a real practical payoff: alerting logic, SLO analysis tooling, error-budget calculators, and reporting can all be built once, generically, around the same numerator/denominator/threshold shape — instead of every service needing custom tooling for its own idiosyncratic metric format.</p>
+
+    <h3>Specification vs. implementation — a distinction worth internalizing</h3>
+    <p>An <strong>SLI specification</strong> is the outcome you actually care about, independent of how you measure it — e.g., "ratio of home page requests that loaded in under 100ms." An <strong>SLI implementation</strong> is a specific, concrete way to measure that specification — and the same specification can have several genuinely different implementations, each with its own tradeoffs:</p>
+    <ul>
+      <li><strong>Server logs</strong> — cheap, already exists, but misses requests that never reached the backend at all.</li>
+      <li><strong>Synthetic browser probes</strong> — catches network-level failures the logs miss, but may not represent what real, diverse users actually experience.</li>
+      <li><strong>Client-side JavaScript instrumentation</strong> — most accurately reflects real user experience, at the real cost of needing new code and its own reliability infrastructure to actually collect and report the data.</li>
+    </ul>
+    <div class="callout"><b>Don't let perfect be the enemy of started.</b> Your first SLI/SLO doesn't need to be right — it needs to exist and be measured, with a real feedback loop to improve it later. Current performance is a legitimate starting point if you lack other data (though the original SRE book's warning against over-anchoring on it still applies) — just don't let it become a ceiling either, since users will come to expect whatever baseline you're actually delivering.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">the worked example</div>
+    <h2>A mobile phone game: API, pipeline, and storage, together</h2>
+    <p>The chapter's running example is a mobile game: a phone app talking to an HTTP API, which writes state to permanent storage; a periodic pipeline generates league tables (daily/weekly/all-time high scores) into a separate data store; users can upload custom avatars, used both in-game and on a companion leaderboard website.</p>
+    <p>This nicely covers the chapter's three fundamental component archetypes, each with its own natural SLI menu:</p>
+    <table class="recap">
+      <tr><th>Component type</th><th>What it is</th><th>Natural SLIs</th></tr>
+      <tr><td>Request-driven</td><td>User triggers an event, expects a response (HTTP API, mobile app backend)</td><td>Availability, latency, quality (did it degrade gracefully?)</td></tr>
+      <tr><td>Pipeline</td><td>Ingests records, transforms them, writes output elsewhere — real-time or batch</td><td>Freshness, correctness, coverage</td></tr>
+      <tr><td>Storage</td><td>Accepts data, makes it retrievable later</td><td>Durability</td></tr>
+    </table>
+    <div class="callout"><b>The chapter's recommendation on quantity: pick five or fewer SLI types</b> that represent the most critical functionality — not an exhaustive inventory of everything measurable. And for latency-shaped SLIs specifically, use multiple thresholds rather than one: "90% of requests under 100ms, 99% under 400ms" captures the unhappy long tail that a single median-latency number would completely hide.</div>
+    <p>A genuinely important nuance on <strong>durability</strong> specifically: the proportion of records that are readable can look excellent in aggregate while still making users miserable — the chapter's example is a billion records spanning ten years, with excellent overall durability, except that <em>today's</em> records — the ones the user actually wants right now — happen to be unavailable. Aggregate durability numbers can hide exactly the failure users notice most.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">implementation choices</div>
+    <h2>From specification to real, measured numbers</h2>
+    <p>For the API's availability and latency, the example uses <strong>load balancer monitoring</strong> — deliberately chosen over raw application logs because it's already available and sits closer to the real user experience than server-side logs alone.</p>
+    <p>For pipeline <strong>freshness</strong>, two implementation options are weighed directly: a periodic query counting fresh vs. stale records treats every stale record as equally important regardless of how many users actually saw it; a <em>client-side</em> check — incrementing a counter every time a client actually requests data, and a second counter when that data was fresher than the threshold — correlates far better with genuine user experience, and is the one the example adopts.</p>
+    <p>For <strong>correctness</strong>, two genuinely different strategies: inject known-good test data and check the pipeline's output against expected results; or compute a "true" answer via an independent (likely much more expensive) method and sample real input/output pairs against it. The example uses manually curated test data with known-correct outputs, re-verified on every pipeline run — with the important caveat that this approach is only trustworthy if the curated test data genuinely represents real-world input.</p>
+
+    <h3>The actual Prometheus math</h3>
+    <div class="math">
+      Availability = sum(rate(http_requests_total{status!~"5.."}[7d]))<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/ sum(rate(http_requests_total[7d]))<br><br>
+      Latency (p90/p99) = histogram_quantile(0.9, rate(http_request_duration_seconds_bucket[7d]))<br><br>
+      Real 4-week numbers from the example:<br>
+      3,663,253 total requests · 3,557,865 successful (97.123%)<br>
+      p90 latency: 432ms · p99 latency: 891ms
+    </div>
+    <p>Rounding these down to manageable numbers produces the proposed starter SLOs: <strong>97% availability</strong>, <strong>90% of requests under 450ms</strong>, <strong>99% under 900ms</strong> — which in turn translates into a concrete error budget: 109,897 allowed failed requests, 366,325 allowed "slow" (>450ms) requests, and 36,632 allowed "very slow" (>900ms) requests, all over the same four-week window.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">choosing a window</div>
+    <h2>Rolling vs. calendar-aligned — a real, non-obvious tradeoff</h2>
+    <table class="recap">
+      <tr><th>Window type</th><th>Strength</th><th>Weakness</th></tr>
+      <tr><td>Rolling (e.g., trailing 4 weeks)</td><td>Matches lived user experience — a huge outage on month-end doesn't magically vanish on the 1st</td><td>None major, if aligned to whole weeks (avoids uneven weekend-count skew)</td></tr>
+      <tr><td>Calendar-aligned (e.g., quarterly)</td><td>Matches business planning cadence directly</td><td>Mid-period, you genuinely don't know how much budget you'll have left by period's end — decisions must speculate</td></tr>
+    </table>
+    <p>Shorter windows enable faster course correction (missed budget last week → reprioritize a few bugs this week); longer windows are needed for genuinely strategic bets — the chapter's own example: choosing between migrating to a high-availability distributed database, automating rollback, or duplicating your stack across zones needs more than a week of signal to evaluate responsibly, roughly proportional to how much engineering effort the option itself represents.</p>
+    <p>Google's own practical answer: a <strong>4-week rolling window</strong> as the general-purpose default, supplemented with weekly summaries for near-term task prioritization and quarterly rollups for larger project planning.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">getting agreement</div>
+    <h2>Three parties, three distinct concerns — all must actually agree</h2>
+    <ul>
+      <li><strong>Product managers</strong> must agree the threshold is genuinely good enough for users — that performance below it is unacceptable and worth real engineering time to fix.</li>
+      <li><strong>Product developers</strong> must agree that when the error budget runs out, they'll actually take concrete steps to reduce risk until back in budget.</li>
+      <li><strong>The team defending the SLO</strong> must agree it's achievable without Herculean effort, chronic toil, or burnout — all of which quietly damage the team and service over the long run.</li>
+    </ul>
+    <div class="callout"><b>The chapter's dry aside once all three agree:</b> "you have started your SLO journey, and the remaining steps entail iterating from this starting point" — with a footnoted joke that harder tasks may still lie ahead. Agreement isn't the finish line, it's the actual starting gate.</div>
+
+    <h3>The error budget policy — a genuine stress test for whether the SLO is right</h3>
+    <p>Getting a written error budget policy approved by product, development, and SRE together is itself a useful diagnostic: if SREs think the SLO is undefensible without excessive toil, they can push to relax it; if developers think reliability work required by a strict SLO would tank feature velocity below acceptable levels, they can push to relax it too — but the PM needs to understand that a looser SLO also means fewer things SRE will actually respond to; and if the PM thinks the SLO lets too many users suffer before anyone's forced to act, it's likely not tight enough. If all three can't agree to actually <em>enforce</em> the policy once written, that's a clear signal to keep iterating rather than ship an unenforceable document.</p>
+    <p>A good policy names specific, concrete actions and owners — e.g., top-priority bugfixing for reliability issues from the past four weeks; the development team pausing external feature commitments entirely until back in SLO (with explicit high-level authority to push back on outside demands); or a full production freeze on further changes until budget recovers.</p>
+
+    <h3>What the actual documentation should contain</h3>
+    <p>Both the SLO document and the error budget policy should record: authors, technical reviewers, and business-decision approvers; approval date and next review date; a brief service description for context; the concrete SLO details and SLI implementations; how the error budget is calculated and consumed; and — genuinely important — the <em>rationale</em> behind the numbers, including honestly noting if they were essentially ad hoc, so future engineers don't mistake an educated guess for a rigorously-derived target.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">iterating</div>
+    <h2>Continuous improvement: does your SLO actually track what users feel?</h2>
+    <p>Once an SLO exists, the real test is whether it correlates with genuine user unhappiness — support tickets, manually discovered outages, social sentiment, in-app happiness sampling, direct surveys. The chapter's suggested method: overlay your support-ticket volume against measured error-budget loss, day by day, and look for correlation (Spearman's rank correlation coefficient, if you want to be rigorous about it) — then specifically investigate the outliers: a day with very few tickets but heavy budget loss, or heavy ticket volume with zero budget impact. Both are worth a closer look, since either could indicate a real gap in what your SLO is actually capturing.</p>
+    <div class="callout"><b>Finding a gap between your SLO and real user pain is normal, not a failure.</b> Realities about a service change constantly — your SLO should evolve with it, not stay frozen at its first-draft definition.</div>
+    <p>Four concrete moves when coverage is off:</p>
+    <ul>
+      <li><strong>Tighten or loosen the SLO threshold itself</strong> — but check the tradeoff carefully: tightening to catch a real missed incident might also flood the team with false-positive noise on unrelated days; find the threshold that improves recall without wrecking precision.</li>
+      <li><strong>Change the SLI implementation</strong> — move the measurement point closer to the actual user (client-side instead of server-side), or broaden coverage (a richer health check that exercises real functionality instead of a bare HTTP GET).</li>
+      <li><strong>Adopt an aspirational SLO</strong> — when you genuinely need a tighter target eventually, but the product isn't there yet, track the tighter number in parallel <em>without</em> triggering the error budget policy — visible progress tracking without living in permanent, unproductive emergency mode.</li>
+      <li><strong>Just iterate.</strong> Favor cheap, fast changes early on to reduce uncertainty quickly, saving more expensive, precise instrumentation for once you've confirmed it's actually worth the investment.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">decision making</div>
+    <h2>Turning error budget numbers into real prioritization calls</h2>
+    <p>The chapter's own worked comparison is genuinely persuasive: a bad API release causes total failures for 4 hours, costing 14,066 errors — 13% of the 4-week budget. A rare single-homed database server failure needs 20 hours to restore from backup, costing an estimated 72,000 errors — 65% of budget. But if bad releases happen 2-3 times a year while server failures happen once in five years, <em>bad releases cost roughly twice the total annual budget of server failures</em> — meaning fixing the release process is the clearly higher-leverage investment, even though any single database failure looks scarier in isolation.</p>
+
+    <h3>The full decision matrix</h3>
+    <table class="recap">
+      <tr><th>SLO</th><th>Toil</th><th>Satisfaction</th><th>Action</th></tr>
+      <tr><td>Met</td><td>Low</td><td>High</td><td>Relax process to move faster, or redirect engineering elsewhere</td></tr>
+      <tr><td>Met</td><td>Low</td><td>Low</td><td>Tighten the SLO — it's not actually capturing what matters to users</td></tr>
+      <tr><td>Met</td><td>High</td><td>High</td><td>Reduce alert sensitivity if it's false positives; otherwise loosen temporarily and fix root causes</td></tr>
+      <tr><td>Met</td><td>High</td><td>Low</td><td>Tighten the SLO</td></tr>
+      <tr><td>Missed</td><td>Low</td><td>High</td><td>Loosen the SLO — it's stricter than users actually need</td></tr>
+      <tr><td>Missed</td><td>Low</td><td>Low</td><td>Increase alerting sensitivity — real problems are slipping through undetected</td></tr>
+      <tr><td>Missed</td><td>High</td><td>High</td><td>Loosen the SLO</td></tr>
+      <tr><td>Missed</td><td>High</td><td>Low</td><td>Offload toil and genuinely fix the product / improve automated mitigation</td></tr>
+    </table>
+    <p>Notice the recurring theme: a met-but-unhappy or missed-but-happy combination is itself diagnostic information — a genuine mismatch between what you're measuring and what users actually feel, worth fixing before chasing anything else.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">advanced topics</div>
+    <h2>Beyond the basics: journeys, tiers, and dependencies</h2>
+
+    <h3>Critical user journeys</h3>
+    <p>Individual SLIs, however well-chosen, rarely map cleanly onto the multi-step sequences that actually define a user's real experience — "search for a product → add to cart → complete purchase" for an e-commerce site. Measuring these end-to-end is genuinely hard (how do you distinguish a user who failed step three from one who simply got distracted and closed the tab?), but the chapter's point stands: identify what actually matters to the user first, <em>then</em> figure out how to measure it — critical user journeys improve recall without sacrificing precision, once you find a workable way to instrument them (joining log events, deeper client-side probing, and so on).</p>
+
+    <h3>Bucketing by importance</h3>
+    <p>Not every request deserves the same target. The chapter's examples: premium customers might get a 99.99% availability SLO while free-tier gets 99.9%; interactive page-blocking requests might target 90% under 100ms while a CSV export only needs 90% starting within 5 seconds. Tracking per-customer SLO compliance individually is possible but noisy for low-volume customers (one lucky or unlucky request can swing their number to either extreme) — the real signal is in aggregate patterns affecting many customers at once, not any single customer's number in isolation.</p>
+
+    <h3>Modeling dependencies — and the tempting, wrong math</h3>
+    <p>If a component is a critical dependency for a high-value user journey, its own reliability target needs to be <em>at least</em> as strict as whatever depends on it. If a dependency simply can't meet the required bar, you either swap it for something that can, or engineer defenses around its limitation — caching, offline store-and-forward, graceful degradation.</p>
+    <div class="fails"><b>The chapter's sharpest, most important warning in this whole section:</b> it's tempting to "math your way" to a higher composite reliability — e.g., two independent 99.9%-available zones should combine to 99.9999%, by naive probability. This reasoning is almost always wrong in practice, because the two "independent" deployments virtually never <em>are</em> independent — they share dependencies, failure domains, control planes, and fate in ways that are easy to overlook and hard to fully enumerate. Unless every shared failure mode is explicitly accounted for, any such multiplication is deceptive, not reassuring.</div>
+    <p>When a missed SLO traces back to another team's dependency, the chapter presents two genuine schools of thought without picking a universal winner: don't halt your own releases since your system didn't cause the problem, <em>or</em> freeze changes anyway to minimize compounding risk regardless of root cause — the second option keeps users happier, but isn't always practical. Whichever you choose, write the decision down in your error budget policy so it's a deliberate call, not an ad hoc one made under pressure during the next incident.</p>
+
+    <h3>Experimenting with relaxed reliability — deliberately, and carefully</h3>
+    <p>It's possible to deliberately degrade a metric (say, adding artificial latency) and measure whether it actually moves a business metric like conversion rate — genuinely valuable for establishing a real, quantified relationship between technical and business metrics. But the chapter is emphatic this should only be attempted with real error budget to spare, and warns of a specific interpretation trap: users might tolerate a slower experience today simply because they lack an alternative right now — and silently leave the instant a competitor offers something better, even though your experiment showed "no measurable harm." Measure the right thing, take real precautions, and don't treat a single experiment as settled forever — expectations shift as the service and its competitors evolve.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>SLOs aren't optional overhead — they're arguably SRE's whole reason to exist</td><td>Without them, "reliability work" has no way to be prioritized against feature work objectively</td></tr>
+      <tr><td>Good-events / total-events SLIs</td><td>A consistent shape enables shared tooling across alerting, reporting, and error-budget calculation</td></tr>
+      <tr><td>SLI specification vs. implementation</td><td>The same target outcome can be measured multiple ways, each with real cost/quality/coverage tradeoffs</td></tr>
+      <tr><td>Aggregate durability can hide today's failure</td><td>A billion readable historical records means nothing if today's specific records are the ones unavailable</td></tr>
+      <tr><td>4-week rolling window as a sane default</td><td>Matches lived user experience better than a calendar-aligned period, without losing planning cadence</td></tr>
+      <tr><td>Error budget policy as a stress test</td><td>If all three stakeholders can't agree to actually enforce it, the SLO itself likely needs more iteration</td></tr>
+      <tr><td>Correlate budget loss with support tickets</td><td>Outliers in either direction reveal real gaps in what your SLI is actually capturing</td></tr>
+      <tr><td>Don't multiply "independent" reliabilities</td><td>Shared dependencies and failure domains make naive probability math for redundancy deceptive</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 2, CC BY-NC-ND 4.0 · sre.google/workbook/implementing-slos</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.19 — SRE: Reaching Beyond Your Walls</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/19-sre-reaching-beyond-your-walls.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part III — Processes</div>
+    <h1 class="title">Chapter 19: SRE — Reaching Beyond Your Walls</h1>
+    <p class="subtitle">99.999% on your side of the API is worthless if your customer's own system tops out at 99% — reliability as a partnership, and a five-step playbook for practicing SRE *with* the people who depend on you.</p>
+    <div class="source-note">📖 Based on <em>Chapter 19</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/reaching-beyond/" target="_blank">sre.google/workbook/reaching-beyond</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="18-sre-engagement-model.html">← Ch.18 SRE Engagement Model</a><a href="20-sre-team-lifecycles.html">next: Ch.20 SRE Team Lifecycles →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the premise</div>
+    <h2>Five truths, offered as a starting foundation</h2>
+    <p>Written 14 years into Google's own SRE practice and just two years after the first SRE book's publication, this chapter tries to look forward — specifically at what happens once reliability work stops being purely internal and starts touching real, external customers and partners. The chapter organizes its argument around five foundational claims.</p>
+
+    <h3>1. Reliability is the most important feature</h3>
+    <p>The chain of logic is simple: an unreliable system loses user trust; users without trust choose a competitor when given the option; software is governed by network effects, so a system with no users is worth nothing. The practical corollary: you are what you measure, so choosing the right metrics matters enormously.</p>
+
+    <h3>2. Your users, not your monitoring, decide your reliability</h3>
+    <div class="callout"><b>"Our monitoring looks fine" is never a satisfying answer to a user who's genuinely experiencing instability.</b> What they felt is what they'll remember when choosing between you and a competitor next time — a direct instance of the <strong>peak-end rule</strong> from behavioral psychology. Monitoring, logs, and alerting only earn their keep insofar as they let you notice a problem before your customers do — not as a rebuttal once a customer has already noticed one you missed.</div>
+
+    <h3>3. If you run a platform, reliability is a partnership</h3>
+    <p>A pure human-facing UI ties experienced reliability almost entirely to your own SRE work. The instant you expose an API and some of your "users" become other machines, the equation changes fundamentally — the reliability your end users actually experience now depends on choices <em>your customers</em> make, not just yours.</p>
+    <div class="math">
+      Your platform: 99.999% availability
+      Customer's own system built on it: never better than 99%
+      → their users' actual best-case experience: 98.99901%
+    </div>
+    <p>Your customers will hold you accountable for whatever their own users actually experience — even when the root cause sits entirely on their side of the boundary, not yours. That's simply what "partnership" means here, whether or not it feels fair.</p>
+
+    <h3>4. Everything important eventually becomes a platform</h3>
+    <p>A system's value scales with its user base, which naturally pulls toward integration — other companies will want their machines talking to yours via API once you're popular enough to matter. And this isn't actually optional: even a deliberate decision to never expose a machine-consumable API doesn't prevent the outcome — others will simply scrape your UI and wrap it into an unofficial API themselves. The only real choice is whether you have any control over how that integration actually happens.</p>
+
+    <h3>5. When your customers struggle, you have to slow down</h3>
+    <div class="fails"><b>Every unit of energy spent helping a struggling customer is energy not spent advancing your own system — and this compounds into a genuine toil trap.</b> Teams (and whole companies) can watch their innovation budget get slowly consumed by reactive break/fix support, even without formal support channels — triaging Stack Overflow questions and social-media complaints counts too. And crucially: this applies just as much to *internal* platform teams as external-facing ones. Believing "I'm on an internal platform team, this doesn't apply to me" is precisely the mistake — internal customers are still customers, and often the very first place this dynamic shows up.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">the conclusion</div>
+    <h2>You will need to practice SRE with your customers, not just for them</h2>
+    <p>If you want customers to design and operate genuinely reliable systems on your platform, you have to actively teach them how — internal customers included. Highly scaled one-to-many resources (docs, blog posts, architecture diagrams) help, but someone still has to figure out what belongs in them, and keep that content from going stale as the platform itself evolves. The chapter's core claim: the most effective way to actually learn these lessons is to <em>do SRE together</em> with your customers — not necessarily carrying their pager, but doing the work that normally precedes a pager handoff (bringing a system up to genuine minimum-viable reliability) with at least a representative sample of your real users.</p>
+  </section>
+
+  <section card class="card">
+    <div class="tab">the five steps</div>
+    <h2>A concrete playbook for practicing SRE with customers</h2>
+
+    <h3>Step 1: SLOs and SLIs are how you speak</h3>
+    <div class="fails"><b>Without shared, agreed-upon SLOs, every reliability conversation with a customer devolves into an unresolvable loop.</b> The chapter's own dramatized example: a customer notices an API call taking longer than usual and demands an immediate fix; you point out performance looks normal on your end; the customer, with no actual target to check against, simply insists something must have changed because it "doesn't usually take this long." Neither side ever reaches a satisfying resolution — you either burn effort convincing them not to worry, or burn effort chasing a root cause purely to prove the same point.</div>
+    <p>The root problem: absent a stated SLO, a customer will inevitably invent their own private one — and never tell you about it until you fail to meet it. The far more productive version of the same conversation starts from a shared metric: "we're burning through our SLO for application FOO too fast, and SLIs X and Y depending on your API have fallen off a cliff" — a conversation that only happens when something genuinely threatens an agreed target, grounded in metrics both sides already understand. The concrete exercise: sit down with the customer, walk them through SLOs, SLIs, and error budgets as your own team actually practices them, then help them describe their own critical applications in those same terms.</p>
+
+    <h3>Step 2: Audit the monitoring and build shared dashboards</h3>
+    <p>Once basic SLOs exist, the next question is whether the customer is actually measuring the right things. In practice, up to half of what customers measure and alert on turns out to have zero real bearing on their stated SLOs — pointing this out, and helping them turn off the resulting noisy alerts, genuinely reduces pages for both sides. The remaining measurements become real SLI candidates, often revealing gaps — dimensions of the SLO with no meaningful measurement in place at all, which is itself useful to surface and fix. The end goal: <strong>shared SLO dashboards</strong>, so that whenever a customer reaches out because their SLO looks threatened, neither side has to swap much additional context — it's already sitting in the shared view both of you already trust.</p>
+
+    <h3>Step 3: Measure, then renegotiate honestly</h3>
+    <div class="callout"><b>Collecting a month or two of real data against the new SLOs is often a genuine wake-up call.</b> An application everyone assumed was running at "five nines" (a number nearly everyone assumes about their own service) frequently turns out closer to 99.5-99.9% once actually measured against real, agreed targets. The productive follow-up question: are the application's actual users happy with what they're getting? If so — and if there's no real evidence that further improving availability would meaningfully move adoption, retention, or usage — the honest answer is that the "missing" nines were never actually needed in the first place. This is worth periodically re-asking, since priorities and real user needs shift over time.</div>
+
+    <h3>Step 4: Design reviews and risk analysis</h3>
+    <p>Sit down and genuinely understand how the customer's application is actually designed and operated — hidden single points of failure, manual (rather than automated) rollouts and rollbacks — essentially the same review discipline you'd apply to your own internal systems. Rank whatever you find by how much of the customer's own error budget each specific issue actually consumes, and pay close attention to which fixes the customer chooses to prioritize when trying to "earn back the nines" they want. What this reveals goes beyond just that one application: how customers actually consume your platform in practice, which reliability mistakes recur across your customer base, and which tradeoffs customers instinctively reach for when trying to improve. It also helps set realistic customer expectations directly — and since expectations shape perception, getting them right is itself a genuine trust-building move.</p>
+
+    <h3>Step 5: Practice, practice, practice</h3>
+    <p>Build real operational rigor together — Wheel of Misfortune exercises, disaster recovery drills, tabletop "game day" simulations. This develops genuine, tested muscle memory for how the two teams actually communicate under real crisis conditions, building trust, lowering MTTR, and surfacing operational edge cases you can feed back directly into platform improvements. And when a real incident does happen, don't just hand the customer your finished postmortem after the fact — run genuinely <strong>joint</strong> postmortems together. That collaborative process itself builds trust and teaches lessons a one-way document handoff never would.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">choosing who</div>
+    <h2>Be thoughtful and disciplined — this doesn't scale to every customer</h2>
+    <p>Running this full five-step process with anything close to your entire customer base quickly becomes impossible. The chapter's recommendation: choose a principled selection criterion and actually stick to it, rather than mixing approaches ad hoc (which confuses stakeholders and overwhelms your own team's capacity).</p>
+    <table class="recap">
+      <tr><th>Approach</th><th>When it fits</th></tr>
+      <tr><td>Revenue coverage</td><td>Select the minimum customer set accounting for X% of revenue — the natural fit when revenue concentrates heavily among a few large customers</td></tr>
+      <tr><td>Feature coverage</td><td>Select the minimum set covering X% of platform features — best for a diverse platform with a long tail of customers doing meaningfully different things, to avoid being blindsided by an under-covered feature</td></tr>
+      <tr><td>Workload coverage</td><td>Group usage into cohorts by dominant use case or customer type, sampling one or two representative customers per cohort — good when no single customer dominates but distinct usage patterns cluster naturally</td></tr>
+    </table>
+  </section>
+
+  <section class="card">
+    <div class="tab">the closing note</div>
+    <h2>A journey Google itself is still on</h2>
+    <p>The chapter closes with real, stated humility: the rapid spread of SRE practice well beyond Google was genuinely unexpected, and predicting exactly how the discipline evolves "in the wild" is described as "uncomfortably exciting" rather than confidently forecastable. What Google feels reasonably confident about is that any organization adopting SRE principles will cross many of the same inflection points Google did — including the growing need to blur the boundary between where your own responsibility ends and your customers' begins. The chapter frames this deep, operational engagement with individual customers as a genuinely new frontier even for Google itself, still actively being explored rather than a solved, finished practice.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Users decide reliability, not your dashboards</td><td>"Our monitoring looks fine" never actually resolves what a customer genuinely experienced</td></tr>
+      <tr><td>Reliability becomes a partnership the moment you expose an API</td><td>Your 99.999% is worthless to end users if the customer built on top of you tops out at 99%</td></tr>
+      <tr><td>An unofficial API happens whether you build one or not</td><td>Someone will scrape your UI regardless — the only real choice is whether you control the outcome</td></tr>
+      <tr><td>Helping struggling customers competes directly with your own innovation budget</td><td>Applies equally to internal platform teams, not just external-facing ones</td></tr>
+      <tr><td>Without shared SLOs, every reliability conversation loops forever</td><td>A customer without a stated target will invent one privately and never tell you until you miss it</td></tr>
+      <tr><td>Half of what customers measure often has zero SLO impact</td><td>Auditing and removing it reduces noise and pages for both sides</td></tr>
+      <tr><td>Measuring for real often reveals the "five nines" were never actually there</td><td>The real question is whether users are happy, not whether a mythical target was hit</td></tr>
+      <tr><td>Pick one customer-selection strategy and stick to it</td><td>Revenue, feature, or workload coverage — mixing approaches confuses stakeholders and overwhelms the team</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 19, CC BY-NC-ND 4.0 · sre.google/workbook/reaching-beyond</footer>
+</div>
+</body>
+</html>

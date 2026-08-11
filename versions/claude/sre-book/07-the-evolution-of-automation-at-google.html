@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.7 — The Evolution of Automation at Google</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/07-the-evolution-of-automation-at-google.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part II — Principles</div>
+    <h1 class="title">Chapter 7: The Evolution of Automation at Google</h1>
+    <p class="subtitle">Automation is a force multiplier, not a fix — it amplifies whatever direction you point it in, good or bad. Three real case studies trace the path from manual toil to systems that don't need automation at all.</p>
+    <div class="source-note">📖 Based on <em>Chapter 7</em> of Google's SRE book — <a href="https://sre.google/sre-book/automation-at-google/" target="_blank">sre.google/sre-book/automation-at-google</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="06-monitoring-distributed-systems.html">← Ch.6 Monitoring</a><a href="08-release-engineering.html">next: Ch.8 Release Engineering →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the reframe</div>
+    <h2>Automation is force, not direction</h2>
+    <p>The chapter opens with a warning before it opens with praise: automation multiplies whatever it's pointed at — thoughtless automation creates exactly as many problems as it solves, just faster and at greater scale. The actual goal, ranked above automation itself, is a system that needs neither manual operation <em>nor</em> automation glue at all — an <strong>autonomous</strong> system that handles the problem internally.</p>
+    <h3>Five separate reasons automation is valuable</h3>
+    <ul>
+      <li><strong>Consistency.</strong> No human, however careful, executes the same 500-step procedure identically every time. A machine does — this is often automation's <em>primary</em> value for well-scoped, well-understood procedures, independent of scale.</li>
+      <li><strong>A platform.</strong> Good automation isn't just a script — it's something extensible, reusable across systems, and it centralizes mistakes: a bug fixed once in the platform stays fixed everywhere, instead of needing to be "fixed" in every human's head simultaneously.</li>
+      <li><strong>Faster repairs (lower MTTR).</strong> Automated remediation for common faults shortens mean-time-to-repair, and problems caught earlier in their lifecycle are cheaper to fix than the same problem discovered later in production.</li>
+      <li><strong>Faster action.</strong> Humans are just slow relative to machines for well-defined actions like failover — requiring a person to click "continue operating" doesn't add safety, it adds latency.</li>
+      <li><strong>Time saving.</strong> The most-cited reason, but often the least calculable — because once a task is automated, <em>anyone</em> can run it, not just whoever originally knew the manual procedure. That decoupling of "who can do this" from "who built the automation" compounds in ways a simple time-saved estimate misses.</li>
+    </ul>
+    <div class="callout"><b>Joseph Bironas' framing, quoted directly in the chapter:</b> processes that aren't automatable mean you keep needing humans to staff them forever — you're "feeding the machines with the blood, sweat, and tears of human beings."</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">the hierarchy</div>
+    <h2>Five stages, from manual to autonomous</h2>
+    <p>This ladder recurs across all three case studies in the chapter — it's the single most reusable idea here:</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 260" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="260" fill="#FBF8EF"/>
+        <g font-size="11.5">
+          <rect x="20" y="20" width="120" height="60" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="80" y="45" text-anchor="middle" font-weight="bold">1. No automation</text>
+          <text x="80" y="63" text-anchor="middle" font-size="10">manual failover</text>
+
+          <path d="M140 50 L 170 50" stroke="#242121" stroke-width="2" marker-end="url(#a10)"/>
+          <rect x="170" y="20" width="130" height="60" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="235" y="40" text-anchor="middle" font-weight="bold" font-size="11">2. Personal script</text>
+          <text x="235" y="58" text-anchor="middle" font-size="10">"in my home dir"</text>
+
+          <path d="M300 50 L 330 50" stroke="#242121" stroke-width="2" marker-end="url(#a10)"/>
+          <rect x="330" y="20" width="140" height="60" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="400" y="40" text-anchor="middle" font-weight="bold" font-size="11">3. Generic external</text>
+          <text x="400" y="58" text-anchor="middle" font-size="10">shared "failover" tool</text>
+
+          <path d="M470 50 L 500 50" stroke="#242121" stroke-width="2" marker-end="url(#a10)"/>
+          <rect x="500" y="20" width="150" height="60" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="575" y="40" text-anchor="middle" font-weight="bold" font-size="11">4. Built-in automation</text>
+          <text x="575" y="58" text-anchor="middle" font-size="10">ships with the system</text>
+
+          <path d="M575 80 L 575 110" stroke="#242121" stroke-width="2" marker-end="url(#a10)"/>
+          <rect x="440" y="115" width="210" height="70" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.5"/>
+          <text x="545" y="142" text-anchor="middle" font-weight="bold" font-size="13">5. Autonomous</text>
+          <text x="545" y="162" text-anchor="middle" font-size="10.5">system self-heals — no</text>
+          <text x="545" y="177" text-anchor="middle" font-size="10.5">glue logic needed at all</text>
+        </g>
+        <text x="340" y="230" text-anchor="middle" font-size="12.5" fill="var(--ink-soft)">the goal isn't step 4 — it's step 5</text>
+        <defs><marker id="a10" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — the five-stage evolution of automation (original diagram)</div>
+    </div>
+    <p>Each stage is genuinely better than the last, but the chapter is explicit that stopping at "step 4" (automation shipped with the system, but still fundamentally external glue reacting to problems) is settling. Step 5 means the failure mode was designed away or the system self-repairs — automation becomes an intrinsic property of the system's design, not a bolt-on script watching for trouble.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 1</div>
+    <h2>MySQL on Borg: automating a team out of its own job</h2>
+    <p>Ads' MySQL databases were manually managed and considered "mature" by 2008 — most routine replica-replacement toil was gone. The next ambition was moving MySQL onto Borg (Ch.2's cluster scheduler) for better resource packing. That created a new problem: Borg reschedules tasks constantly — once or twice a week — which is fine for read replicas, but MySQL <em>master</em> failovers were taking 30–90 minutes each, manually.</p>
+    <div class="math">
+      Manual failover: 30–90 min → best case ~99% uptime (misses the actual SLO)<br>
+      Error budget required: &lt; 30 seconds of downtime per failover<br>
+      → no human-driven process can hit that number; automation wasn't optional
+    </div>
+    <p>The team built <strong>Decider</strong>, an automated failover daemon that completed both planned and unplanned failovers in under 30 seconds, 95% of the time. This is the chapter's clearest statement of a broader mindset shift: instead of optimizing to <em>prevent</em> failover, the team optimized to <em>recover</em> from it quickly and automatically — accepting that failure at this scale is simply inevitable, not something to be engineered away entirely.</p>
+    <p>The payoff compounded: once failover stopped requiring humans, the team had time to automate schema changes too, cutting total Ads Database operational maintenance by ~95% and freeing up ~60% of hardware (via denser bin-packing on Borg). Automating one hard problem bought the time to automate the next one — a virtuous cycle, not a one-off win.</p>
+    <div class="fails"><b>The real cost, stated plainly:</b> this wasn't free. Every application talking to this MySQL setup had to be rewritten with far more failure-handling logic than the MySQL ecosystem normally assumes is necessary — a deliberate trade of application-side complexity for operational simplicity.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 2</div>
+    <h2>Cluster turnup: what happens when automation gets orphaned</h2>
+    <p>This is the chapter's cautionary tale, and the most detailed one. Standing up a new datacenter cluster involved dozens of interdependent subsystems (DNS, lock service, storage, compute), each evolving weekly. Early automation was a pile of ad hoc SSH-driven shell scripts — fast to write, and it worked, until it didn't.</p>
+
+    <h3>The Bigtable wipe — a concrete example of implicit assumptions turning dangerous</h3>
+    <p>A Bigtable cluster had deliberately been configured to skip its first disk for latency reasons. A year later, unrelated automation assumed "first disk unused" meant "this machine has no storage configured — safe to wipe and reinstall." It wasn't. The cluster's data was instantly erased (fortunately there were live replicas). The lesson the chapter draws is specific: <strong>automation must never infer safety from an implicit signal</strong> — a coincidence in configuration state is not a promise about intent.</p>
+
+    <h3>Prodtest: turning "is this cluster ready?" into a testable question</h3>
+    <p>The fix was extending Python's unit-test framework to run against real infrastructure: chained tests with dependencies, so one failure would halt anything depending on it and pinpoint exactly what was misconfigured. This finally made "is this cluster correctly configured?" answerable and visible — before Prodtest, nobody could say with confidence why a turnup was taking six-plus weeks.</p>
+
+    <h3>From detecting problems to fixing them — and a new kind of bug</h3>
+    <p>When leadership demanded five clusters turned up in one week (instead of the usual six-plus weeks each), the team paired every failing test with an automated, <strong>idempotent</strong> fix — safe to re-run every 15 minutes without risk, so dependency ordering resolved itself naturally as upstream systems became ready. This worked, but introduced flaky tests: the gap between a test running, a fix applying, and a retest created timing windows where not-quite-idempotent fixes could leave the system in an inconsistent in-between state.</p>
+
+    <h3>The organizational trap: a dedicated "turnup team"</h3>
+    <p>To cut latency further, a specialized turnup team took over running the automation on behalf of every service-owning team. This worked briefly, then quietly rotted — and the chapter is unusually candid about naming exactly why, because the failure was organizational, not technical:</p>
+    <ul>
+      <li>A team whose job is "make turnup fast today" has zero incentive to reduce the service-owning team's <em>future</em> technical debt.</li>
+      <li>A team that never runs its own automation has zero incentive to design systems that are actually easy to automate.</li>
+      <li>A product manager whose schedule isn't affected by low-quality automation will always deprioritize automation quality in favor of shipping features.</li>
+    </ul>
+    <div class="fails"><b>The general principle:</b> the most functional tools are usually written — and maintained — by the people who actually use them. Separating "who runs the automation" from "who owns the underlying system" breaks that feedback loop, and the automation degrades exactly as fast as the world underneath it keeps changing.</div>
+
+    <h3>The accidental fix: a security mandate</h3>
+    <p>Ironically, what finally broke the cycle wasn't a turnup redesign — it was a security push to eliminate broad SSH/root access, replaced with an authenticated, ACL-driven RPC service (<strong>Admin Servers</strong>) with code-reviewed, audited access. That structural change happened to force exactly the right shape of solution: each service team now owned an Admin Server exposing a stable API (turnup/turndown RPCs), while remaining free to change their own internals. Turnup became a Service-Oriented Architecture problem — central automation just called each team's Admin Server once a cluster was "network-ready," and each team stayed responsible for keeping its own corner correct.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 3</div>
+    <h2>Borg: from parallel-SSH scripts to a self-repairing "warehouse-scale computer"</h2>
+    <p>The final case study zooms out furthest. Early Google clusters were racks with specific, hand-assigned purposes — "search gets machine x1 once crawl is done with it." Automation started small: Python scripts to restart crashed services, track which service ran where, grep logs over SSH.</p>
+    <p>The limiting factor wasn't the automation's sophistication — it was that every abstraction was still tied to <em>physical machines</em>. Borg's actual innovation was conceptual: stop treating a cluster as a set of owned machines, and start treating it as a pool of schedulable resources exposed through a central API. That single reframing is what let batch and user-facing jobs share hardware safely, and what turned "a machine died" from an incident into a background statistic.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 200" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="640" height="200" fill="#FBF8EF"/>
+        <rect x="30" y="30" width="260" height="130" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2.5"/>
+        <text x="160" y="60" text-anchor="middle" font-size="14" font-weight="bold">Before Borg</text>
+        <text x="160" y="85" text-anchor="middle" font-size="12">"search owns machine x1"</text>
+        <text x="160" y="103" text-anchor="middle" font-size="12">— fixed host/port/job</text>
+        <text x="160" y="121" text-anchor="middle" font-size="12">assignments, brittle to</text>
+        <text x="160" y="139" text-anchor="middle" font-size="12">reassign or repair</text>
+
+        <path d="M290 95 L 350 95" stroke="#242121" stroke-width="2.5" marker-end="url(#a11)"/>
+
+        <rect x="350" y="30" width="260" height="130" rx="6" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.5"/>
+        <text x="480" y="60" text-anchor="middle" font-size="14" font-weight="bold">After Borg</text>
+        <text x="480" y="85" text-anchor="middle" font-size="12">machines = a fungible pool</text>
+        <text x="480" y="103" text-anchor="middle" font-size="12">of resources, addressed by</text>
+        <text x="480" y="121" text-anchor="middle" font-size="12">API, not by name — repair</text>
+        <text x="480" y="139" text-anchor="middle" font-size="12">and reschedule are routine</text>
+        <defs><marker id="a11" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — the reframe from "owned machines" to "a schedulable pool" (original diagram)</div>
+    </div>
+
+    <p>The chapter offers a nice mental model for why this matters: rescheduling a task onto a different machine is really just like a process moving from one CPU core to another — the fact that the new "core" happens to sit across a network link doesn't change the logic. Thought of this way, rescheduling isn't something you'd "automate" so much as a native property the system should just have — the same way you wouldn't build external automation to move a process between cores on a single computer.</p>
+    <p>The one place the single-machine analogy breaks: a single computer isn't generally expected to survive many of its own components failing simultaneously. A warehouse-scale system <em>must</em> be, because at that scale, failures aren't rare edge cases — they're a statistical certainty happening continuously. That's the real argument for self-repair as a design requirement, not an optional nicety.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the warning</div>
+    <h2>Automation's dark side: skill atrophy and silent scope creep</h2>
+    <p>The chapter draws a direct parallel to aviation and industrial automation: as automation quietly absorbs more and more of the day-to-day operation of a system, human operators lose hands-on practice — and their mental model of "what the system is actually doing" drifts away from reality. When automation eventually does fail, the humans meant to step back in have lost the fluency to do so safely, and often the very manual pathways they'd fall back on no longer even exist.</p>
+
+    <h3>The Diskerase incident — automation amplifying a single bad assumption, instantly</h3>
+    <p>A concrete, sobering example: decommissioning automation wipes ("Diskerases") the disks of retiring machines, verified by an independent system. One run failed partway through, <em>after</em> the wipe step had already succeeded. On restart-from-scratch, the automation computed "machines still needing Diskerase" — correctly — as an empty set. But that automation treated an empty set as a special sentinel value meaning "everything." Within minutes, nearly every CDN machine across all of Google's colocation facilities was wiped.</p>
+    <div class="fails"><b>What saved the day:</b> good capacity planning meant Google's own datacenters could absorb the load with only a minor latency bump most users never noticed. The actual fix took two days of physical reinstalls, followed by weeks of auditing — adding sanity checks, rate limiting, and making the whole decommission workflow properly idempotent.</div>
+    <p>The lesson isn't "automation is dangerous, avoid it." It's the opposite of that instinct, stated carefully: at Google's scale, automation and autonomous behavior aren't optional — but every automated system needs the same rigor around edge cases, sentinel values, and rate limits that any other critical production system gets.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">for smaller teams</div>
+    <h2>You don't need Google's scale to apply any of this</h2>
+    <p>The chapter closes by heading off an easy misreading: none of this requires Google-scale infrastructure to be worth doing. Automation's value isn't purely a time-saved calculation — its other four benefits (consistency, platform effects, faster repair, faster action) apply at any size. And the highest-leverage moment to think about automation isn't after the fact — it's at design time: shipping fast and iterating rapidly gets you working functionality quickly, but rarely produces a resilient system on its own. Ordinary good software engineering practice — decoupled subsystems, real APIs, minimized side effects — is what actually makes a system automatable (and eventually autonomous) later, without a painful retrofit.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Automation is a force multiplier</td><td>Amplifies good and bad design alike — thoughtless automation fails at scale, fast</td></tr>
+      <tr><td>Five-stage hierarchy</td><td>Manual → personal script → generic tool → built-in automation → autonomous — the real goal is the last stage</td></tr>
+      <tr><td>MySQL on Borg / Decider</td><td>Optimizing for fast recovery, not failure prevention, made a 30-second SLO achievable</td></tr>
+      <tr><td>Cluster turnup saga</td><td>Separating who owns automation from who runs the system in production breaks the feedback loop that keeps it correct</td></tr>
+      <tr><td>Borg</td><td>Reframing machines as a schedulable pool (not owned assets) is what made self-repair possible at all</td></tr>
+      <tr><td>Diskerase incident</td><td>Even necessary, valuable automation needs rigor around sentinel values, idempotency, and rate limits</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 7, CC BY-NC-ND 4.0 · sre.google/sre-book/automation-at-google</footer>
+</div>
+</body>
+</html>

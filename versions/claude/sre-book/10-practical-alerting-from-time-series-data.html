@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.10 — Practical Alerting</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/10-practical-alerting-from-time-series-data.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices (opens here)</div>
+    <h1 class="title">Chapter 10: Practical Alerting from Time-Series Data</h1>
+    <p class="subtitle">Inside Borgmon, the system that turned "run a script, check for errors" into "collect everything, compute alerts from history" — and quietly became the ancestor of Prometheus.</p>
+    <div class="source-note">📖 Based on <em>Chapter 10</em> of Google's SRE book — <a href="https://sre.google/sre-book/practical-alerting/" target="_blank">sre.google/sre-book/practical-alerting</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="09-simplicity.html">← Ch.9 Simplicity</a><a href="11-being-on-call.html">next: Ch.11 Being On-Call →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the shift</div>
+    <h2>From "run a script and check" to "collect everything, compute later"</h2>
+    <p>Before Borgmon, monitoring at Google looked like most places still look: custom check scripts that individually poll a target, decide pass/fail, and alert — completely separate from whatever tool draws the trend graphs. Borgmon's actual innovation was making <strong>the collection of time-series data itself a first-class, permanent thing</strong>, and then building a real query/rule language on top of that stored history, instead of throwing away each check's result the moment it ran.</p>
+    <p>This matters because Prometheus, one of the most widely used open-source monitoring systems today, was directly inspired by Borgmon's model — collect labeled variables, evaluate rules over their history, generate alerts from the same data that feeds dashboards. Understanding Borgmon is understanding the shape of an entire generation of monitoring tools that came after it.</p>
+    <div class="callout"><b>The scale problem this solves:</b> at Google's size, paging a human for a single failed machine is unacceptable noise — one machine failing is a statistical certainty happening constantly, not an event. The system needs to aggregate signals and prune outliers automatically, alerting on high-level service objectives while still preserving the ability to drill into individual components when actually debugging.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">instrumentation</div>
+    <h2>varz: the dead-simple export format that made this all possible</h2>
+    <p>Every Google binary exposes an HTTP endpoint (historically called <code>/varz</code>) that just lists its internal counters as plain text — no schema required:</p>
+    <div class="math">
+      curl https://webserver:80/varz<br>
+      http_requests 37<br>
+      errors_total 12<br><br>
+      map-valued: http_responses map:code 200:25 404:0 500:12
+    </div>
+    <p>Adding a new metric to a program is a single line of code. That low barrier to instrumentation was deliberate — and it comes with a real tradeoff the chapter is upfront about: because the metric definition and its use in Borgmon's rules are decoupled (nothing enforces a schema), keeping the two in sync over time requires real discipline, which Google addressed by building separate tooling to validate and generate rules automatically rather than trusting humans to keep them aligned by hand.</p>
+    <p>Borgmon polls each target's <code>/varz</code> at a set interval, staggering collection across targets so they're not all hit in lockstep. It also records a handful of "synthetic" variables per target automatically — did the name resolve, did the target respond, did the health check pass, when did collection finish — which alone are often enough to write a useful "is this task even reachable" alerting rule.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">storage model</div>
+    <h2>Time-series, labels, and the "arena"</h2>
+    <p>Every data point is a <code>(timestamp, value)</code> pair, and every time-series is uniquely named by a set of <code>key=value</code> labels — a <em>labelset</em>. At minimum, a time-series needs: <code>var</code> (the metric name), <code>job</code> (server type), <code>service</code> (a group of jobs serving users), and <code>zone</code> (the datacenter location where it was collected).</p>
+    <div class="math">
+      {var=http_requests, job=webserver, instance=host0:80, service=web, zone=us-west}
+    </div>
+    <p>Querying doesn't require every label — dropping <code>instance</code> from that query returns a <em>vector</em>: one row per matching instance. This is the mechanism that lets the same rule work whether there's 1 task or 10,000 — you write the rule once against the labelset shape, and it naturally fans out.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 200" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="200" fill="#FBF8EF"/>
+        <text x="20" y="24" font-size="13" font-weight="bold">one query, one labelset, five matching time-series</text>
+        <g font-size="11.5" font-family="monospace">
+          <text x="30" y="55">host0:80</text><rect x="110" y="42" width="220" height="16" fill="#DCE6F4"/><text x="220" y="55" text-anchor="middle">10</text>
+          <text x="30" y="80">host1:80</text><rect x="110" y="67" width="200" height="16" fill="#DCE6F4"/><text x="220" y="80" text-anchor="middle">9</text>
+          <text x="30" y="105">host2:80</text><rect x="110" y="92" width="240" height="16" fill="#DCE6F4"/><text x="220" y="105" text-anchor="middle">11</text>
+          <text x="30" y="130">host3:80</text><rect x="110" y="117" width="10" height="16" fill="#F4E1D6"/><text x="220" y="130" text-anchor="middle">0 (dead?)</text>
+          <text x="30" y="155">host4:80</text><rect x="110" y="142" width="220" height="16" fill="#DCE6F4"/><text x="220" y="155" text-anchor="middle">10</text>
+        </g>
+        <text x="440" y="90" font-size="12" fill="var(--ink-soft)">dropping the "instance"</text>
+        <text x="440" y="108" font-size="12" fill="var(--ink-soft)">label returns this whole</text>
+        <text x="440" y="126" font-size="12" fill="var(--ink-soft)">vector as one query</text>
+      </svg>
+      <div class="diagram-caption">sketch — a labelset query returning a vector across instances (original diagram)</div>
+    </div>
+
+    <p>Storage is an in-memory <strong>time-series arena</strong> — a fixed block of RAM, garbage-collected oldest-first once full. The window of retained data is the <em>horizon</em>, typically sized around 12 hours for datacenter/global Borgmon: enough to debug a recent incident interactively, without the RAM bill of keeping everything forever. Older data gets periodically archived out to a separate, cheaper Time-Series Database (TSDB) for slower historical queries.</p>
+    <div class="math">
+      ~24 bytes per data point → 1M unique time-series, 12h at 1-min intervals, fits in under 17 GB RAM
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="tab">rules</div>
+    <h2>Borgmon is "just" a programmable calculator over time-series</h2>
+    <p>Rules are algebraic expressions that compute new time-series from existing ones — they can look back in time on one series, or across labels on many series at once, in the same expression. The chapter's running example builds up an error-rate alert from raw counters, step by step:</p>
+    <div class="math">
+      1. per-task request rate:<br>
+      &nbsp;&nbsp;task:http_requests:rate10m = rate({var=http_requests,job=webserver}[10m])<br><br>
+      2. sum across tasks in the datacenter (drop the instance label):<br>
+      &nbsp;&nbsp;dc:http_requests:rate10m = sum without instance(task:http_requests:rate10m)<br><br>
+      3. same idea for error responses, then:<br>
+      &nbsp;&nbsp;dc:http_errors:ratio_rate10m = dc:http_errors:rate10m / dc:http_requests:rate10m
+    </div>
+    <p>Two details worth internalizing, because they explain a lot of real-world monitoring bugs elsewhere:</p>
+    <ul>
+      <li><strong>Counters, not gauges, for anything you plan to rate() over.</strong> A counter only ever increases, so even if a scrape is missed, the next successful scrape still reflects everything that happened in between. A gauge (current value, can go up or down) silently loses any activity that happened between two samples.</li>
+      <li><strong>Sum the rates, don't rate the sum.</strong> Summing individual rates before combining protects the result against a single task restarting (which resets its counter to zero) — that reset would otherwise corrupt a naive "sum first, then compute rate" calculation for the whole aggregate.</li>
+    </ul>
+    <p>There's also a small but genuinely useful naming convention baked into the examples: <code>scope:variable:operation</code> — e.g. <code>dc:http_errors:ratio_rate10m</code> reads as "datacenter-level HTTP errors, expressed as a 10-minute ratio rate." A convention like this makes a large rule library skimmable instead of archaeological.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">alerting</div>
+    <h2>From "rule is true" to "a human's pager buzzes"</h2>
+    <div class="math">
+      {var=dc:http_errors:ratio_rate10m,job=webserver} &gt; 0.01<br>
+      &nbsp;&nbsp;and by job, error<br>
+      {var=dc:http_errors:rate10m,job=webserver} &gt; 1<br>
+      &nbsp;&nbsp;for 2m<br>
+      &nbsp;&nbsp;=&gt; ErrorRatioTooHigh<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;details "webserver error ratio at %trigger_value%"<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;labels { severity=page };
+    </div>
+    <p>This fires only when <em>both</em> conditions hold — a high error <em>ratio</em> alone isn't enough (that could just mean traffic is very low), and a high absolute error <em>count</em> alone isn't enough either (that could be normal at high traffic). Requiring both filters out a whole category of noisy, technically-true-but-not-actually-urgent alerts.</p>
+    <p>The <code>for 2m</code> clause exists specifically to fight <strong>flapping</strong> — a rule that goes true, false, true, false in rapid succession. Requiring the condition to hold continuously for at least two evaluation cycles before actually paging means one missed collection or one brief blip doesn't wake anyone up.</p>
+    <p>Fired alerts route to a central <strong>Alertmanager</strong>, which handles the parts that shouldn't live in every individual Borgmon: deduplicating identical alerts arriving from multiple Borgmon instances, suppressing an alert when a related, more-informative one is already firing, and fanning alerts in or out based on their labels. This is also where the Chapter 6 taxonomy actually gets applied in practice — page-worthy alerts go to on-call, important-but-not-urgent ones go to a ticket queue, everything else just feeds a dashboard.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">scaling monitoring itself</div>
+    <h2>Borgmon monitoring Borgmon: a hierarchy, not a single collector</h2>
+    <p>A single Borgmon trying to scrape every task of a global service directly would be both a scaling bottleneck and a single point of failure. Instead, Borgmon instances form a hierarchy: typically one Borgmon per datacenter cluster, feeding up into two or more global Borgmon for top-level aggregation (deliberately two-plus, so routine maintenance or an outage of one doesn't blind the whole hierarchy). For very large services, even the per-datacenter layer splits further into pure "scraper" Borgmon feeding a separate aggregation layer.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 220" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="640" height="220" fill="#FBF8EF"/>
+        <g font-size="11.5">
+          <rect x="20" y="150" width="90" height="40" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="65" y="174" text-anchor="middle">scraper A</text>
+          <rect x="120" y="150" width="90" height="40" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="165" y="174" text-anchor="middle">scraper B</text>
+          <path d="M65 150 L 130 105" stroke="#242121" stroke-width="1.5"/>
+          <path d="M165 150 L 130 105" stroke="#242121" stroke-width="1.5"/>
+          <rect x="70" y="80" width="120" height="35" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="130" y="102" text-anchor="middle">DC Borgmon</text>
+
+          <rect x="330" y="150" width="90" height="40" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="375" y="174" text-anchor="middle">scraper C</text>
+          <rect x="430" y="150" width="90" height="40" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="475" y="174" text-anchor="middle">scraper D</text>
+          <path d="M375 150 L 440 105" stroke="#242121" stroke-width="1.5"/>
+          <path d="M475 150 L 440 105" stroke="#242121" stroke-width="1.5"/>
+          <rect x="380" y="80" width="120" height="35" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="440" y="102" text-anchor="middle">DC Borgmon</text>
+
+          <path d="M130 80 L 270 40" stroke="#242121" stroke-width="1.5"/>
+          <path d="M440 80 L 300 40" stroke="#242121" stroke-width="1.5"/>
+          <rect x="240" y="15" width="140" height="35" rx="4" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2.5"/>
+          <text x="310" y="37" text-anchor="middle" font-weight="bold">Global Borgmon (×2+)</text>
+        </g>
+      </svg>
+      <div class="diagram-caption">sketch — the Borgmon aggregation hierarchy, filtered at every tier (original diagram)</div>
+    </div>
+
+    <p>Crucially, upper tiers <strong>filter</strong> what they pull from lower tiers rather than importing every raw per-task series — the global layer builds a local cache of only what's actually relevant at that level, so it doesn't drown in per-task noise it will never need.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the blind spot</div>
+    <h2>White-box monitoring alone can't see what users experience</h2>
+    <p>Borgmon is fundamentally white-box (Ch.6's term) — it inspects internal state, with rules written by people who understand those internals. That transparency is powerful for diagnosis, but it has a hard limit: you can only see the requests that actually reached your instrumentation. A request lost to a DNS failure, or dropped by a crashed server before it was ever counted, is invisible to a purely white-box view — you can only alert on the failure modes you already anticipated.</p>
+    <p>The fix is <strong>Prober</strong> — a black-box checker that actually behaves like an external client: makes a real protocol request against a target, validates the response payload (not just "did it respond," but "was the HTML actually correct"), and can export what it finds as its own time-series. Pointing Prober at both the public load-balanced endpoint <em>and</em> individual datacenter backends behind it lets a team distinguish "one datacenter is failing but users are unaffected because traffic failed over cleanly" from "the failure is visible all the way to the edge" — a distinction pure white-box monitoring can't make on its own.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">config at scale</div>
+    <h2>Rules as reusable templates, not copy-pasted per team</h2>
+    <p>Borgmon separates rule definitions from the specific targets they apply to, so the same rule set can be reused across many services instead of being hand-copied and subtly diverging each time. Two families of reusable templates emerged in practice: ones that just codify the schema a shared code library already exports (an HTTP server library, an RPC framework — reuse the varz shape, get the rules for free), and ones that encode generic aggregation patterns matching a service's actual topology (task → job → shard → datacenter → global).</p>
+    <p>That topology modeling isn't arbitrary — the grouping choices are meant to track <strong>shared fate</strong>: tasks sharing a config file fail together, jobs in a shard share a datacenter's fate, sites share a network's fate. Structuring aggregation around genuine shared-failure boundaries is what makes "which layer is actually broken" a fast question to answer during an incident, instead of a guessing game.</p>
+    <div class="callout"><b>Guarding against config rot:</b> because a rule language this expressive can also become a source of bugs, Borgmon configs get real unit and regression tests — synthesizing fake time-series data to confirm a rule behaves as intended — run continuously before configuration ever ships to production Borgmon instances.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Collection as a first-class, persistent thing</td><td>Enables both dashboards and alerts to draw from the same stored history, not disposable one-off checks</td></tr>
+      <tr><td>Labelsets + vectors</td><td>One rule, written once, naturally fans out across however many instances match the label query</td></tr>
+      <tr><td>Counters over gauges for rates</td><td>Counters survive missed scrapes; gauges silently lose activity between samples</td></tr>
+      <tr><td>Sum-of-rates, not rate-of-sums</td><td>Protects aggregate rate calculations against individual task restarts resetting a counter</td></tr>
+      <tr><td>`for 2m` duration on alerts</td><td>Prevents flapping conditions from paging on a single noisy evaluation cycle</td></tr>
+      <tr><td>Aggregation hierarchy</td><td>Scraper → per-DC → global Borgmon, filtering at each tier, avoids one collector becoming a bottleneck or SPOF</td></tr>
+      <tr><td>Prober (black-box)</td><td>Catches failures invisible to white-box instrumentation — requests that never even reached your code</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 10, CC BY-NC-ND 4.0 · sre.google/sre-book/practical-alerting</footer>
+</div>
+</body>
+</html>

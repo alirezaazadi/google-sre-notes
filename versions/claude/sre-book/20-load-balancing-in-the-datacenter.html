@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.20 — Load Balancing in the Datacenter</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/20-load-balancing-in-the-datacenter.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 20: Load Balancing in the Datacenter</h1>
+    <p class="subtitle">"Lame ducks," deterministic subsetting, and why simple round robin quietly wastes half your reserved CPU — the algorithms behind picking exactly one backend, over and over, billions of times a day.</p>
+    <div class="source-note">📖 Based on <em>Chapter 20</em> of Google's SRE book — <a href="https://sre.google/sre-book/load-balancing-datacenter/" target="_blank">sre.google/sre-book/load-balancing-datacenter</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="19-load-balancing-at-the-frontend.html">← Ch.19 Load Balancing at the Frontend</a><a href="21-handling-overload.html">next: Ch.21 Handling Overload →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the ideal, and the waste</div>
+    <h2>Perfect balance is the target — and most approaches fall well short</h2>
+    <p>Inside one datacenter, a <em>client task</em> sends requests to a pool of interchangeable <em>backend tasks</em> implementing some service — typically 100 to 1,000 processes for a mid-sized service, sometimes over 10,000 for the largest. In the ideal case, load spreads perfectly evenly: at any moment, the least- and most-loaded backend consume identical CPU.</p>
+    <p>Why does perfect balance matter so much? Because a datacenter can only accept traffic up to the point where its <em>most loaded</em> single task hits its limit — every bit of idle capacity sitting on every less-loaded task in that same pool is simply wasted, reserved but unusable. The chapter states this with a concrete example: you might reserve 1,000 CPUs for a service in a datacenter, yet in practice never be able to use more than ~700 of them, purely because of imbalance between tasks — the other 300 sit idle on backends that never get their fair share of traffic.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">step 1: health</div>
+    <h2>Before balancing load, you have to know who's actually healthy</h2>
+    <h3>Flow control: a blunt first line of defense</h3>
+    <p>The simplest approach: a client tracks active requests per backend connection, and stops sending to any backend once that count crosses a threshold (100 is a common default). This doubles as crude load balancing — an overloaded backend naturally gets avoided as requests pile up against its cap. But it's genuinely blunt: many backends become meaningfully overloaded well before hitting 100 active requests, while others with naturally long-lived requests can hit the cap while still having plenty of real spare capacity — the chapter notes cases where this default limit backfired so badly that <em>every</em> backend appeared unreachable simultaneously, with requests queuing client-side until they simply timed out.</p>
+
+    <h3>Lame duck state: a much more robust answer</h3>
+    <p>A backend task can be in one of three states from a client's point of view: <strong>healthy</strong> (serving normally), <strong>refusing connections</strong> (unresponsive — starting up, crashing, or genuinely down), or <strong>lame duck</strong> — still listening and still able to serve, but explicitly telling clients "please stop sending me new requests."</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="200" fill="#FBF8EF"/>
+        <g font-size="12">
+          <rect x="20" y="30" width="180" height="130" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.5"/>
+          <text x="110" y="55" text-anchor="middle" font-weight="bold">1. SIGTERM</text>
+          <text x="110" y="78" text-anchor="middle" font-size="11">job scheduler signals</text>
+          <text x="110" y="94" text-anchor="middle" font-size="11">the backend task</text>
+
+          <path d="M200 95 L 230 95" stroke="#242121" stroke-width="2" marker-end="url(#a17)"/>
+          <rect x="230" y="30" width="180" height="130" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2.5"/>
+          <text x="320" y="55" text-anchor="middle" font-weight="bold">2. Lame duck</text>
+          <text x="320" y="78" text-anchor="middle" font-size="11">broadcasts "stop sending</text>
+          <text x="320" y="94" text-anchor="middle" font-size="11">new requests" to clients</text>
+          <text x="320" y="115" text-anchor="middle" font-size="10.5">— old requests still finish normally —</text>
+
+          <path d="M410 95 L 440 95" stroke="#242121" stroke-width="2" marker-end="url(#a17)"/>
+          <rect x="440" y="30" width="220" height="130" rx="6" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.5"/>
+          <text x="550" y="55" text-anchor="middle" font-weight="bold">3. Drain → exit</text>
+          <text x="550" y="78" text-anchor="middle" font-size="11">active count → 0, then clean</text>
+          <text x="550" y="94" text-anchor="middle" font-size="11">exit (or scheduler kills it)</text>
+          <text x="550" y="115" text-anchor="middle" font-size="10.5">10–150s, service dependent</text>
+        </g>
+        <defs><marker id="a17" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — the clean-shutdown sequence enabled by lame duck state (original diagram)</div>
+    </div>
+    <p>This state propagates fast — typically within 1–2 round trips — even to <em>inactive</em> clients, because Google's RPC layer has idle clients still sending periodic UDP health checks even with no open TCP connection. The real payoff: this makes clean shutdown possible without ever serving an error to a request that was already in flight — essential for routine code pushes, maintenance, and machine failures, none of which should be user-visible events.</p>
+    <p>It also solves a second, less obvious problem: a backend can accept connections early, during a potentially slow startup/initialization sequence, without pretending it's ready to serve — it simply doesn't leave lame duck state until initialization genuinely finishes, avoiding the extra latency of negotiating a fresh connection right at the moment traffic needs to start flowing.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">step 2: subsetting</div>
+    <h2>Why every client shouldn't connect to every backend</h2>
+    <p>Every open connection costs real memory and CPU on both ends (periodic health checks alone aren't free) — and at Google's scale, a naive "every client connects to every backend" design wastes enormous aggregate resources for very little benefit. <strong>Subsetting</strong> caps how many backends any one client actually connects to.</p>
+    <p>Picking a subset size (typically 20–100 backends in practice) genuinely depends on your traffic shape: you want a <em>larger</em> subset when clients heavily outnumber backends (otherwise some backends might never receive traffic at all), or when client-side request bursts are common — a large fan-out request concentrated onto a too-small subset can locally overload exactly the few backends that subset happens to include.</p>
+
+    <h3>Random subsetting: intuitive, and surprisingly bad</h3>
+    <p>The obvious first approach — each client shuffles the backend list once and takes the first N — handles restarts and failures gracefully, but the chapter shows with real simulated numbers just how uneven the resulting load actually is:</p>
+    <div class="math">
+      300 clients, 300 backends, 30% subset (90 backends/client):<br>
+      least-loaded backend: 63% of average · most-loaded: 121% of average<br><br>
+      same setup, 10% subset (30 backends/client):<br>
+      least-loaded: 50% of average · most-loaded: 150% of average
+    </div>
+    <p>The pattern is stark: <em>smaller</em> subsets make the imbalance <em>worse</em>, not better. The chapter's conclusion is blunt — getting genuinely even spread out of pure random subsetting would require subset sizes around 75%, which defeats the entire point of subsetting in the first place.</p>
+
+    <h3>Deterministic subsetting: Google's actual fix</h3>
+    <p>The real solution restructures the problem: divide client tasks into <strong>rounds</strong> of <code>subset_count</code> clients each (where <code>subset_count = backends / subset_size</code>). Within a single round, every backend is assigned to <em>exactly one</em> client — no overlap, no gaps (except possibly a partial final round). Each round uses its own random seed to shuffle the backend list differently — critically important, because if every round used the same shuffle, a failed backend's load would only redistribute among the small number of backends sharing its exact subset, compounding badly as more backends in that same subset fail together.</p>
+    <div class="math">
+      def Subset(backends, client_id, subset_size):
+          subset_count = len(backends) / subset_size
+          round = client_id / subset_count
+          random.seed(round)          # different seed per round
+          random.shuffle(backends)
+          subset_id = client_id % subset_count
+          start = subset_id * subset_size
+          return backends[start : start + subset_size]
+    </div>
+    <p>The result, tested on the same 300-client/300-backend scenario at a 10-backend subset size: essentially perfectly even connection counts across every backend — a dramatic improvement over random subsetting's 50%–150% spread using the exact same subset size.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">step 3: picking one</div>
+    <h2>Load balancing policies — actually choosing which backend gets this request</h2>
+
+    <h3>Simple round robin — cheap, and surprisingly costly in practice</h3>
+    <p>Cycle through healthy, non-lame-duck backends in order. Simple, and for years Google's default — but the chapter documents a real-world spread of up to 2x CPU consumption between the least- and most-loaded backend under this policy, driven by four compounding factors:</p>
+    <ul>
+      <li><strong>Small subsets amplify uneven client request rates.</strong> If clients issuing very different volumes happen to share overlapping subsets, the backends in the busiest clients' subsets end up disproportionately loaded.</li>
+      <li><strong>Wildly varying query cost.</strong> The chapter's own figure: the most expensive requests at Google can cost 1000x or more CPU than the cheapest ones — an "all of user X's emails today" query can be trivial or enormous depending purely on how much mail arrived. Round robin has no way to know this in advance and treats every request identically.</li>
+      <li><strong>Machine heterogeneity.</strong> Not every machine in a datacenter has the same CPU generation, so the same logical request costs measurably different real resources depending purely on where it lands. Google's fix was a normalized virtual unit — the <strong>GCU (Google Compute Unit)</strong> — mapping every CPU architecture's performance onto one common scale, so scheduling and reservation math could stay meaningful across heterogeneous hardware.</li>
+      <li><strong>Genuinely unpredictable performance factors.</strong> Two concrete examples: <em>antagonistic neighbors</em> — unrelated processes sharing the same machine competing for cache space or bandwidth can swing performance by up to 20%, with effects that cascade (slower outgoing requests → more requests stay "active" → heavier garbage collection); and <em>task restarts</em> — freshly restarted tasks (especially on JIT-optimizing platforms like Java) can need meaningfully more resources for their first few minutes, which Google mitigates by deliberately keeping restarted servers in lame duck state for a "pre-warming" period until their performance actually normalizes.</li>
+    </ul>
+
+    <h3>Least-loaded round robin — an improvement, with a dangerous failure mode</h3>
+    <p>Instead of blind round robin, track each backend's current active-request count and round-robin only among whichever backends currently have the <em>fewest</em> active requests. The intuition: heavily loaded backends tend to have higher latency, so naturally routing away from them should self-correct.</p>
+    <div class="fails"><b>The "sinkholing" trap:</b> if a backend is seriously unhealthy and starts returning 100% errors, those error responses can actually be <em>faster</em> to return than a real successful response would have been (failing fast is cheap). A naive least-loaded policy sees that backend's active-request count staying low — because requests complete so quickly — and interprets that as capacity, routing it <em>more</em> traffic, not less. The fix: count recent errors as if they were still-active requests, so an unhealthy backend gets correctly treated as loaded rather than "fast and available."</p></div>
+    <p>Even fixed, least-loaded round robin has two structural limits the chapter is explicit about: active-request count is a poor proxy for real capacity when requests spend most of their life blocked on network I/O rather than actual CPU work (a machine that's genuinely twice as fast might show identical active-request counts to a slower one, since both are mostly just waiting); and each client only sees <em>its own</em> requests to a backend — it has zero visibility into what every other client is simultaneously sending that same backend. In practice, large Google services on this policy still saw roughly a 2x spread — not meaningfully better than plain round robin.</p>
+
+    <h3>Weighted round robin — the actual solution</h3>
+    <p>This is where the picture changes qualitatively: backends themselves report their observed query rate, error rate, and utilization (typically CPU) in every response — including plain health-check responses. Clients use this real, backend-reported data to maintain a live "capability" score per backend and weight round robin proportionally, with failed requests actively penalizing a backend's score for future decisions.</p>
+    <div class="callout"><b>Why this actually works where the others didn't:</b> it's the only policy using ground-truth information the backend itself reports about its real load and health, rather than a client-side proxy (active request count) that can be misleading. In practice, switching services from least-loaded to weighted round robin drastically shrank the spread between the least- and most-loaded backend — the chapter's own measured before/after data shows the gap collapsing sharply the moment weighted round robin is enabled.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Wasted capacity from imbalance</td><td>Traffic is capped by the *most*-loaded task — every idle cycle elsewhere is reserved but unusable</td></tr>
+      <tr><td>Lame duck state</td><td>Lets a backend drain in-flight requests cleanly before shutdown — no user-visible errors during routine pushes</td></tr>
+      <tr><td>Deterministic subsetting</td><td>Fixes random subsetting's 50–150% imbalance by guaranteeing each backend is assigned to exactly one client per round</td></tr>
+      <tr><td>Simple round robin's ~2x spread</td><td>Driven by uneven client rates, wildly varying query cost, machine heterogeneity, and unpredictable neighbor effects</td></tr>
+      <tr><td>Sinkholing</td><td>An unhealthy backend that fails fast can trick naive least-loaded balancing into sending it *more* traffic</td></tr>
+      <tr><td>Weighted round robin</td><td>Using backend-reported real load/error data, not a client-side proxy, is what actually closes the gap</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 20, CC BY-NC-ND 4.0 · sre.google/sre-book/load-balancing-datacenter</footer>
+</div>
+</body>
+</html>

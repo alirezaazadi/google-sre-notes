@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.1 — Introduction</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/01-introduction.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part I — Introduction</div>
+    <h1 class="title">Chapter 1: Introduction</h1>
+    <p class="subtitle">Why Google decided to run production systems with software engineers instead of traditional sysadmins — and the tenets that fell out of that one decision.</p>
+    <div class="source-note">📖 Based on <em>Chapter 1</em> of Google's SRE book — <a href="https://sre.google/sre-book/introduction/" target="_blank">sre.google/sre-book/introduction</a>. Explained in my own words; original diagrams (the source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><span>← start of book</span><a href="02-the-production-environment-at-google-from-the-viewpoint-of-an-sre.html">next: Ch.2 Production Environment →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the old way</div>
+    <h2>The sysadmin model, and why it breaks</h2>
+    <p>Before SRE, the standard way to run a service was to have developers build it and a separate operations (sysadmin) team run it. The sysadmin team assembles existing tools, deploys the service, and then reacts by hand whenever something happens.</p>
+    <p>This is easy to set up — it's the industry default, so there's a large hiring pool and lots of existing tooling. But it has a structural flaw: <strong>the ops team's headcount has to grow roughly in proportion to the traffic and complexity of the system</strong>, because more traffic means more manual events to react to. That's a direct cost.</p>
+    <p>There's also an indirect cost, and it's the more expensive one. Dev and ops have different incentives by default: developers want to ship features and get them adopted; ops wants the pager to stay quiet. Since most outages trace back to some kind of change, these two goals collide constantly. Both sides know they can't say their actual position out loud ("ship anything, anytime" vs. "never change anything"), so the conflict goes underground — ops adds launch-review gates, dev learns to route around them by calling a risky change a "flag flip" instead of a "launch." Neither side is wrong; the incentive structure itself is the problem.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 240" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="240" fill="#FBF8EF"/>
+        <rect x="30" y="40" width="260" height="150" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.5" transform="rotate(-0.4 160 115)"/>
+        <text x="160" y="70" text-anchor="middle" font-size="16" font-weight="bold">Dev team</text>
+        <text x="160" y="98" text-anchor="middle" font-size="13">wants: ship fast,</text>
+        <text x="160" y="116" text-anchor="middle" font-size="13">grow adoption</text>
+        <text x="160" y="150" text-anchor="middle" font-size="12" fill="#1e3c66">"launch = feature</text>
+        <text x="160" y="167" text-anchor="middle" font-size="12" fill="#1e3c66">renamed 'flag flip'"</text>
+
+        <rect x="390" y="40" width="260" height="150" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2.5" transform="rotate(0.4 520 115)"/>
+        <text x="520" y="70" text-anchor="middle" font-size="16" font-weight="bold">Ops team</text>
+        <text x="520" y="98" text-anchor="middle" font-size="13">wants: pager stays</text>
+        <text x="520" y="116" text-anchor="middle" font-size="13">quiet, system stable</text>
+        <text x="520" y="150" text-anchor="middle" font-size="12" fill="#7a2c14">"launch review checks</text>
+        <text x="520" y="167" text-anchor="middle" font-size="12" fill="#7a2c14">every past incident"</text>
+
+        <path d="M290 115 L 390 115" stroke="#242121" stroke-width="2.5" stroke-dasharray="2 5" fill="none"/>
+        <text x="340" y="105" text-anchor="middle" font-size="13" transform="rotate(-90 340 105)">friction</text>
+        <defs></defs>
+      </svg>
+      <div class="diagram-caption">sketch — the structural conflict baked into a dev/ops split (original diagram)</div>
+    </div>
+
+    <div class="fails"><b>The core issue:</b> as long as ops headcount scales with traffic, and dev/ops incentives point in opposite directions, this tension doesn't get solved — it just gets managed, forever, at increasing cost.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">the SRE answer</div>
+    <h2>SRE: ask a software engineer to design the ops team</h2>
+    <p>Google's fix was structural, not procedural: staff the operations function with software engineers, and have them treat operational problems as engineering problems to be automated away, not as an endless queue of manual tasks. That's the entire definition — "SRE is what happens when you ask a software engineer to design an operations team."</p>
+    <p>SRE teams are roughly half traditional software-engineering hires, and half engineers with adjacent-but-rare skills (deep UNIX internals, low-level networking) who are just as capable of writing production software. What both groups share is that they'll get bored doing something by hand twice, and have the skill to automate it — even when the automation itself is a hard engineering problem.</p>
+
+    <h3>The 50% cap — the mechanism that makes it real</h3>
+    <p>This is the single most load-bearing rule in the chapter, so it's worth sitting with: <strong>Google caps the aggregate operational work ("toil" — tickets, on-call, manual tasks) for SRE teams at 50% of their time.</strong> The other half is reserved for engineering: building the automation, monitoring, and tooling that reduces the operational load in the first place.</p>
+    <p>Why does this matter so much? Without the cap, there's a vicious cycle: more traffic → more manual work → less time to build automation → even more manual work next quarter. The cap forces a release valve. If a team's ops load crosses 50%, the excess gets pushed back to the product development team — reassigned tickets, developers rotated onto the pager — until the load drops again. It's a forcing function, not a suggestion.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 220" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="640" height="220" fill="#FBF8EF"/>
+        <text x="30" y="30" font-size="14" font-weight="bold">SRE team's time budget</text>
+        <rect x="30" y="50" width="580" height="60" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+        <rect x="30" y="50" width="290" height="60" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+        <text x="175" y="85" text-anchor="middle" font-size="14" font-weight="bold">engineering (≥50%)</text>
+        <text x="465" y="85" text-anchor="middle" font-size="14" font-weight="bold">ops / toil (≤50%)</text>
+        <path d="M320 130 L 320 160" stroke="#B84B2A" stroke-width="2" marker-end="url(#ar)"/>
+        <text x="320" y="180" text-anchor="middle" font-size="13" fill="#B84B2A">cap line — overflow gets pushed back to product dev</text>
+        <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#B84B2A"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — the 50% ops cap as a release valve (original diagram)</div>
+    </div>
+
+    <h3>The error budget — resolving the launch-velocity fight directly</h3>
+    <p>Instead of chasing 100% availability (which users can't perceive anyway, since their laptop, WiFi, and ISP are all less reliable than that), the business picks a target — say, 99.99% available. The allowed unavailability, 0.01%, is the <strong>error budget</strong>. Any outage, risky launch, or experiment can spend from that budget freely, as long as the team doesn't overspend it.</p>
+    <p>This is the trick that ends the dev-vs-ops standoff from the last section: SRE's job is no longer "prevent all outages" — it's "help spend the error budget on the highest-value launches." An outage isn't a failure anymore; it's an expected, budgeted cost of moving fast. Dev and SRE are now optimizing the same number instead of opposing each other.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the tenets</div>
+    <h2>The rest of SRE's practices, in one pass</h2>
+    <p>The chapter lists several more tenets — later chapters each expand one of these into a full chapter, so this is the compressed version:</p>
+    <ul>
+      <li><strong>Monitoring</strong> should never require a human to <em>interpret</em> data. Software interprets; humans only get paged when action is actually needed. Valid outputs are just three: <em>alerts</em> (act now), <em>tickets</em> (act soon), <em>logs</em> (act never, unless something else prompts you to look).</li>
+      <li><strong>Emergency response</strong> is measured by MTTR (mean time to repair), not by how rarely things break. A written playbook, used consistently, cuts MTTR roughly 3x versus improvising — "winging it" doesn't scale even with brilliant engineers.</li>
+      <li><strong>Change management</strong> matters because ~70% of outages trace back to a change in a live system. The fix is automating three things: progressive rollouts, fast + accurate problem detection, and safe rollback — removing humans (and their fatigue) from the loop.</li>
+      <li><strong>Capacity planning</strong> means forecasting both organic growth (natural adoption) and inorganic growth (a marketing push, a big launch) far enough ahead to actually provision for it, and load-testing to confirm the forecast maps to real capacity.</li>
+      <li><strong>Efficiency and performance</strong> matter because a slowing system is functionally a system running out of capacity — at the limit, "very slow" becomes "not serving requests at all."</li>
+    </ul>
+    <div class="callout"><b>How these tenets connect:</b> monitoring tells you something's wrong, emergency response and change management limit how bad it gets, and capacity planning + efficiency stop you from getting there in the first place. Every later chapter in the book is really just one of these five ideas taken all the way to implementation detail.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Sysadmin model</td><td>Ops headcount scales with load — expensive, and dev/ops incentives structurally conflict</td></tr>
+      <tr><td>SRE = SWE running ops</td><td>Automates away the manual work instead of hiring to keep pace with it</td></tr>
+      <tr><td>50% ops cap</td><td>Forcing function that guarantees time is reserved for the automation that reduces future toil</td></tr>
+      <tr><td>Error budget</td><td>Turns "avoid all outages" into a shared, spendable number — ends the dev-vs-ops standoff</td></tr>
+      <tr><td>3-tier monitoring</td><td>Alerts / tickets / logs — humans act, software interprets</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 1, CC BY-NC-ND 4.0 · sre.google/sre-book/introduction</footer>
+</div>
+</body>
+</html>

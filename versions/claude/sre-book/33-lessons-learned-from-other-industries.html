@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.33 — Lessons Learned from Other Industries</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/33-lessons-learned-from-other-industries.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part V — Conclusions (opens here)</div>
+    <h1 class="title">Chapter 33: Lessons Learned from Other Industries</h1>
+    <p class="subtitle">Lifeguards, nuclear submarines, LASIK surgeons, and a $440M software glitch — what a dozen Google engineers' past careers reveal about reliability outside of tech.</p>
+    <div class="source-note">📖 Based on <em>Chapter 33</em> of Google's SRE book — <a href="https://sre.google/sre-book/lessons-learned/" target="_blank">sre.google/sre-book/lessons-learned</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="32-the-evolving-sre-engagement-model.html">← Ch.32 The Evolving SRE Engagement Model</a><a href="34-conclusion.html">next: Ch.34 Conclusion →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the method</div>
+    <h2>A genuinely unusual research method: interview the engineers' past lives</h2>
+    <p>This chapter takes a different shape than the rest of the book — instead of describing Google's own practices, it interviews Google engineers about the high-reliability fields they worked in <em>before</em> joining Google: defense contracting, lifeguarding, laser eye surgery, telecom emergency response, medical devices, military aviation, nuclear submarines, manufacturing, proprietary trading, civil nuclear power, and air traffic control. The guiding questions: do SRE's core principles hold up outside tech? If other industries already practice something similar, how does it actually manifest there — and what, if anything, should Google (or the wider tech industry) actually learn from the comparison?</p>
+    <p>The findings are organized around four themes distilled directly from concepts already covered elsewhere in the book: <strong>Preparedness and Disaster Testing</strong>, <strong>Postmortem Culture</strong>, <strong>Automation and Reduced Operational Overhead</strong>, and <strong>Structured and Rational Decision Making</strong>.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">theme 1</div>
+    <h2>Preparedness and disaster testing — "hope is not a strategy," everywhere</h2>
+    <p>Google's own DiRT (Disaster Recovery Testing) drills — deliberately inflicting real outages to verify systems behave as expected, surface unknown weaknesses, and harden the system before a real, uncontrolled failure does the same job for free — turn out to have close analogues across nearly every industry interviewed, each shaped by that industry's own specific constraints:</p>
+    <table class="recap">
+      <tr><th>Strategy</th><th>Industry example</th></tr>
+      <tr><td>Relentless organizational focus on safety</td><td>Manufacturing: "every management meeting started with a discussion of safety" (Eddie Kennedy) — formal safety standards like SIL 1–4 define acceptable software reliability levels directly</td></tr>
+      <tr><td>Attention to detail</td><td>Nuclear Navy: routine maintenance (even lube oil checks) exists specifically to stop small oversights from snowballing through tightly interconnected systems</td></tr>
+      <tr><td>Swing capacity</td><td>Telecom: a "SOW" (switch on wheels) — a literal mobile telco office — deployed for disasters or predictable surges like the Olympics; a 2005 celebrity phone-number leak caused symptoms indistinguishable from a DDoS attack</td></tr>
+      <tr><td>Simulations vs. live drills</td><td>Aviation can't safely test "in production," so it uses extremely realistic full-detail simulators instead; telecom runs live hurricane drills, leading directly to weatherproofed facilities with in-building generators</td></tr>
+      <tr><td>Training and certification</td><td>Lifeguards undergo rigorous certification *and* periodic recertification — fitness, technical (CPR/first aid), and operational components, all site-specific (pool vs. lake vs. ocean)</td></tr>
+      <tr><td>Detailed requirements gathering</td><td>Medical devices: LASIK machine designers actively solicit requirements from surgeons and maintenance technicians, not just from within the design team itself</td></tr>
+      <tr><td>Defense in depth</td><td>Nuclear power: redundant systems, fallback layers, and a final physical containment barrier — justified by genuinely zero tolerance for failure</td></tr>
+    </table>
+
+    <div class="callout"><b>The nuclear Navy's live-drill discipline is worth sitting with specifically:</b> Jeff Stevenson describes drills that involve "actually breaking real stuff, but with control parameters" — run religiously, two to three days a week. The stated reasoning: thought exercises alone aren't sufficient preparation — responses have to be physically practiced, or they get forgotten under real pressure. Lifeguarding runs an equally striking version: facility managers stage genuinely convincing mock drownings — deliberately realistic enough that lifeguards can't reliably tell a staged emergency from a real one.</div>
+
+    <p>One sharp, explicit contrast the chapter draws directly against Google's own culture: defense contractor Peter Dahl described a design process where a full <em>year</em> of design work preceded just <strong>three weeks</strong> of actually writing code. That ratio is close to inverted from Google's iterate-fast, launch-and-learn culture — and the chapter is explicit this isn't a case of one approach being objectively better. It's a direct consequence of a different risk appetite: when a mistake risks lives or catastrophic material loss, that much design-phase rigor is the rational response to the actual stakes involved.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">theme 2</div>
+    <h2>Postmortem culture — blameless analysis, everywhere, for different reasons</h2>
+    <p>The chapter connects Google's blameless postmortem practice to the broader concept of <strong>CAPA</strong> — Corrective and Preventive Action — systematically investigating root causes specifically to prevent recurrence, evaluating what happened, how well the response worked, and what concrete action prevents the same failure next time — deliberately without dwelling on <em>who</em> caused it. Nearly every industry interviewed does some version of this, even without using the word "postmortem" — but the chapter finds the <em>motivation</em> behind it varies meaningfully by field.</p>
+    <ul>
+      <li><strong>Regulatory accountability.</strong> Heavily regulated industries — telecom (FCC), aviation (FAA), manufacturing/chemicals (OSHA), medical devices (FDA), nuclear power, transportation — face formal external scrutiny whenever something goes wrong, which itself drives rigorous incident analysis, independent of any internal cultural preference for it.</li>
+      <li><strong>Safety, in industries where injury or death is a live daily risk.</strong> The chapter's specific example: former Alcoa CEO Paul O'Neill required notification within 24 hours of any injury causing a lost workday — and personally distributed his home phone number to factory-floor workers so safety concerns could reach him directly, without friction.</li>
+      <li><strong>"Near misses" as a genuine, distinct category worth their own scrutiny.</strong> The chapter quotes VM Brasseur directly: "there are multiple near misses in just about every disaster and business crisis, and typically they're ignored at the time they occur. Latent error, plus an enabling condition, equals things not working quite the way you planned." A worker skipping standard procedure, someone jumping out of the way of a spill at the last second, an uncleaned spill on a staircase — all of these are disasters that simply haven't happened <em>yet</em>. The UK's CHIRP (Confidential Reporting Programme for Aviation and Maritime) exists specifically to surface near-misses industry-wide via confidential reporting, published periodically so the whole field can learn from incidents that never technically became incidents.</li>
+    </ul>
+    <div class="callout"><b>Lifeguarding's version is genuinely close in spirit to SRE's own culture, arrived at independently.</b> Mike Doherty's memorable line: "if a lifeguard's feet go in the water, there will be paperwork." Serious incidents get a full team-wide, end-to-end review of what went right and wrong, feeding directly into both operational changes and follow-up training. For particularly traumatic incidents, a counselor is brought in specifically to help staff process the psychological aftermath — recognizing explicitly that a team can be technically well-prepared and still <em>feel</em> like they fell short, and that gap deserves direct attention too. And, just like SRE, the culture is deliberately blameless: incidents are chaotic and multi-causal, and singling out one person rarely reflects what genuinely happened or helps prevent the next one.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">theme 3</div>
+    <h2>Automating away repetitive work — a genuinely mixed picture across industries</h2>
+    <p>SRE's own instinct is a low tolerance for repetitive, low-value reactive work — if a task adds no value on repetition, automate it and reclaim that time for higher-leverage work. The chapter's cross-industry finding is more divided than a simple "everyone should automate more" — different industries have made very different, often well-justified bets:</p>
+    <table class="recap">
+      <tr><th>Industry</th><th>Automation stance</th></tr>
+      <tr><td>Nuclear Navy</td><td>Deliberately favors trusted human chains over automation — a valve operation required an operator, a supervisor, *and* a crew member on the phone with the engineering watch officer. The explicit fear: automated systems might silently miss a problem a human would immediately catch, and automated mistakes can compound at a speed no human oversight could intercept in time.</td></tr>
+      <tr><td>Proprietary trading</td><td>Grown *more* cautious about automation over time — Knight Capital's 2012 "software glitch" lost $440M in a few hours; the 2010 Flash Crash (triggered by automated market manipulation) wiped out trillions of dollars of value in just 30 minutes before recovering. Speed is a liability when the automation is misconfigured.</td></tr>
+      <tr><td>Manufacturing</td><td>Embraces automation specifically for efficiency, cost, and tighter, more repeatable tolerances than manual human work can reliably achieve</td></tr>
+      <tr><td>UK nuclear power</td><td>A concrete rule of thumb: if a required response time is under 30 minutes, it *must* be automated — human reaction speed simply can't reliably meet that bar</td></tr>
+      <tr><td>Aviation</td><td>Selective: operational failover runs automatically, but critical air-traffic-control implementations still require human verification and manual inspection before being trusted</td></tr>
+      <tr><td>LASIK / medical devices</td><td>Automation *eliminated an entire class of medical error* — a computerized sanity check flags implausible manually-entered measurements, and iris-photo matching at surgery time makes it structurally impossible to mix up patient data or left/right eye</td></tr>
+    </table>
+    <div class="fails"><b>The chapter's real point isn't "automate more" or "automate less" — it's that the right amount of automation is a direct function of what happens when it's wrong.</b> Automation that fails fast and cheap (a flagged data-entry anomaly) is an easy, obvious win. Automation that can compound a mistake faster than any human could intervene (a trading algorithm, a nuclear valve) demands a fundamentally more conservative posture — echoing this book's own Chapter 7 warning that automation is a force multiplier for whatever direction it's pointed, good or bad.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">theme 4</div>
+    <h2>Structured, rational decision-making — killing the "HiPPO"</h2>
+    <p>Google SRE's stated ideal: agree on the basis for a decision <em>in advance</em>, not justified after the fact; make inputs and assumptions explicit; and let data win over gut feeling or seniority. The chapter borrows Eric Schmidt and Jonathan Rosenberg's term directly — the <strong>"HiPPO"</strong> (Highest-Paid Person's Opinion) — as the specific failure mode this discipline exists to guard against.</p>
+    <p>Cross-industry, decision-making styles vary widely, and the chapter is careful not to rank them — each reflects a genuinely different, often well-reasoned tradeoff:</p>
+    <ul>
+      <li><strong>"If it ain't broke, don't fix it — ever."</strong> Telecom still runs long-distance switches designed in the 1980s, because — per Gus Hartmann — they're "pretty much bulletproof and massively redundant." Civil nuclear follows an identical instinct: if it currently works, changing it is treated as adding risk, not removing it.</li>
+      <li><strong>Playbooks and "the binder" over open-ended problem-solving.</strong> Every conceivable scenario gets pre-scripted into an authoritative checklist. This works specifically where the underlying system evolves slowly (so the checklist doesn't constantly go stale) and where the workforce may have limited specialized training — a clear, simple, pre-agreed instruction beats relying on improvised judgment under real pressure.</li>
+      <li><strong>Rigorous, hypothesis-driven experimentation.</strong> Manufacturing and research environments (per Eddie Kennedy) run controlled experiments and only roll out a change once it clears statistical significance — deliberately close in spirit to Chapter 17's testing-for-reliability discipline, arrived at independently.</li>
+      <li><strong>Structurally separating risk-taking from risk-enforcement.</strong> Proprietary trading keeps an enforcement team entirely separate from the traders themselves, explicitly empowered to halt trading the moment something looks abnormal — and only that team, not the traders under pressure to keep a profitable position running, can bring the system back online. John Li's summary captures the logic precisely: "If we aren't trading, we aren't losing money. We aren't making money either, but at least we aren't losing money."</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">the synthesis</div>
+    <h2>Google's real differentiator isn't inventing new principles — it's the risk appetite</h2>
+    <p>The chapter's closing argument is genuinely important, and it's a note of humility rather than a victory lap: <strong>most of what makes up SRE culture wasn't invented at Google</strong> — these same underlying principles (preparedness, blameless postmortems, careful automation, structured decisions) show up independently across a wide range of industries, often decades earlier, because they're simply what real reliability work looks like at scale, regardless of domain.</p>
+    <div class="callout"><b>What actually differs is velocity tolerance, driven directly by the cost of failure.</b> In nuclear, aviation, or medical device work, a failure can genuinely injure or kill someone — which rationally justifies the far more conservative posture those fields adopt (extensive upfront design, live-drill discipline, structurally separated risk oversight). Most of Google's software products don't carry that same direct life-safety stake — which is precisely what makes tools like the <em>error budget</em> (Chapter 3) coherent in the first place: it's a deliberate mechanism for "funding" calculated risk-taking and genuine innovation, made possible specifically because the consequences of a miss are usually recoverable, not catastrophic.</div>
+    <p>The chapter's final framing is worth holding onto: Google didn't discover reliability from scratch — it adapted reliability principles already proven out in far older, higher-stakes industries, and built its own particular version of that culture around a genuinely different balancing point: scale, complexity, and velocity, weighed against reliability, in a domain where "reliable enough" is itself a deliberate, calculated business decision — not an externally imposed, non-negotiable safety floor.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>SRE's principles aren't unique to tech</td><td>Preparedness, blameless postmortems, careful automation, and structured decisions all appear independently across older, higher-stakes industries</td></tr>
+      <tr><td>Live drills vs. simulation</td><td>The choice depends entirely on whether a real failure during the test would itself be catastrophic (aviation) or survivable (nuclear Navy's "break real stuff")</td></tr>
+      <tr><td>Near misses deserve their own scrutiny</td><td>An event that *could* have caused harm but didn't is a disaster waiting to happen, not a non-event</td></tr>
+      <tr><td>Automation's right amount depends on failure cost</td><td>Fast, cheap, reversible mistakes favor automation; compounding, hard-to-reverse mistakes favor human chains of judgment</td></tr>
+      <tr><td>The "HiPPO" problem is universal</td><td>Data-driven, pre-agreed decision criteria beat seniority-driven gut calls, across every industry surveyed</td></tr>
+      <tr><td>Separate risk-taking from risk-enforcement</td><td>Trading's independent halt-authority team is a direct structural analog to SRE's error-budget gate on release velocity</td></tr>
+      <tr><td>Google's real difference is risk appetite, not invention</td><td>Error budgets work because most software failures are recoverable — a luxury nuclear, aviation, and medicine don't have</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 33, CC BY-NC-ND 4.0 · sre.google/sre-book/lessons-learned</footer>
+</div>
+</body>
+</html>

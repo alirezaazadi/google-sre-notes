@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.14 — Managing Incidents</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/14-managing-incidents.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 14: Managing Incidents</h1>
+    <p class="subtitle">Mary, Sabrina, Malcolm, and a five-datacenter meltdown — told twice, once as chaos and once with structure, to show exactly what incident command buys you.</p>
+    <div class="source-note">📖 Based on <em>Chapter 14</em> of Google's SRE book — <a href="https://sre.google/sre-book/managing-incidents/" target="_blank">sre.google/sre-book/managing-incidents</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="13-emergency-response.html">← Ch.13 Emergency Response</a><a href="15-postmortem-culture-learning-from-failure.html">next: Ch.15 Postmortem Culture →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the chaos version</div>
+    <h2>Everybody did their job — and it still fell apart</h2>
+    <p>The chapter opens with a deliberately relatable scenario: Mary, on-call, watches datacenters drop one by one — first one, then a second, then a third, overloading the survivors into failure too. She reverts to the previous release; it doesn't help. She calls Josephine (the code's author) at 3:30am her time. Colleagues Sabrina and Robin start independently poking at the system, "just looking." Executives start calling her manager directly, demanding an ETA, offering unhelpful advice from stale engineering experience.</p>
+    <p>The turning point: a sleep-deprived Josephine calls in Malcolm, who has a hunch about CPU affinity and — without coordinating with Mary, who's nominally in charge — pushes his own fix straight to production. The servers restart, pick up his change, and immediately die.</p>
+    <div class="fails"><b>The chapter's key observation:</b> nobody in this story was incompetent or careless. Mary is a strong engineer doing exactly what she's good at. Malcolm's fix might even have been right. The failure isn't a skills failure — it's a coordination failure, and the chapter names three specific, generalizable hazards that caused it:</div>
+    <ul>
+      <li><strong>Sharp focus on the technical problem.</strong> The person best equipped to solve the technical issue is also the worst-positioned to simultaneously manage communication and coordination — those are different jobs, and doing both at once means doing both badly.</li>
+      <li><strong>Poor communication.</strong> Nobody knew what anyone else was doing. Business stakeholders got angry because nobody kept them informed; engineers who could have genuinely helped weren't being directed anywhere useful.</li>
+      <li><strong>Freelancing.</strong> Malcolm's fix came from good intentions and real technical insight — but deploying it without coordinating with the person actually running point turned a bad situation into a much worse one.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">the structure</div>
+    <h2>Incident Command System: separating "who decides" from "who acts"</h2>
+    <p>Google's incident management borrows directly from the Incident Command System — originally developed by firefighters for wildfire response, later adapted broadly for emergency management. Its core principle: <strong>clear, non-overlapping roles</strong> — and counterintuitively, this constraint actually gives people <em>more</em> autonomy within their own role, because they no longer have to second-guess or duplicate what a colleague might already be doing.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 260" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="260" fill="#FBF8EF"/>
+        <rect x="260" y="15" width="160" height="55" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2.5"/>
+        <text x="340" y="38" text-anchor="middle" font-weight="bold" font-size="13">Incident Commander</text>
+        <text x="340" y="56" text-anchor="middle" font-size="10.5">holds all undelegated roles</text>
+
+        <path d="M340 70 L 130 110" stroke="#242121" stroke-width="1.5"/>
+        <path d="M340 70 L 340 110" stroke="#242121" stroke-width="1.5"/>
+        <path d="M340 70 L 550 110" stroke="#242121" stroke-width="1.5"/>
+
+        <rect x="30" y="115" width="200" height="60" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+        <text x="130" y="140" text-anchor="middle" font-weight="bold" font-size="12.5">Ops lead</text>
+        <text x="130" y="158" text-anchor="middle" font-size="10.5">only group modifying the system</text>
+
+        <rect x="240" y="115" width="200" height="60" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+        <text x="340" y="140" text-anchor="middle" font-weight="bold" font-size="12.5">Communications</text>
+        <text x="340" y="158" text-anchor="middle" font-size="10.5">public face, status updates</text>
+
+        <rect x="450" y="115" width="200" height="60" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+        <text x="550" y="140" text-anchor="middle" font-weight="bold" font-size="12.5">Planning</text>
+        <text x="550" y="158" text-anchor="middle" font-size="10.5">bugs, handoffs, tracking drift</text>
+
+        <text x="340" y="215" text-anchor="middle" font-size="12.5" fill="var(--ink-soft)">any role can spin off a delegated sub-incident if overloaded</text>
+      </svg>
+      <div class="diagram-caption">sketch — the four core incident roles (original diagram)</div>
+    </div>
+
+    <ul>
+      <li><strong>Incident Command</strong> — holds the overall state of the incident and structures the response. Critically, the commander <em>de facto</em> holds every role they haven't explicitly delegated — nothing falls through the cracks by default, it just defaults to the commander until handed off.</li>
+      <li><strong>Operational Work</strong> — the Ops lead is the <em>only</em> one actually touching the system. This single rule is what would have stopped Malcolm's freelance CPU-affinity push in the chaos version — there's exactly one channel through which production changes happen during an incident.</li>
+      <li><strong>Communication</strong> — the public face, sending periodic updates to stakeholders and keeping the incident document current. This role exists specifically so the technical responders never have to context-switch into "manage the VPs" mode.</li>
+      <li><strong>Planning</strong> — the less glamorous but essential role: filing bugs, arranging shift handoffs, ordering dinner for a long incident, and tracking exactly how the system has diverged from its normal configuration so it can all be reverted cleanly once the incident closes.</li>
+    </ul>
+    <p>If any one role gets overloaded, the answer isn't for that person to just push through — it's to ask the planning lead for more staff, and delegate further, potentially spinning off a formal sub-incident for a self-contained piece of the problem.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">practical scaffolding</div>
+    <h2>Three artifacts that make the roles actually work</h2>
+    <ul>
+      <li><strong>A recognized command post.</strong> Sometimes a literal physical "war room," sometimes just an agreed communication channel. Google specifically calls out IRC as a genuine boon: reliable, naturally produces a searchable log of exactly what was said when (invaluable input to the eventual postmortem), and works well across geographically distributed teams. Bots that auto-log incident traffic and post alert events directly into the channel remove yet another manual task from an already-busy responder's plate.</li>
+      <li><strong>A live, shared incident state document.</strong> The incident commander's single most important artifact — kept in something genuinely concurrently editable (Google Docs, or Google Sites for the Docs team itself, for the wonderfully self-aware reason that depending on the exact software you're currently trying to fix, as your incident-management tool, is a bad idea). It can be messy, but has to stay functional — a template with the most important information kept at the top makes it usable under pressure, and it's retained afterward as direct input to the postmortem.</li>
+      <li><strong>Clear, explicit handoff.</strong> At shift change, command must be handed off unambiguously — the chapter is specific that the outgoing commander should literally say "You're now the incident commander, okay?" and wait for firm acknowledgment before disengaging. Nothing about the identity of "who's in charge right now" should ever be ambiguous, even for a moment.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">the same incident, managed</div>
+    <h2>Replaying the exact same failure — with structure this time</h2>
+    <p>The chapter's most effective device is retelling the identical datacenter-cascade scenario, this time with the framework applied. Mary still gets paged, still watches datacenters fail one by one — but this time she immediately hands off command: <em>"Can you take command?"</em> to Sabrina, who takes a quick rundown and starts a structured update thread to a prearranged stakeholder mailing list.</p>
+    <p>Every beat that went wrong in the chaos version plays out differently here specifically because of role separation: Sabrina — not Mary — decides to loop in Josephine, and only after confirming with Mary first. Robin volunteers to help and is explicitly told to prioritize whatever Mary (Ops) delegates to him, and to report back through the structure rather than improvising independently. When Mary's attempted binary rollback doesn't work, that update flows through Robin to IRC to the live incident document — everyone stays synchronized without Mary herself having to personally broadcast the update.</p>
+    <p>At 5pm, instead of the incident just grinding on with an exhausted team, Sabrina proactively arranges a handoff to the sister office in another time zone, briefs them via a short call, and formally hands off. Mary comes back the next morning to find the incident already resolved and the postmortem already underway — resolved by colleagues who were never even present for the original page, purely because the incident document and structured handoff made that possible.</p>
+    <div class="callout"><b>The comparison's real point:</b> nothing about the underlying technical problem changed between the two tellings — same failure, same people, same skills available. The entire difference in outcome came from structure and communication, not from anyone being smarter or working harder.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">when to declare</div>
+    <h2>Declare early — the cost of a false alarm is much lower than the cost of delay</h2>
+    <p>The chapter's guidance is refreshingly concrete rather than vague: it's far better to formally declare an incident, spin up the framework, and then find a quick fix and close it out early — than to be hours into a worsening problem before finally invoking the process. Three simple trigger conditions, any one of which is sufficient to declare:</p>
+    <ul>
+      <li>Does fixing this require involving a second team?</li>
+      <li>Is the outage actually visible to customers?</li>
+      <li>Has the issue remained unsolved after an hour of concentrated, focused analysis?</li>
+    </ul>
+    <p>There's also a practical maintenance problem the chapter names directly: incident management skill genuinely atrophies if it's not exercised regularly. The proposed fix is to widen what counts as "using the framework" — apply the same structure to routine operational changes that happen to span time zones or teams, and fold incident-management drills into regular disaster-recovery testing, including role-playing the response to an incident that's already been solved by someone else, purely to keep the muscle memory current.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>Best practices, as the chapter states them directly</h2>
+    <table class="recap">
+      <tr><th>Practice</th><th>What it means</th></tr>
+      <tr><td>Prioritize</td><td>Stop the bleeding, restore service, preserve evidence for root-causing — in that order</td></tr>
+      <tr><td>Prepare</td><td>Document incident procedures in advance, with input from the people who'll actually use them</td></tr>
+      <tr><td>Trust</td><td>Give full autonomy within an assigned role — that's the whole point of separating roles</td></tr>
+      <tr><td>Introspect</td><td>Notice your own rising panic or overwhelm, and ask for more support before it affects your judgment</td></tr>
+      <tr><td>Consider alternatives</td><td>Periodically re-evaluate whether the current approach is still the right one, rather than committing by default</td></tr>
+      <tr><td>Practice</td><td>Use the framework routinely, not just during real incidents, so it's second nature under pressure</td></tr>
+      <tr><td>Change it around</td><td>Rotate roles across incidents so the whole team is fluent in every position, not just their usual one</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 14, CC BY-NC-ND 4.0 · sre.google/sre-book/managing-incidents</footer>
+</div>
+</body>
+</html>

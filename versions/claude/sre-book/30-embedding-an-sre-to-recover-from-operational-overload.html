@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.30 — Embedding an SRE to Recover from Operational Overload</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/30-embedding-an-sre-to-recover-from-operational-overload.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part IV — Management</div>
+    <h1 class="title">Chapter 30: Embedding an SRE to Recover from Operational Overload</h1>
+    <p class="subtitle">Why the fix isn't "help clear the ticket queue" — it's teaching a team to see its own fires clearly, then getting out of the way while they put them out themselves.</p>
+    <div class="source-note">📖 Based on <em>Chapter 30</em> of Google's SRE book — <a href="https://sre.google/sre-book/operational-overload/" target="_blank">sre.google/sre-book/operational-overload</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="29-dealing-with-interrupts.html">← Ch.29 Dealing with Interrupts</a><a href="31-communication-and-collaboration-in-sre.html">next: Ch.31 Communication and Collaboration →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the setup</div>
+    <h2>When the 50/50 balance breaks down for months, not days</h2>
+    <p>SRE's standard policy is roughly even time between project work and reactive ops (Chapter 5's territory) — but in practice, a sustained rise in ticket volume can quietly overturn that balance for months at a stretch. This is dangerous in a specific, compounding way: a team stuck disproportionately in reactive mode has no bandwidth left to fix the very things driving that reactive load, so scalability and reliability both degrade together, precisely while the team has the least capacity to address either.</p>
+    <p>Google's fix is a temporary, targeted intervention: transfer one experienced SRE <em>into</em> the overloaded team. Critically, the embedded SRE's job is <strong>not</strong> to help empty the ticket queue — it's to observe the team's actual daily routine and recommend changes to the underlying practices that are generating so many tickets in the first place. That's a genuinely different job than "extra pair of hands," and the chapter is explicit that conflating the two undermines the entire point of the intervention.</p>
+    <div class="callout"><b>Why exactly one SRE, not two:</b> a second embedded engineer doesn't reliably improve outcomes, and can actively backfire — a team already under strain may read multiple outsiders arriving at once as a larger, more threatening intervention, triggering defensiveness that makes the whole engagement harder, not easier.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">phase 1</div>
+    <h2>Learn the service and get context</h2>
+    <p>The embedded SRE's first job is diagnostic, not corrective: understand precisely which habits and processes are actually hurting the service's scalability. The chapter frames the core principle to keep returning to throughout: <strong>more tickets should never automatically justify more SREs</strong> — the entire SRE model exists specifically to keep headcount from scaling linearly with load. If a team's answer to rising ticket volume is simply "we need more people," that's itself the symptom to investigate, not a legitimate staffing request to approve.</p>
+
+    <h3>"Ops mode" vs. genuine scaling — and matching your strategy to which one you're actually facing</h3>
+    <p>The chapter names a specific failure pattern directly: <strong>ops mode</strong> is when a team responds to growth by adding more administrators to manage more of the same kind of manual work (more VMs, more people managing VMs) — instead of writing software or removing scalability bottlenecks so operational headcount stops tracking load at all. A team drifting into ops mode will often insist "our service is too small for this to matter" — and the chapter's suggested reality check is refreshingly concrete: actually shadow an on-call shift and see whether that claim holds up, rather than taking the team's self-assessment at face value.</p>
+    <p>The right response genuinely depends on which situation you're actually looking at:</p>
+    <ul>
+      <li><strong>If the service really is small but business-important</strong> — focus on how the team's current approach is actively blocking reliability improvements. And a pointed reminder: your job as the embedded SRE is to make the service actually work well, not to build a wall shielding the development team from ever seeing alerts.</li>
+      <li><strong>If the service is early-stage and growing</strong> — focus on preparing the team for genuinely explosive scale ahead. The chapter's own benchmark: a service at 100 requests/second today can plausibly be at 10,000 requests/second within a year — and the practices that were "good enough" at the smaller scale usually won't survive that jump unmodified.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">finding the fires</div>
+    <h2>Identifying stress sources and "kindling" — emergencies waiting to happen</h2>
+    <p>Teams often default into ops mode reacting to pressure that's either genuinely overwhelming, or merely <em>feels</em> that way based on the team's own history — the chapter is explicit that perceived pressure and real pressure both drive the same unhealthy behavior, so both deserve investigation. Once you understand the service well enough to ask hard design and deployment questions, prioritize past outages by their actual impact on team stress — being alert to the fact that, due to a team's particular history, some genuinely small incidents can carry disproportionate emotional weight compared to their real severity.</p>
+
+    <h3>"Kindling" — the chapter's specific, named red flags for future emergencies</h3>
+    <table class="recap">
+      <tr><th>Kindling type</th><th>Why it's dangerous</th></tr>
+      <tr><td>Knowledge gaps from overspecialization</td><td>On a large team, deep specialization can quietly leave nobody with the broad understanding on-call actually requires</td></tr>
+      <tr><td>SRE-built "side" services quietly growing important</td><td>They rarely get the same launch-time scrutiny as major features, precisely because at least one SRE already implicitly vouches for them</td></tr>
+      <tr><td>Over-reliance on "the next big thing"</td><td>Real, temporary fixes get ignored for months because a rewrite is assumed to make the problem moot — and often doesn't arrive on schedule</td></tr>
+      <tr><td>Common alerts nobody actually diagnoses</td><td>Routinely dismissed as "transient," but they still quietly consume attention and erode focus on real problems</td></tr>
+      <tr><td>Client complaints with no formal SLI/SLO/SLA</td><td>Without an agreed target, there's no way to know whether the complaints reflect a real problem or a mismatched expectation</td></tr>
+      <tr><td>Capacity plans that are just "add servers when they run low"</td><td>A load test that barely passes today (e.g., 1.99GB against a 2GB budget) isn't proof of adequate headroom — it's proof you're already at the edge</td></tr>
+      <tr><td>Postmortems whose only action item is "revert the change"</td><td>Reverting fixes the symptom; it doesn't answer *why* the timeout crept to 60 seconds in the first place</td></tr>
+      <tr><td>"We don't know, the devs own that"</td><td>Acceptable on-call support requires at least knowing a component's failure impact and urgency — not full mastery, but not blank ignorance either</td></tr>
+    </table>
+  </section>
+
+  <section class="card">
+    <div class="tab">phase 2</div>
+    <h2>Sharing context — postmortems and sorting fires by type</h2>
+
+    <h3>Don't critique old postmortems — write the next one, together</h3>
+    <p>The chapter is specific and a little counterintuitive here: reviewing a struggling team's <em>past</em> postmortem archive and leaving improvement comments doesn't actually help — it tends to trigger defensiveness rather than genuine reflection, especially on a team that already half-suspects the postmortem process exists to assign blame. The better move: there <em>will</em> be a real outage during your embedded assignment — use it. Whether or not you're the one on-call, actively partner with whoever is to co-write a genuinely excellent, blameless postmortem together, demonstrating the SRE model's value through direct, lived example rather than retroactive criticism of work already done.</p>
+    <div class="fails"><b>Naming the "Bad Apple Theory" directly, and why it's false:</b> the instinctive belief that "the system works fine — just remove the people who make mistakes and it'll keep working fine" is demonstrably wrong, supported by evidence across multiple fields including airline safety. The chapter's suggested actual phrasing to a defensive on-call engineer: <em>"Mistakes are inevitable in any system with multiple subtle interactions. You were on-call, and I trust you to make the right decisions with the right information. I'd like you to write down what you were thinking at each point in time, so we can find out where the system misled you, and where the cognitive demands were too high."</em> This reframes the entire postmortem around the system's failure to support good decisions — not the individual's judgment.</div>
+
+    <h3>Sort fires: toil, or genuinely part of the job</h3>
+    <p>A deliberately simplified two-bucket model: some "fires" shouldn't exist at all — they're pure toil (Chapter 5), and the right response is automating or eliminating them entirely. Others genuinely are inherent to running the service and are reasonably expected overhead. Either way, the team needs real tooling to actually control the burn — the point of sorting isn't to assign blame for each fire, it's to present the team with a clear, explicit list explaining exactly why each item belongs in one bucket or the other, so the distinction itself becomes visible and shared rather than a matter of individual gut feeling.</p>
+  </section>
+
+  <section card class="card">
+    <div class="tab">phase 3</div>
+    <h2>Driving change — teaching principles, not applying a fix</h2>
+    <div class="callout"><b>The chapter's foundational metaphor for this whole phase:</b> humans are naturally good at homeostasis — so the embedded SRE's real job is establishing the right initial conditions and teaching a small set of durable principles, then trusting the team to self-regulate from there, rather than trying to personally solve every problem through sheer effort during the engagement window.</div>
+
+    <h3>Start with the single highest-leverage lever: a real SLO</h3>
+    <p>If the team doesn't already have a genuine service level objective, writing one is described as the single most important lever available for shifting a team from reactive ops work toward sustainable, healthy SRE practice — an SLO gives a quantitative measure of exactly how much an outage costs, and by extension, exactly how valuable a proposed process change actually is. The chapter's blunt bottom line: without this agreement in place, essentially none of the rest of the chapter's advice will actually stick. If you land on a team with no SLOs at all, the very first move is establishing one — bringing tech leads and management into a room and actually arbitrating a real number, not deferring the conversation further.</p>
+
+    <h3>Get help clearing kindling — deliberately, not by doing it yourself</h3>
+    <p>There's a strong, natural pull to just personally fix the problems you've identified — the chapter names this directly as a trap to resist, because doing so quietly reinforces the belief that "making real changes is someone else's job," which is precisely the opposite lesson you're trying to teach. The recommended sequence instead:</p>
+    <ol>
+      <li>Find a genuinely useful piece of work one team member (not you) can own.</li>
+      <li>Explain explicitly how this work fixes a postmortem-identified issue <em>permanently</em> — the chapter notes even otherwise-healthy teams routinely settle for shortsighted, symptom-level action items without realizing it.</li>
+      <li>Serve as reviewer on the resulting code and doc changes — present, but not the one doing the work.</li>
+      <li>Repeat for two or three separate issues, building real muscle memory across multiple team members rather than one.</li>
+    </ol>
+    <p>Anything you spot beyond that gets written up as a bug or a doc for the team to reference later — this serves two purposes simultaneously: it spreads the underlying information, and it models the habit of actually writing things down, which the chapter notes is often the very first casualty once deadline pressure hits.</p>
+
+    <h3>Explain your reasoning — every time, not just when challenged</h3>
+    <p>As the team regains footing, expect pushback on the everyday judgment calls that originally led to overload in the first place — and the chapter notes, with a hint of dry humor, that being challenged directly in a production meeting is actually the <em>better</em> outcome. The more dangerous case is nobody asking at all — which is exactly why you should proactively explain every decision, whether or not anyone requests it. <strong>The explicit long-term goal: after you leave, the team should be able to correctly predict what you'd say about a given design or changelist</strong> — which is only achievable if your reasoning was made visible and legible the whole way through, not left implicit.</p>
+    <table class="recap">
+      <tr><th>Thin explanation (avoid)</th><th>Thorough explanation (aim for)</th></tr>
+      <tr><td>"I don't think servers generating their own routing config is safe."</td><td>"...isn't safe because a bug there can cause a correlated failure across the whole service, and the extra code itself becomes a new bug source that could slow down a rollback."</td></tr>
+      <tr><td>"The automation should give up if it hits a conflicting deployment."</td><td>"...because we're assuming all changes flow through the automation, and a conflict means something clearly violated that assumption — if this keeps happening, we should find and eliminate the source of unorganized change."</td></tr>
+    </table>
+    <p>Both "thin" examples might well be the objectively correct call — the chapter's point isn't that they're wrong, it's that a team can't read your mind, and will very plausibly imitate the shallow reasoning they actually observed rather than the sound judgment that happened to sit behind it.</p>
+
+    <h3>Ask leading questions — genuinely leading, not loaded</h3>
+    <p>The chapter draws a careful, important distinction: a <em>leading</em> question nudges someone toward reasoning from first principles themselves; a <em>loaded</em> question is really just a hidden accusation. Modeling this style of inquiry matters specifically because a team stuck in ops mode has, by definition, gotten used to rejecting exactly this kind of probing reasoning from its own members — seeing an outsider consistently model it helps normalize the habit.</p>
+    <table class="recap">
+      <tr><th>Leading (genuine)</th><th>Loaded (avoid)</th></tr>
+      <tr><td>"The TaskFailures alert fires often, but on-call rarely acts on it. How does that affect the SLO?"</td><td>"What's up with all these old, stalled releases?"</td></tr>
+      <tr><td>"This turnup procedure looks complicated — do you know why so many config files need updating for a new instance?"</td><td>"Why does the Frobnitzer do so many things?"</td></tr>
+    </table>
+  </section>
+
+  <section class="card">
+    <div class="tab">wrapping up</div>
+    <h2>What the engagement leaves behind</h2>
+    <p>Done well, this kind of embedding gives a team four durable things: a genuine, ideally quantitative, understanding of <em>why</em> change was needed in the first place; a lived, concrete example of what that change actually looks like in practice — not just theory; a real, legible explanation behind the "folk wisdom" SRE culture often relies on, rather than received rules taken on faith; and the core underlying principles needed to reason through genuinely novel situations later, on their own, long after the embedded SRE has left.</p>
+    <p>The engagement's formal close is an after-action report — reiterating perspective, concrete examples, and reasoning, along with specific action items the team commits to going forward. The chapter suggests framing it almost as a "postvitam" (explicitly, the mirror image of a postmortem) — walking back through the critical decisions that led to a successful outcome, the same way a postmortem walks through the decisions that led to a failure.</p>
+    <div class="callout"><b>The job isn't fully done at handoff.</b> The chapter closes with a clear expectation: stay available for design and code reviews after the formal embedded period ends, and keep a genuine eye on the team over the following months to confirm capacity planning, emergency response, and rollout processes are actually continuing to improve — not just holding steady in the immediate afterglow of the intervention before quietly regressing once attention moves elsewhere.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Embed to teach, not to help clear the queue</td><td>"Extra hands" and "practice consultant" are fundamentally different jobs — conflating them defeats the purpose</td></tr>
+      <tr><td>Ops mode vs. genuine scaling</td><td>More tickets should never automatically mean more SREs — that's the exact pattern the SRE model exists to prevent</td></tr>
+      <tr><td>Kindling checklist</td><td>Knowledge gaps, missing SLOs, symptom-only postmortems, and "the devs own that" are all specific, nameable red flags</td></tr>
+      <tr><td>Own the next postmortem, don't critique old ones</td><td>Retroactive criticism triggers defensiveness; live collaboration demonstrates the model directly</td></tr>
+      <tr><td>Bad Apple Theory is false</td><td>Reframe postmortems around where the system misled a person, not whether they made the "right" call</td></tr>
+      <tr><td>Get help clearing kindling — don't fix it yourself</td><td>Doing it yourself reinforces "change is for other people"; delegate, explain, and review instead</td></tr>
+      <tr><td>Explain reasoning even when unasked</td><td>The team should be able to predict your judgment after you leave — only possible if the "why" was always visible</td></tr>
+      <tr><td>A real SLO is the highest-leverage lever</td><td>Without it, quantifying the value of any proposed change is impossible, and the rest of the advice won't stick</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 30, CC BY-NC-ND 4.0 · sre.google/sre-book/operational-overload</footer>
+</div>
+</body>
+</html>

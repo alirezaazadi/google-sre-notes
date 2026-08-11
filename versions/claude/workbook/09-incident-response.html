@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.9 — Incident Response</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/09-incident-response.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part II — Practices</div>
+    <h1 class="title">Chapter 9: Incident Response</h1>
+    <p class="subtitle">Google Home's silent 12-day escalation failure, GKE's 6-hour-40-minute DockerHub mystery, a lightning strike in Belgium, and PagerDuty's own "Failure Friday" — four incidents, told in genuine detail.</p>
+    <div class="source-note">📖 Based on <em>Chapter 9</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/incident-response/" target="_blank">sre.google/workbook/incident-response</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="08-on-call.html">← Ch.8 On-Call</a><a href="10-postmortem-culture-learning-from-failure.html">next: Ch.10 Postmortem Culture →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the framework</div>
+    <h2>ICS, adapted from wildfire response, and the "3 Cs"</h2>
+    <p>Resolving an incident (fixing the actual problem) and managing an incident (coordinating people, communication, and decision-making) are genuinely separate jobs — and trying to do both simultaneously under pressure is exactly what breaks down in a real emergency. Google's framework, <strong>Incident Management at Google (IMAG)</strong>, is built on the <strong>Incident Command System (ICS)</strong> — established by firefighters in 1968 to manage wildfires, later adapted broadly across tech.</p>
+    <p>Every incident response framework is judged against the same three goals — the <strong>"3 Cs"</strong>: <strong>Coordinate</strong> the response effort, <strong>Communicate</strong> between responders, the org, and the outside world, and <strong>maintain Control</strong> over the response. When incident response goes wrong, the chapter notes, the root cause is almost always traceable back to a failure in one of these three.</p>
+
+    <h3>The three core roles</h3>
+    <ul>
+      <li><strong>Incident Commander (IC)</strong> — whoever first declares the incident typically starts here by default, and holds every role not yet explicitly delegated. Focuses on the 3 Cs directly: commanding and coordinating, communicating effectively, staying in control, and working with responders toward resolution.</li>
+      <li><strong>Operations Lead (OL)</strong> — applies the actual operational tools to mitigate or resolve the incident. The IC can either delegate this role or take it on personally.</li>
+      <li><strong>Communications Lead (CL)</strong> — the incident's public face: periodic status updates to the response team and stakeholders, managing external inquiries, freeing the IC and OL to focus purely on resolution.</li>
+    </ul>
+    <p>Both OL and CL can lead their own sub-teams that expand or contract as the incident's scope changes — and if an incident shrinks enough, the CL role can simply be folded back into the IC.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 1</div>
+    <h2>Google Home — what happens when nobody declares an incident</h2>
+    <p>A bug in Google Assistant v1.88 caused speaker-recognition files to be fetched <strong>50x more often</strong> than intended, eventually exceeding server quota. This is the chapter's cautionary example — resolved eventually, but the story is really about everything that made it take far longer than it needed to.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="220" fill="#FBF8EF"/>
+        <g font-size="11">
+          <rect x="10" y="20" width="150" height="45" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="1.8"/>
+          <text x="85" y="42" text-anchor="middle" font-weight="bold" font-size="10.5">May 22: Jasper</text>
+          <text x="85" y="57" text-anchor="middle" font-size="9.5">spots anomaly, pauses rollout</text>
+
+          <rect x="180" y="20" width="150" height="45" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="1.8"/>
+          <text x="255" y="42" text-anchor="middle" font-weight="bold" font-size="10.5">May 31: rollout</text>
+          <text x="255" y="57" text-anchor="middle" font-size="9.5">resumed, reaches 50%</text>
+
+          <rect x="350" y="20" width="150" height="45" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="1.8"/>
+          <text x="425" y="42" text-anchor="middle" font-weight="bold" font-size="10.5">June 3 (Sat): 100%</text>
+          <text x="425" y="57" text-anchor="middle" font-size="9.5">rollout, no devs on hand</text>
+
+          <rect x="520" y="20" width="150" height="45" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="1.8"/>
+          <text x="595" y="42" text-anchor="middle" font-weight="bold" font-size="10.5">June 4: quota raised</text>
+          <text x="595" y="57" text-anchor="middle" font-size="9.5">again, incident ends</text>
+        </g>
+        <text x="340" y="110" text-anchor="middle" font-size="12" fill="#B84B2A">an incident was never formally DECLARED at any point in this whole timeline</text>
+      </svg>
+      <div class="diagram-caption">sketch — the Google Home timeline, and the missing formal declaration (original diagram)</div>
+    </div>
+    <p>Jasper (developer on-call) spotted an anomalous QPS pattern on May 22 and paused the rollout — good early detection. The team linked it to a different, already-known bug and requested a temporary quota increase, then resumed the rollout — which turned out to be treating a <em>symptom</em>, not the actual root cause. The rollout crept up to 50%, then — critically — reached <strong>100% on a Saturday</strong>, violating the team's own best practice of only rolling out on business days when developers are actually reachable. When it hit full saturation, user reports flooded in — support calls, tweets, Reddit threads, a growing help-forum thread — yet the bug's priority still wasn't escalated until the <em>next day</em>, Sunday, when volume became undeniable.</p>
+    <div class="fails"><b>An incident was never formally declared, at any point.</b> The team debugged entirely through the ordinary bug-tracking system — no IC, no dedicated war room, no structured communication. The eventual fix (another quota increase) worked, but the review is blunt: developers rallying on a weekend to fix this was <em>lucky</em>, not a repeatable process — "what if the developers had been unreachable?" Google explicitly values work-life balance; incident response shouldn't structurally depend on volunteer weekend heroics.</div>
+    <p><strong>The chapter's stated lesson:</strong> declaring an incident early would have prevented the client/server miscommunication that repeatedly sent the team down wrong paths, sped up root-cause identification, and looped in the right people (and external comms) far sooner. Google's practice of gathering all responders into a single "war room" — physical or virtual (IRC, video chat) — exists specifically to prevent exactly this kind of fragmented, uncoordinated investigation.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 2</div>
+    <h2>GKE CreateCluster — a corrupted DockerHub image, and the power of a generic mitigation</h2>
+    <p>London on-call SRE Zara got paged for <code>CreateCluster</code> failures across multiple zones — over 60% failure in two zones, existing clusters unaffected. She correctly declared an incident within 25 minutes of the page, opening an IRC channel and bringing in a customer support engineer to notify affected users quickly.</p>
+    <p>The investigation dragged: cluster startup logs showed a certificate-signing request failure, but network, resource availability, and the signing process itself all checked out individually. A developer joined, requesting a tracking bug and escalation to infrastructure. When a senior SRE (Il-Seong) arrived hours in, he ruled out that day's release as the cause, started a shared working document, and pushed for escalating to networking and compute-engine teams too — pulling in still more responders. By 9:10am, a dozen people were in the incident channel, 2.5 hours in, with <strong>no root cause and no mitigation</strong>.</p>
+    <div class="callout"><b>A deliberately mid-incident handoff, made for the right reason:</b> the scheduled London→Seattle on-call handover was 10am, but Zara proactively handed IC to Il-Seong <em>before</em> that, specifically because he had more IMAG experience — prioritizing the incident's actual needs over the routine schedule. Il-Seong immediately imposed formal structure: Zara became Ops Lead, another SRE became Comms Lead, the existing customer support engineer stayed External Comms Lead — and Comms sent an "all hands on deck" email to every relevant mailing list.</div>
+    <p>The eventual root cause: the certificate signer was trying to pull a corrupted image directly from DockerHub — reproducible only in Europe, not the US. Because DockerHub was an <em>external</em> dependency, direct mitigation and root-causing were both genuinely hard. The team pursued two options in parallel: get Docker to fix the image themselves, or reconfigure clusters to fetch from Google's own Container Registry (GCR) instead — which meant a real binary rebuild (~1 hour), and the rebuild had to be <em>restarted</em> once a second bad-image reference was discovered 90% of the way through.</p>
+    <p>The actual breakthrough came from a different direction: an SRE realized GCR already had a mirror feature that could transparently intercept and serve Docker pull requests from cache instead — <code>--registry-mirror=https://mirror.gcr.io</code> — and discovered the mirror was <em>already configured</em>. Once confirmed images were flowing from the GCR mirror, GCR on-call purged the corrupted image from European storage, and all European zones dropped to 0% error within about 12 minutes.</p>
+    <div class="math">
+      Total outage: 6 hours 40 minutes<br>
+      41 unique IRC participants · 26,000 words of IRC logs<br>
+      7 IMAG task forces spun up (up to 4 running simultaneously) · 28 postmortem action items
+    </div>
+    <div class="fails"><b>The chapter's sharpest structural critique: the incident could plausibly have ended by 10am, not 12:11pm, with a generic mitigation.</b> A <strong>generic mitigation</strong> is a blunt-instrument action taken before the root cause is fully understood — rolling back to a known-good state once you know roughly <em>where</em> the problem is, without yet knowing exactly <em>why</em>. By 9:56am the team already knew the corrupted image was the likely culprit — that alone was enough information to roll back to known-good images immediately, rather than spending the next two hours building a bespoke, image-source-swapping configuration change. Customers don't care whether you fully understand the cause — they care that the errors stop.</div>
+    <p>The chapter's recommended priority order for live incident response, stated directly: <strong>(1)</strong> assess impact, <strong>(2)</strong> mitigate the impact, <strong>(3)</strong> perform root-cause analysis, <strong>(4)</strong> only after the incident is fully over, fix the underlying cause and write the postmortem. Generic mitigation tools (rollback, drain, reroute) are worth building <em>before</em> an incident, not improvised during one — and reviewing past postmortems specifically to spot "a generic mitigation would have helped here" is a genuinely productive habit.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 3</div>
+    <h2>The Belgium lightning strike — what a well-run incident actually looks like</h2>
+    <p>In mid-2015, lightning struck the power grid near a Google Belgium datacenter four times within two minutes. Backup generators (which take a few minutes to spin up) kicked in as designed; most servers rode out the gap on backup batteries. But the disk trays' own separate UPS batteries failed to switch over on the third and fourth strikes — too closely spaced — so disk trays lost power entirely until generators came fully online, even though the servers themselves stayed powered.</p>
+    <p>Persistent Disk SRE on-call was paged immediately for the resulting read/write errors across many Compute Engine VMs, declared a major incident promptly, and — because that team had the clearest visibility into actual customer impact — retained the IC role themselves rather than handing it elsewhere.</p>
+
+    <h3>Clean, well-scoped delegation</h3>
+    <ul>
+      <li><strong>Restoring grid power and rebooting non-VM-hosting machines</strong> — clearly defined, already documented — assigned straightforwardly to the operations team, with regular status reports flowing back to the IC.</li>
+      <li><strong>The genuinely hard problem</strong> — machines hosting <em>both</em> a disk tray and live customer VMs couldn't simply be rebooted without also killing unaffected VMs on the same host. This wasn't covered by any existing playbook. The IC assigned a dedicated coordinator specifically to bridge Persistent Disk SRE and GCE SRE, and — recognizing mid-incident that genuinely new tooling was needed to safely migrate VMs off affected hosts — pulled in more engineers specifically to build it, live.</li>
+    </ul>
+    <p>The Communications Lead tracked and served four genuinely distinct audiences simultaneously: company leadership (needing scope + reassurance), internal teams with storage dependencies (needing an ETA), external customers in the affected region (needing proactive notice), and specific customers with open support tickets (needing individualized workaround guidance).</p>
+    <p>Post-incident analysis found the actual data loss was remarkably small — only writes that were still <em>pending</em> on the exact machines that lost power during the outage window were ever at risk, and because Persistent Disk snapshots and Cloud Storage data are both stored redundantly across multiple datacenters, the total loss came to roughly <strong>0.000001%</strong> of data from running GCE machines.</p>
+    <div class="callout"><b>Why this one worked so well:</b> early declaration, clear IC ownership assigned to the team with the best actual visibility, clean delegation of the well-understood parts, and a deliberate, engineer-staffed response to the genuinely novel part — rather than trying to force a known playbook onto a problem that didn't fit one. The IC's judgment call to prioritize "get affected customers unblocked fastest" over "restore full infrastructure fastest" is exactly the kind of prioritization call the role exists to make.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 4</div>
+    <h2>PagerDuty — an outside perspective, and genuinely inventive training</h2>
+    <p>PagerDuty's own incident response evolved from a single permanent company-wide IC model into something that changes deliberately every few months as the company (400+ employees) and its engineering org grew — publicly documented at response.pagerduty.com specifically because they treat the process itself as a living, non-static thing.</p>
+
+    <h3>Two genuinely distinctive training techniques</h3>
+    <ul>
+      <li><strong>"Failure Friday"</strong> — inspired directly by Netflix's Simian Army/Chaos Monkey — a weekly exercise recreating real production and incident-response scenarios. A nominated IC (often someone actively training for the role) runs the drill using the exact same processes and vocabulary as a genuine incident, giving new on-callers real exposure to the language and rhythm of incident response, and giving experienced ones a regular refresher.</li>
+      <li><strong>Time-bound simulation games</strong> — specifically <em>Keep Talking and Nobody Explodes</em>, a cooperative bomb-defusal game under a hard time limit. The chapter's reasoning: Failure Friday teaches roles and process well, but can't fully replicate the felt urgency of a real major incident — a genuinely time-pressured, communication-intensive game closes that specific gap.</li>
+    </ul>
+
+    <h3>A real incident: NTP clock drift, October 2017</h3>
+    <p>An SRE was first alerted to internal NTP server clock drift at 7:53pm; automated recovery ran, standard runbook mitigation steps were completed, documented in a dedicated Slack channel. Two separate downstream software teams got their <em>own</em> independent automated alerts about clock-drift-caused errors over the next hour and a half — a real early sign of how widely the problem was actually propagating, even before anyone called it a "major incident."</p>
+    <p>At 9:49pm — roughly two hours after the very first alert — the SRE on-call formally declared a major incident and paged the on-call IC, who assembled every engineer whose service depended on NTP plus customer support, all onto one shared conference call and Slack channel. The response ran for roughly <strong>eight hours</strong>, methodically working through runbook options and then improvising new recovery approaches once the documented ones failed to resolve it.</p>
+    <div class="callout"><b>A specific, deliberate fatigue-management tactic:</b> both on-call engineers <em>and</em> the IC role itself rotated every four hours through the night — explicitly to let people actually rest, and to bring fresh perspective and new ideas into a stalled response, rather than letting the same tired team grind on a problem that wasn't yielding to their current approach.</div>
+    <p>A configuration change to the NTP servers at 5:33am finally resolved it; the IC validated full recovery with every affected on-call individually before formally closing the incident at 6:13am and assigning postmortem ownership — a genuinely disciplined close-out given how exhausting the preceding eight hours clearly were.</p>
+
+    <h3>PagerDuty's three core tools</h3>
+    <p><strong>PagerDuty itself</strong> stores on-call schedules, service ownership, postmortems, and incident metadata centrally, enabling fast team assembly. <strong>Slack</strong> (a dedicated <code>#incident-war-room</code> channel) serves mainly as the scribe's running ledger of actions, owners, and timestamps. <strong>Conference calls</strong> are where real-time coordination decisions actually get made, with outcomes then recorded back into Slack — and every call is recorded, specifically as a backstop in case the scribe misses something important in the moment. The chapter is clear this exact tool combination isn't prescriptive — use whatever communication method genuinely works for your own team.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">preparation</div>
+    <h2>Putting best practices into practice — before disaster strikes</h2>
+    <div class="callout"><b>The chapter's central, blunt framing:</b> by the time a page actually fires, it is already too late to start thinking about how you'll manage the incident. All of the following has to be decided in advance.</div>
+
+    <h3>Training</h3>
+    <p>Full-blown ICS may be more machinery than a smaller team genuinely needs — the chapter suggests picking the specific pieces that matter most: making clear that on-callers are empowered to delegate and escalate, encouraging a mitigation-first mindset, and defining the IC/CL/OL roles concretely. People absorb this far better through hands-on exercises tied to real past incidents than through abstract theory alone — walking through what actually went well and poorly in a genuine past incident lands harder than a slide deck of principles in the abstract.</p>
+
+    <h3>Prepare beforehand — four concrete steps</h3>
+    <ul>
+      <li><strong>Decide on a communication channel in advance</strong> — and actually practice using it, so there's zero decision-making friction about "which tool do we even use" once a real incident is already underway.</li>
+      <li><strong>Keep your audience informed proactively.</strong> Silence gets read as "nothing is being done" — and forgetting to formally announce resolution gets read as "this is still ongoing." Prepare 2-3 ready-to-use communication templates in advance (with PR/legal sign-off where relevant, as Google does) so nobody has to draft a public-facing announcement from scratch under acute stress.</li>
+      <li><strong>Prepare a contact list ahead of time.</strong> GKE's "all hands on deck" email worked specifically because the relevant mailing lists already existed and were ready to use — not improvised mid-incident.</li>
+      <li><strong>Establish clear criteria for what actually counts as "an incident."</strong> Build this list by examining your own team's past outages and known high-risk areas — removing the ambiguity that let the Google Home case study drag on undeclared for days.</li>
+    </ul>
+
+    <h3>Drills</h3>
+    <p>Google's company-wide <strong>Disaster Recovery Testing (DiRT)</strong> deliberately creates controlled emergencies with zero real customer impact, which teams then respond to exactly as if they were genuine — followed by a real debrief. Making DiRT actually work required specific cultural buy-in: genuinely accepting failure as a legitimate learning mechanism, valuing the gaps a drill surfaces rather than treating them as embarrassments, and securing real leadership sponsorship for the whole program. On a smaller scale, "Wheel of Misfortune" role-play (Chapter 28 of the original SRE book) serves the same purpose at lower cost and effort.</p>
+    <p>A genuinely simple, low-cost alternative the chapter suggests directly: deliberately treat a genuinely minor issue as if it required a full-scale response, purely for the practice — using real tools against a real (if low-stakes) situation. Drills matter for <em>everyone</em> who could conceivably get pulled into a real incident — SREs, developers, customer support, even marketing — not just the core on-call rotation. And a drill's real value comes from the debrief afterward: a clear-eyed report of what worked, what didn't, and what to do differently is what actually converts a fun exercise into closed capability gaps.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>The 3 Cs: Coordinate, Communicate, Control</td><td>Nearly every incident-response failure traces back to a breakdown in one of these three</td></tr>
+      <tr><td>Declare incidents early — even without a formal declaration ritual</td><td>Google Home's undeclared, ad hoc response repeatedly sent the team down wrong paths for days</td></tr>
+      <tr><td>Generic mitigations beat waiting for full root cause</td><td>GKE's outage could have ended ~2 hours sooner by rolling back once the *location* of the problem was known</td></tr>
+      <tr><td>Mitigate first, root-cause after</td><td>The stated priority order: assess impact → mitigate → root-cause → fix and postmortem, in that order</td></tr>
+      <tr><td>Assign IC to whoever has the clearest visibility into real impact</td><td>Persistent Disk SRE kept IC in the Belgium incident specifically because they saw customer impact most directly</td></tr>
+      <tr><td>Rotate people during long incidents</td><td>PagerDuty's 4-hour IC/on-call rotation during an 8-hour incident kept both rest and fresh ideas flowing</td></tr>
+      <tr><td>Prepare comms templates, contact lists, and channels in advance</td><td>Removes decision friction and drafting stress from the middle of an actual live incident</td></tr>
+      <tr><td>Drills only pay off with a genuine, honest debrief afterward</td><td>The exercise itself teaches less than the structured review of what it revealed</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 9, CC BY-NC-ND 4.0 · sre.google/workbook/incident-response</footer>
+</div>
+</body>
+</html>

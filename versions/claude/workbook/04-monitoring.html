@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.4 — Monitoring</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/04-monitoring.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part I — Foundations</div>
+    <h1 class="title">Chapter 4: Monitoring</h1>
+    <p class="subtitle">Logs vs. metrics isn't a choice — it's a tradeoff. Three real case studies, and how to design a metric that actually earns its place on a dashboard.</p>
+    <div class="source-note">📖 Based on <em>Chapter 4</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/monitoring/" target="_blank">sre.google/workbook/monitoring</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="03-slo-engineering-case-studies.html">← Ch.3 SLO Engineering Case Studies</a><a href="05-alerting-on-slos.html">next: Ch.5 Alerting on SLOs →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the five jobs</div>
+    <h2>What monitoring is actually for</h2>
+    <p>The original SRE book named the same five jobs monitoring exists to do — this chapter takes each one seriously as a genuine, distinct design constraint, not just a list: alert on conditions needing attention, help investigate and diagnose issues, visually display system state, surface long-term trends for planning, and let you compare behavior before/after a change or between experimental groups. Different systems weight these five differently — which is exactly why "which monitoring system should I use" doesn't have one universal answer.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">choosing a system</div>
+    <h2>Four features worth weighing deliberately</h2>
+
+    <h3>Speed</h3>
+    <p>Data freshness directly determines how fast you can be paged — and stale data has a subtler danger too: during active incident response, if too much time passes between taking an action and seeing its effect reflected in monitoring, you can wrongly conclude a fix did nothing, or infer a false correlation between unrelated events. The chapter's rough rule of thumb: data more than 4-5 minutes stale can meaningfully hurt incident response speed. Separately, <em>query</em> speed matters too — a monitoring system that precomputes derived time series from incoming data, rather than tallying raw data fresh on every query, keeps dashboards responsive even under heavy historical queries.</p>
+
+    <h3>Calculations</h3>
+    <p>At minimum, retain data across multiple months — without that horizon, you can't see genuine long-term trends like organic growth. Aggregated summary data is usually enough for capacity planning, but keeping full granular detail helps answer questions like "has this exact anomaly happened before" — at real storage and retrieval cost. The chapter reinforces a strong preference for <strong>monotonically incrementing counters</strong> over raw gauges (echoing Chapter 10 of the original SRE book) — counters let you compute clean windowed rates, including the longer windows (up to a month) that SLO burn-rate alerting depends on. And percentiles genuinely matter over averages: a system that can compute p50/p95/p99 directly tells you whether 50%, 5%, or 1% of requests are slow — an arithmetic mean can only tell you "somewhat slower," with zero information about how the slowness is actually distributed.</p>
+
+    <h3>Interfaces</h3>
+    <p>Different audiences genuinely need different views of the same underlying data — an executive dashboard and an SRE's debugging dashboard shouldn't look identical, but should stay internally consistent in how they present comparable data so nobody has to re-learn a new visual language for every service. Real-time ad hoc drill-down — slicing by machine type, server version, request type on demand — is what actually lets you spot correlations while they're still fresh and relevant, not after the fact.</p>
+
+    <h3>Alerts</h3>
+    <p>Multiple severity levels enable genuinely proportional response — a low error rate sustained for an hour might just warrant a ticket, while a 100% error rate is an immediate page. <strong>Suppression</strong> is explicitly called out as essential, not optional: if every node hits the same global error spike simultaneously, you want <em>one</em> alert for the aggregate condition, not one per node flooding the channel; and if a known dependency is already alerting, your own service's downstream symptom shouldn't independently re-alert on top of it. Just as important: suppressed alerts need to reliably un-suppress once the underlying event actually clears, or you risk silently missing a genuine new problem hiding behind stale suppression state.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">logs vs. metrics</div>
+    <h2>Two genuinely different data sources, each with a real, distinct role</h2>
+    <table class="recap">
+      <tr><th></th><th>Logs</th><th>Metrics</th></tr>
+      <tr><td>Granularity</td><td>Highly detailed, per-event</td><td>Aggregated, coarser</td></tr>
+      <tr><td>Freshness</td><td>Inherent delay between event and visibility</td><td>Near real-time</td></tr>
+      <tr><td>Best for</td><td>Root-cause investigation, ad hoc queries, detailed batch reports</td><td>Alerting and dashboards — fast notification when something's wrong</td></tr>
+      <tr><td>Typical stack</td><td>Batch processing (e.g. Cloud Dataflow), ad hoc query (BigQuery), reporting (Data Studio)</td><td>Purpose-built real-time monitoring system</td></tr>
+    </table>
+    <div class="callout"><b>The chapter's clear default guidance:</b> use metrics for alerting and dashboards — their real-time nature means engineers get notified fast — and use logs to actually find root cause once you're already investigating, since the fine-grained detail you need for that usually isn't (and often shouldn't be) captured as a metric. Resist the temptation to build one-off, ad hoc log-based alerts for rare exceptional events — instead, increment a counter metric when the event happens and alert on that counter. This keeps every alert definition in one consistent, centrally manageable place instead of scattering alert logic across two different systems.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">three case studies</div>
+    <h2>Real decisions about where data should actually live</h2>
+
+    <h3>1. Moving information from logs to metrics — App Engine's HTTP status codes</h3>
+    <p>HTTP status codes mattered enormously to App Engine customers debugging their own errors, but only existed in logs — the metrics dashboard showed just one global blended error rate, with no breakdown by actual cause. Debugging meant manually eyeballing a graph for an anomaly, then grepping raw log files hoping to correlate a specific error line back to that spike — slow, and genuinely hard to tell if any single logged error was rare or systemic.</p>
+    <p><strong>Fix:</strong> export the HTTP status code as a metric <em>label</em> — <code>requests_total{status=404}</code> vs. <code>requests_total{status=500}</code>. Since the space of realistic status codes is small and bounded, this didn't blow up metric cardinality into something impractical. <strong>Outcome:</strong> graphs could now show separate lines per error category, customers could form real hypotheses directly from the exposed codes, and the team could set genuinely different, more accurate alert thresholds for client-caused (4xx) versus server-caused (5xx) errors instead of one blended threshold covering both.</p>
+
+    <h3>2. Improving both logs and metrics together — an Ads SRE team's brittle scripts</h3>
+    <p>A team running ~50 services across multiple languages used logs as the canonical SLO-compliance source — but each service needed its own hand-maintained, highly specific processing script to decide what actually counted as an error:</p>
+    <div class="math">
+      IF status in (500,599) AND 'SERVER ERROR' field populated<br>
+      AND no DEBUG cookie AND URL doesn't contain '/reports'<br>
+      AND exception != 'com.google.ads.PasswordException'<br>
+      THEN increment error counter
+    </div>
+    <p>These scripts were brittle and hard to maintain, and — worse — used data the metrics-based alerting system had no access to, so alerts frequently fired without actually corresponding to real user-facing errors, forcing an explicit manual triage step on <em>every single alert</em> before anyone could act on it.</p>
+    <p><strong>Fix:</strong> build a shared library, hooked directly into each application framework's own request-handling logic, that decides <em>at request time</em> whether an error is genuinely user-impacting — then writes that same decision simultaneously to both logs (with full context for debugging) and metrics (for alerting), guaranteeing the two stay consistent by construction rather than by separately-maintained parallel logic. <strong>Outcome:</strong> a uniform control surface reused across all ~50 services eliminated the custom per-service log-processing code entirely, and — because alerts were now directly tied to real SLO impact — false positives dropped sharply, since "the alert fired" and "a user was actually affected" became the same statement by design.</p>
+
+    <h3>3. Keeping logs as the data source — when a metric genuinely doesn't fit</h3>
+    <p>An SRE team investigating incidents routinely needed to look up specific affected entity IDs to assess user impact and find root cause — but unlike the App Engine status-code case, entity IDs could take on <em>millions</em> of distinct values, making them fundamentally impractical as a metric label (cardinality explosion). Each incident required assembling a one-off log query live, under time pressure, adding real minutes to every incident response.</p>
+    <p><strong>Fix:</strong> rather than force a metric where one genuinely didn't belong, the team wrote a reusable script for the recurring log query and documented exactly which script to run directly inside the alert email itself — ready to paste into a terminal the moment an alert fires. <strong>Outcome:</strong> the cognitive overhead of constructing the right query from scratch under pressure disappeared, results came back faster (though still not as instantly as a true metrics-based lookup), and the approach left room to later automate the query to run immediately on every alert, or poll on a regular interval for semi-fresh results in between.</p>
+    <div class="callout"><b>The throughline across all three:</b> the right answer isn't "always prefer metrics" or "always prefer logs" — it's asking honestly whether the data in question can be practically bounded as a metric label at all, and whether alerting speed or investigative depth matters more for that specific piece of information.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">running it well</div>
+    <h2>Managing your monitoring system like the production service it is</h2>
+    <ul>
+      <li><strong>Treat configuration as code.</strong> Store monitoring config in version control for the same reasons you'd version anything else — change history, linked task-tracking references, easy rollback, lint checks, and enforced code review. Prefer intent-based configuration (a config file the system reads) over a pure web UI or CRUD API, since the former is what actually plays nicely with version control in the first place.</li>
+      <li><strong>Encourage consistency across teams — but don't force it rigidly.</strong> Google's own evolution converged on a single, centrally-run monitoring framework specifically because it means engineers ramp up faster switching teams, and cross-team debugging gets easier when everyone's dashboards share a common shape and are centrally discoverable. If every service exports a common baseline of metrics automatically (via a shared instrumentation library), every new component gets basic monitoring coverage for free, with zero extra setup effort — usable even by non-engineering teams.</li>
+      <li><strong>Prefer loose coupling between components.</strong> Collection, storage, alerting, and visualization should ideally be separable, swappable pieces behind stable interfaces — not one tightly fused monolith. The chapter's own concrete example: when Google migrated from Borgmon to Monarch, dashboarding was deliberately pulled out into its own separate service (Viceroy, from Ch.31 of the original SRE book) — decoupling it meant Monarch itself needed fewer functional requirements, and users could view graphs sourced from *both* the old and new monitoring systems simultaneously, enabling a genuinely gradual migration instead of a risky flag-day cutover.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">metrics with purpose</div>
+    <h2>Beyond your SLI dashboard: what actually helps you diagnose "why"</h2>
+    <p>SLI metrics tell you <em>that</em> you're violating an SLO — they rarely tell you <em>why</em>. The chapter recommends four specific categories of supplementary metric, each aimed at closing that gap fast during a real incident:</p>
+    <ul>
+      <li><strong>Intended changes.</strong> Track binary version, active command-line flags (especially any used as feature toggles), and dynamic config version — or at minimum a last-built/packaged timestamp if nothing is cleanly versioned. Being able to glance at a graph and immediately correlate an outage with a specific rollout beats manually trawling CI/CD logs after the fact.</li>
+      <li><strong>Dependencies.</strong> Export request/response size, latency, and response code for every direct dependency — mapped onto the Four Golden Signals, broken down further by response code, RPC method, and peer job name. Ideally instrument this once, in the shared RPC client library itself, so every dependency gets this coverage automatically rather than requiring every team to remember to add it manually. A specific, tricky case worth naming: dependencies exposing one single generic RPC (a bare "Get" or "Query") for many different real operations hide their true signal behind that one opaque interface — you'll see aggregate latency variance and error rates with no way to tell which underlying operation is actually failing, unless you either export more granular metrics that unpack the request payload, or push the dependency's own owners to expose a properly split-out API.</li>
+      <li><strong>Saturation.</strong> Track every resource the service depends on — hard-limited ones (RAM, disk, CPU quota) and softer ones without a clean ceiling (open file descriptors, active thread-pool threads, queue wait time, log volume) alike. Language-specific additions matter too: JVM heap and metaspace size (plus GC-specific metrics depending on collector), goroutine count in Go. Alert not just on hard breach, but on approaching a threshold where performance measurably starts to degrade before outright failure — and track every resource for capacity planning purposes even when it's currently well-managed and boring.</li>
+      <li><strong>Status of served traffic.</strong> Break traffic down by response code even when most codes don't individually justify their own alert — some are triggered purely by client misbehavior, and having the full breakdown available is what lets you actually distinguish "clients are sending bad requests" from "we're the ones failing." If you enforce rate limits or quotas, separately track how many requests were denied for exceeding them.</li>
+    </ul>
+    <div class="fails"><b>Every exported metric should serve a genuine, specific purpose.</b> Don't export something just because it happens to be easy to generate. A good alerting metric should move dramatically only when the system is genuinely unhealthy, and stay flat during normal operation — noisy metrics that wobble under perfectly normal conditions make poor alert material. Debugging metrics, by contrast, don't need that same discipline — their whole job is illuminating <em>what's</em> happening once an alert has already fired, which is a fundamentally different design goal from the alerting metric that triggered the page in the first place.</div>
+    <p>A genuinely useful postmortem habit the chapter suggests directly: after any real incident, explicitly ask "which additional metric, had it existed, would have let us diagnose this faster?" — turning every incident into a concrete, prioritized backlog item for monitoring coverage, rather than a one-off lesson that fades from memory.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">testing monitoring</div>
+    <h2>Monitoring code deserves the same rigor as application code</h2>
+    <p>Monitoring and alerting logic should ideally face the same testing discipline as any other code — but the chapter is candid that broadly-adopted tooling for this is still immature industry-wide. Google's own internal approach: a domain-specific language for generating synthetic time series, paired with assertions checked against the resulting derived time series or against a specific alert's firing status and label values.</p>
+    <p>Because monitoring is genuinely a multi-stage pipeline, the chapter recommends testing at three separate tiers, each catching a different class of failure:</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 170" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="170" fill="#FBF8EF"/>
+        <g font-size="12">
+          <rect x="20" y="30" width="200" height="90" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="120" y="55" text-anchor="middle" font-weight="bold" font-size="12">1. Binary reporting</text>
+          <text x="120" y="78" text-anchor="middle" font-size="10.5">does the exported metric</text>
+          <text x="120" y="94" text-anchor="middle" font-size="10.5">actually change as expected?</text>
+
+          <rect x="240" y="30" width="200" height="90" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="340" y="55" text-anchor="middle" font-weight="bold" font-size="12">2. Monitoring config</text>
+          <text x="340" y="78" text-anchor="middle" font-size="10.5">does rule evaluation produce</text>
+          <text x="340" y="94" text-anchor="middle" font-size="10.5">the expected result/alert?</text>
+
+          <rect x="460" y="30" width="200" height="90" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="560" y="55" text-anchor="middle" font-weight="bold" font-size="12">3. Alerting config</text>
+          <text x="560" y="78" text-anchor="middle" font-size="10.5">does the alert route to the</text>
+          <text x="560" y="94" text-anchor="middle" font-size="10.5">right destination by label?</text>
+        </g>
+      </svg>
+      <div class="diagram-caption">sketch — the three testing tiers for a monitoring pipeline (original diagram)</div>
+    </div>
+    <p>Where synthetic testing genuinely isn't feasible for some stage, the chapter's fallback is refreshingly concrete: stand up a small running system that exports simple, well-known metrics (request count, error count) purely to validate that your derived time series and alert rules behave as expected against real, if synthetic, traffic. This matters because alerting rules routinely sit untouched and unfired for months or years after being configured — you genuinely need real confidence that when a threshold is finally crossed for real, the right engineer gets a notification that actually makes sense to them, not a guess made once at config time and never verified since.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Metrics for alerting, logs for root cause</td><td>Real-time speed vs. investigative granularity — pick based on which job you're actually doing</td></tr>
+      <tr><td>Counter metrics + percentiles over gauges + averages</td><td>Enables clean windowed rate calculations and reveals the tail an average would hide</td></tr>
+      <tr><td>Alert suppression must also un-suppress reliably</td><td>Missing this risks silently hiding a genuinely new problem behind stale suppression state</td></tr>
+      <tr><td>Cardinality is the real constraint on "make it a metric label"</td><td>HTTP status codes worked as labels; millions-of-values entity IDs didn't — logs stayed the right tool there</td></tr>
+      <tr><td>Instrument once, at the shared client library</td><td>Every dependency gets consistent monitoring automatically, instead of each team remembering to add it</td></tr>
+      <tr><td>Every exported metric needs a real purpose</td><td>Alerting metrics should be flat-normally/sharp-when-broken; debugging metrics exist purely to illuminate cause</td></tr>
+      <tr><td>Test monitoring in three tiers</td><td>Binary reporting → rule evaluation → alert routing, since each layer can independently fail silently</td></tr>
+      <tr><td>Loosely couple collection, storage, alerting, and dashboards</td><td>Enabled Google's gradual Borgmon→Monarch migration without a risky flag-day cutover</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 4, CC BY-NC-ND 4.0 · sre.google/workbook/monitoring</footer>
+</div>
+</body>
+</html>

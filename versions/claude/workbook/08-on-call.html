@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.8 — On-Call</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/08-on-call.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part II — Practices (opens here)</div>
+    <h1 class="title">Chapter 8: On-Call</h1>
+    <p class="subtitle">A brand-new SRE team on-call in three months, Evernote's cloud migration, and the anatomy of pager load — bugs, alerting, and human process, taken apart piece by piece.</p>
+    <div class="source-note">📖 Based on <em>Chapter 8</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/on-call/" target="_blank">sre.google/workbook/on-call</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="07-simplicity.html">← Ch.7 Simplicity</a><a href="09-incident-response.html">next: Ch.9 Incident Response →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the premise</div>
+    <h2>Answering the questions the first book left open</h2>
+    <p>This chapter exists specifically to address real reader pushback on Chapter 11 of the original SRE book: "we're not Google-sized," "our rotation mixes developers and DevOps — how do we split responsibilities," "our on-call gets paged a hundred times a shift and real problems get buried," "we have high on-call turnover — how do we close the knowledge gap," "what's actually different between SRE on-call, DevOps on-call, and developer on-call?" The chapter's answer is grounded in two real, detailed case studies plus a genuinely deep dive into what actually drives pager load.</p>
+    <p>The original book's core principles are restated as groundwork: balance on-call against real project time (at least 50%); target a maximum of <strong>two incidents per 12-hour shift</strong> to leave room for real follow-up; treat psychological safety as essential, not optional, given how stressful on-call inherently is; and compensate out-of-hours work, capped at some proportion of salary, so people aren't economically incentivized to overload themselves with shifts.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 1</div>
+    <h2>Google: standing up a brand-new SRE team, on-call in three months</h2>
+    <p>A new Mountain View SRE team had to be on-call within three months for three Google Apps services — dramatically faster than the usual 3–9 month ramp Google teams expect for new hires. Seven people: a tech lead, one experienced SRE, one developer-to-SRE transfer, and four brand-new hires ("Nooglers"). Despite genuine junior-heaviness, the team onboarded successfully without sacrificing quality or velocity — cutting machine costs 40% and fully automating release rollouts with canarying, while holding a 99.98% availability target (~26 minutes downtime per quarter).</p>
+
+    <h3>How they actually got there</h3>
+    <ul>
+      <li><strong>A concrete training checklist</strong> — roughly two dozen focus areas (administering production jobs, draining a cluster, rolling back a bad push, rate-limiting unwanted traffic, using monitoring dashboards, describing the architecture and dependencies) built by the two experienced members, filled in partly through independent research and partly through team members' own starter projects.</li>
+      <li><strong>Peer teaching as it happened</strong> — whenever someone learned something relevant to their starter project, they ran a short, impromptu session sharing it with the rest of the team, rather than waiting for a formal training calendar.</li>
+      <li><strong>Hands-on "deep dives"</strong> — browsing real monitoring consoles, identifying live running jobs, debugging actual recent pages together, deliberately building muscle memory rather than staying purely theoretical.</li>
+      <li><strong>Leaning on the wider org</strong> — traveling to meet sister SRE teams and product developers directly, joining weekly production meetings, reading daily on-call handoffs and postmortems, hosting a visiting SRE from the Kirkland team, and running a full disaster-scenario exercise designed by the London team during Google's company-wide DiRT week.</li>
+      <li><strong>Wheel of Misfortune role-play</strong> (Chapter 28 of the original SRE book) — even <em>after</em> everyone had ramped up, the team kept running these regularly, rotating who leads each session and recording them for future reference.</li>
+      <li><strong>A precise handoff contract</strong> — read the previous shift's handoff at shift start; minimize user impact first, full resolution second; send a written handoff to the next engineer at shift end — plus clear escalation guidance and postmortem expectations for larger incidents.</li>
+    </ul>
+    <p>The team graduated gradually: shadowing the outgoing Kirkland team at two months, becoming primary on-call with Kirkland as backup at three months (so escalation stayed easy if needed), with Nooglers themselves shadowing more experienced local SREs before finally joining the rotation. When their sister London team later moved to a new project and a brand-new Zürich team formed to take over, the Mountain View team's own onboarding materials made that <em>second</em> transition markedly faster — with the team further formalizing their training checklist into semi-independent exercises specifically anticipating future one-at-a-time turnover, rather than another full cohort onboarding at once.</p>
+
+    <h3>Maintaining playbooks — a genuinely contested, unresolved tension</h3>
+    <p>The chapter is candid this is a real point of disagreement even within Google: some SREs prefer <strong>general</strong> playbook entries (one shared entry for all "RPC Errors High" alerts, paired with an architecture diagram, trusting a well-trained on-call engineer to apply judgment) because they stay accurate longer; others prefer <strong>step-by-step</strong> playbooks specifically to reduce variance between different on-callers' responses and drive down MTTR. If your team can't agree on anything else, the chapter's fallback advice is to at least agree on the minimum structured content every playbook entry must include — and to notice when a playbook has accumulated far more detail than that minimum, which is usually the signal that hard-won knowledge should be turned into actual automation or a monitoring console instead of more prose.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 2</div>
+    <h2>Evernote: on-call after a 70-day cloud migration</h2>
+    <p>Evernote's on-prem infrastructure was built around a monolithic application with a fixed architecture and data flow — genuinely incompatible with the horizontal scaling they needed. Migrating to GCP (thousands of servers, 3.5 PB of data, completed in 70 days) solved the infrastructure problem — but immediately raised a new one: how do you monitor, alert, and respond in a fundamentally new environment?</p>
+    <p>Their old on-prem alerting philosophy assumed heavy built-in redundancy and a stable, fully-controlled environment — so even a small anomaly (a few dropped packets, say) reliably meant something specific and locatable was actually failing. That assumption broke immediately in the cloud, where live migrations and variable network latency are simply normal background conditions, not signals of failure. <strong>Reframing paging criteria around explicit SLOs</strong> — focusing on high-level indicators like API responsiveness rather than low-level infrastructure metrics like MySQL InnoDB row-lock waits — let the team trim a huge amount of noise and stop chasing transient, meaningless blips. The direct payoff: more sleep, more effectiveness, and genuinely higher job satisfaction for the on-call team.</p>
+
+    <h3>A simple, effective three-tier severity model</h3>
+    <table class="recap">
+      <tr><th>Tier</th><th>Meaning</th><th>Response</th></tr>
+      <tr><td>P1</td><td>Immediately actionable, SLO-impacting</td><td>Pages on-call, triggers full triage</td></tr>
+      <tr><td>P2</td><td>Not customer-facing, or very limited scope</td><td>Email + event-stream notification — handled next business day</td></tr>
+      <tr><td>P3</td><td>Purely informational</td><td>Dashboards, passive email — includes capacity-planning signal</td></tr>
+    </table>
+    <p>Every P1/P2 event automatically gets an incident ticket, tracking triage, remediation, SLO impact, occurrence count, and any postmortem link. Severity-1 incidents follow a deliberately narrow, finite escalation checklist to make the "should I escalate this" call as unambiguous as possible under pressure — assembling a full incident team (incident manager, scribe, comms lead) and triggering an automatic postmortem shared broadly across the company once resolved. Lower-severity incidents stay with the original on-call responder, with a lighter abbreviated postmortem.</p>
+    <div class="callout"><b>Keeping the process genuinely lightweight paid off directly:</b> on-call is explicitly freed from any expectation of project work during a shift, which empowers immediate follow-up action and honest identification of tooling/process gaps right after an incident — creating a real, continuous improvement loop where every shift is meant to be measurably better than the last.</div>
+    <p>Evernote also engaged Google's Customer Reliability Engineering (CRE) team directly, agreeing that CRE gets paged alongside Evernote's own engineers for any SLO-impacting event — genuinely useful for cutting through cloud-abstraction opacity when root-causing something, and a further, real reduction in MTTR. With less time spent purely in triage/root-cause/postmortem cycles, the team found real bandwidth to invest in forward-looking work — improving their microservices platform, and defining production-readiness criteria for other product teams, directly propagating the same on-call lessons company-wide.</p>
+  </section>
+
+  <section card class="card">
+    <div class="tab">pager load</div>
+    <h2>Anatomy of pager load: bugs, alerting, human process</h2>
+    <p>Pager load is the number of paging incidents an on-call engineer receives per typical shift. The chapter's central, practical insight: before assuming "we just need fewer alerts," check whether your current paging setup is even correctly calibrated — some things being paged on would be better served by automated repair, or downgraded to a non-urgent ticket entirely. The chapter's own worked table of realistic response expectations makes the point concretely: a revenue-impacting network outage genuinely needs a 5-minute response, with the on-call engineer never more than arm's reach from a charged, network-connected laptop; a stuck batch job can reasonably wait 30 minutes, letting someone step out briefly; a pre-launch service's failing backup can just become a next-business-day ticket, with zero on-call impact at all.</p>
+
+    <h3>Scenario: the Connection team's overload</h3>
+    <p>A hypothetical (but representative) frontend-load-balancing SRE team had an agreed pager budget of 2 incidents/shift, but had been running at 5/shift for a full year — a third of all shifts blowing the budget. Engineers were heroically absorbing the load but couldn't keep up; people left for less operationally burdened teams; real root-cause follow-up became rare since on-callers only had time to mitigate, never actually fix. Crucially, their monitoring was already genuinely good — SLO-aligned thresholds, symptom-based paging that fired only on real customer impact — so the problem wasn't sloppy alerting configuration. It was structural: the team had absorbed ownership from 10+ developer teams, held hard dependencies on Google's customer-facing edge/backbone networks entirely outside their own control, and was simultaneously shipping new frontend features <em>and</em> migrating off a decade-old legacy framework — an unusually high rate of change was itself a direct, ongoing driver of pages.</p>
+
+    <h3>Three input categories, broken down</h3>
+    <table class="recap">
+      <tr><th>Category</th><th>What drives it</th></tr>
+      <tr><td>Production ("bugs")</td><td>Existing bug count, new bugs introduced, speed of identifying them, speed of mitigating/removing them</td></tr>
+      <tr><td>Alerting</td><td>Threshold tuning, new alerts being introduced, how well a service's SLO actually aligns with its dependencies' SLOs</td></tr>
+      <tr><td>Human process</td><td>How rigorously bugs get followed up, quality of data collected about pages, attention paid to pager-load trends over time, human-driven production changes</td></tr>
+    </table>
+
+    <h3>Preexisting and new bugs</h3>
+    <p>No system is bug-free — some concrete mitigations: keep systems only as complex as they genuinely need to be (a direct callback to Chapter 7); regularly update dependencies for known fixes; run destructive testing/fuzzing (Chaos Monkey-style); and don't neglect load testing alongside functional testing, since many bugs only ever manifest under specific load conditions or request mixes. For genuinely <em>new</em> bugs, the chapter's sharpest recommendation is procedural: prefer <strong>"detect, roll back, fix, roll forward"</strong> over "detect, keep rolling forward anyway, fix, roll forward again" — a strategy that only works if releases are frequent and small enough that any single rollback is cheap (a direct link back to Chapter 8 of the original SRE book on release engineering).</p>
+    <div class="math">
+      99.99% SLO → ~15 minutes of quarterly error budget<br>
+      A code rebuild-and-redeploy can easily exceed that on its own<br>
+      → rolling BACK, not forward, is almost always the faster, cheaper path
+    </div>
+    <p>The Connection team's own concrete data-driven fix: requiring a tracking bug for every outage revealed human error as the <em>second</em> most common root cause of new bugs — which directly justified prioritizing automation of previously semi-manual production changes, since automated changes get pre-validated against safety checks a rushed human under pressure simply won't reliably apply.</p>
+
+    <h3>Identification delay and mitigation delay</h3>
+    <p>The longer a bug's root cause takes to identify, the more chances it has to recur and re-page — concrete fixes: alerts and dashboards that correlate black-box and white-box signals together, playbooks kept genuinely current (with the on-call engineer expected to refresh them the moment a page reveals stale info), frequent small releases (making it much easier to correlate a new bug with the specific change that introduced it), a searchable change-log timeline, and — critically — a team culture where asking for help mid-incident carries zero stigma.</p>
+    <p>Once identified, mitigation delay matters just as much: roll back rather than push a "quick fix" forward whenever safe to do so (a quick fix still needs real testing before it ships, which takes real time); design for genuine <strong>feature isolation</strong> so one broken feature can be disabled via a flag without collateral damage to unrelated features; and use staged rollouts specifically so you can <strong>drain</strong> traffic away from just the affected fraction of infrastructure in seconds, rather than waiting minutes-plus for a full rollback to complete.</p>
+
+    <h3>Alerting discipline</h3>
+    <p>The 2-incidents-per-shift ceiling is itself a forcing function encouraging real caution around introducing new paging alerts. Reinforcing the original book's guidance directly: every alert should be immediately actionable by a human (if the system itself could act, it shouldn't be paging a human at all); teams that fully commit to SLO/symptom-based alerting should treat "just relax the threshold" as rarely the right response to being paged; and new alerts deserve the same review rigor as new code, each with its own accompanying playbook entry. A specific, practical technique: soft-launch a new alert by emailing its author when it fires, rather than immediately paging on-call — letting the team observe its real trigger rate across a representative week (covering routine rollouts, provider maintenance windows, weekly load peaks) before formally promoting it to a paging alert and explicitly, as a team, approving the pager-budget cost it'll add.</p>
+
+    <h3>Rigor of follow-up</h3>
+    <p>The chapter is emphatic: aim to identify the genuine root cause of <em>every</em> page — and "root cause" can legitimately be a process failure (a missing unit test, a gap in code review), not just a code bug. If you truly can't determine the cause, add the monitoring or logging that would let you catch it definitively next time — "cause unknown" should be a rare conclusion, not a routine one. Explaining a page away as merely "transient," or doing nothing because the system apparently "fixed itself," just invites the identical page to recur and burden the next on-call engineer instead.</p>
+    <div class="callout"><b>The chapter's three-tier framework for turning one page into a systemic fix, illustrated with a shared-failure-domain example:</b> a <em>point fix</em> just rebalances current capacity across more failure domains and stops there; a <em>systemic fix</em> automates that rebalancing permanently, for this server type and all similar ones, going forward; a <em>monitoring/prevention fix</em> proactively alerts (as a ticket, not a page) when failure-domain diversity drops below the safe threshold — before it's actually service-impacting, buying time to fix it calmly rather than reactively. A concrete cost/benefit rule of thumb: if a systemic fix costs 120 engineer-hours and each individual page costs ~4 hours to properly handle, the break-even point is exactly 30 pages — a genuinely simple, persuasive number to bring to a prioritization conversation.</div>
+
+    <h3>Data quality — you can't prioritize what you haven't measured</h3>
+    <p>The chapter's recommended mechanism: file a placeholder bug for every paging alert, and have the on-call engineer link each new page back to the relevant existing bug the moment they recognize it as a recurrence, rather than trying to manually track patterns from memory (which doesn't scale). Once that structured link exists, you can answer genuinely useful prioritization questions — which bug causes the most pages, which system component is the worst offender, whether pages correlate with other signals like traffic peaks. The same structured data doubles as an automatically-populated "known issues" list useful to a support team, and lets bug-fix prioritization be driven by actual page counts rather than gut feeling. Explicit team norms matter here too — small habits like teammates cross-referencing a new page against a similar one from last week's shift ("this looks like what happened on my shift last Wednesday — <link>") reinforce good data hygiene far more effectively than a policy document alone.</p>
+
+    <h3>Vigilance — avoiding "boiling the frog"</h3>
+    <p>Operational overload rarely arrives as one dramatic event — it usually creeps in through a thousand small cuts. The chapter's concrete countermeasures: regularly discuss pager-load trends in production meetings, using something like a rolling 21-day trailing average rather than a single noisy day or week; set an agreed warning-threshold ticket alert (routed to tech leads/managers specifically) for when pager load starts trending upward; and hold regular joint SRE/developer meetings specifically to review outstanding production bugs that are actively generating pages.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">flexibility</div>
+    <h2>Building on-call schedules that survive real human lives</h2>
+
+    <h3>Shift length</h3>
+    <p>The chapter's clear recommendation: cap shifts at <strong>12 hours</strong>. Exhaustion breeds mistakes, and 24-hour-plus continuous on-call simply isn't sustainable for most people — many countries also have hard legal limits on working hours anyway. A single-location team doesn't need to be globally distributed to make 12-hour shifts work — splitting a week between two engineers (one covering days, one covering nights) beats asking one person to carry a pager continuously for a full week straight. Shorter rotation cycles (3 days on, 4 off, for instance) are a legitimate alternative to a full week-long shift.</p>
+
+    <h3>Automated scheduling</h3>
+    <p>As a team grows, manually juggling vacation plans, weekday/weekend distribution, personal preferences, and religious observances by hand becomes genuinely unmanageable — and "fair" doesn't mean a mechanically uniform split; it means intelligently accommodating genuinely different needs and preferences across a diverse team. A good scheduling tool should: rearrange shifts to accommodate changing needs, automatically rebalance load after any change, factor in both explicit preferences ("no primary during weekends in April") and recent historical load per person, and — critically — <strong>never silently alter an already-published schedule</strong>, so people can actually plan their lives around it with confidence.</p>
+
+    <h3>Short-term swaps and long-term breaks</h3>
+    <p>Illness, urgent errands, or simply wanting to attend an evening event are all completely normal reasons to swap part of a shift — the chapter recommends giving team members direct ability to update the rotation themselves, backed by a documented swap policy, with peer review of changes as a reasonable middle ground between full centralization (only a manager can change anything) and full decentralization (anyone can change anything unilaterally). Teams with a strict response SLO (say, 5 minutes) also need to explicitly account for commute time — if getting to a laptop takes 30 minutes, someone else genuinely needs coverage during that gap.</p>
+    <p>For longer breaks (parental leave, burnout recovery, any major life change), team size itself needs real slack built in — the chapter's concrete minimums: <strong>5 people per site</strong> for a multisite 24/7 rotation, <strong>8 people</strong> for a single-site 24/7 rotation — with one additional person per site recommended specifically as a buffer against exactly this kind of temporary staff reduction, bringing realistic minimums to 6 (multisite) and 9 (single-site).</p>
+
+    <h3>Part-time schedules</h3>
+    <p>Genuinely compatible with on-call, with the right adjustments. For someone working fewer full days per week, simply exclude their non-working days from the rotation's scheduling entirely. For someone working shorter hours each day, two real options: split a shift across two people (each covering only their own actual working hours), or have the part-time engineer work full hours specifically on days they're scheduled to be on-call — workable if on-call shifts for them aren't too frequent. Either way, on-call compensation and load should scale proportionally with actual hours worked — a smaller team absorbs this adjustment with more relative strain than a larger one, which is itself a reason to keep team sizes above the bare survivable minimum.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">team dynamics</div>
+    <h2>Logistics alone don't fix a broken on-call culture</h2>
+
+    <h3>Scenario: "survive the week" culture</h3>
+    <p>A growing company's on-call rotation eventually mixes 25 feature developers and 5 dedicated "ops" engineers — but feature developers retain final say over their own subsystems, leaving ops with limited real authority. High pager volume follows, and morale sinks — feature developers prioritize new features over on-call follow-up, one developer insists on alerting by raw error <em>rate</em> rather than error <em>ratio</em> for their module despite team pushback (producing noisy, unactionable false positives), and other on-callers develop a coping habit of simply recognizing and silently dismissing familiar-looking duplicate pages rather than actually addressing the underlying issue.</p>
+
+    <h3>Two structural interventions that actually helped</h3>
+    <ul>
+      <li><strong>Genuinely empower the ops/SRE role — not just relabel it.</strong> A name change to "SRE" alone accomplishes nothing without real, communicated ownership: SREs own site operations outright, including a shared reliability roadmap, driving issues to full resolution, and owning the monitoring rules themselves — feature developers remain necessary collaborators, but no longer hold unilateral veto power over decisions like the noisy alerting example above. Encouraging SREs to dive directly into code themselves (sending changes out for review by subject-matter experts, rather than only filing requests and waiting) builds genuine ownership and upgrades their skills and standing for future situations.</li>
+      <li><strong>Deliberately strengthen team relationships.</strong> Google specifically designates a "fun budget" for offsite team-bonding activities. The underlying logic: stronger relationships translate directly into people actually caring about not inconveniencing each other — the chapter's own small, relatable example is forgetting to disable a monitoring check when retiring a pipeline, accidentally paging a colleague at 3am; a real relationship with that colleague makes you genuinely more careful next time, in a way a policy document alone can't replicate. Something as simple as seating the whole on-call rotation together, regardless of job title, and encouraging shared lunches, measurably improves team dynamics.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Match response time to actual urgency</td><td>Not every page needs a 5-minute response — some belong as tickets, or shouldn't page at all</td></tr>
+      <tr><td>Reframe alerting around SLOs, not raw infra metrics</td><td>Evernote's cloud migration only became sustainable once alerts tracked user-facing impact, not low-level noise</td></tr>
+      <tr><td>Prefer "roll back, fix, roll forward" over pushing through</td><td>A rebuild-and-redeploy can easily exceed an entire quarter's error budget for tight SLOs</td></tr>
+      <tr><td>Point fix vs. systemic fix vs. monitoring fix</td><td>A single page is an opportunity to prevent an entire class of future pages, not just resolve today's instance</td></tr>
+      <tr><td>Link every page to a tracked bug</td><td>Structured data is what actually enables prioritizing the worst offenders instead of guessing</td></tr>
+      <tr><td>Cap shifts at 12 hours</td><td>Exhaustion breeds mistakes — even single-site teams should split day/night rather than run 24-hour shifts</td></tr>
+      <tr><td>Automated scheduling must never silently alter a published schedule</td><td>People need to genuinely plan their lives around a rotation they can trust to stay fixed</td></tr>
+      <tr><td>Empower the ops/SRE role for real, don't just rename it</td><td>A title change without real ownership and authority won't fix the underlying structural conflict</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 8, CC BY-NC-ND 4.0 · sre.google/workbook/on-call</footer>
+</div>
+</body>
+</html>

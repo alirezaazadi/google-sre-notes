@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.2 — The Production Environment</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/02-the-production-environment-at-google-from-the-viewpoint-of-an-sre.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part I — Introduction</div>
+    <h1 class="title">Chapter 2: The Production Environment at Google</h1>
+    <p class="subtitle">A vocabulary chapter in disguise — meet Borg, Colossus, Chubby, Stubby, GSLB, and the layers that turn a warehouse of machines into "the cloud."</p>
+    <div class="source-note">📖 Based on <em>Chapter 2</em> of Google's SRE book — <a href="https://sre.google/sre-book/production-environment/" target="_blank">sre.google/sre-book/production-environment</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="01-introduction.html">← Ch.1 Introduction</a><a href="03-embracing-risk.html">next: Ch.3 Embracing Risk →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">vocabulary</div>
+    <h2>Machine vs. server — the one distinction everything else depends on</h2>
+    <p>Google draws a hard line between two words people usually use interchangeably:</p>
+    <ul>
+      <li><strong>Machine</strong> — a physical box (or VM). Just hardware.</li>
+      <li><strong>Server</strong> — a piece of software that implements a service. It has no fixed home.</li>
+    </ul>
+    <p>Why bother? Because at Google's scale, no machine is dedicated to a particular piece of software. There's no "the mail server machine." A scheduler called <strong>Borg</strong> decides, dynamically, which machines run which software, and moves things around as machines fail or load shifts. Once you accept that servers float freely across machines, most of the rest of the chapter is just: <em>which system handles which layer of that floating arrangement?</em></p>
+
+    <h3>Physical layout, zoomed out</h3>
+    <p>Machines are grouped into <strong>racks</strong> (tens of machines), racks form a <strong>row</strong>, rows form a <strong>cluster</strong>, a building holds multiple clusters, and nearby buildings form a <strong>campus</strong>. Within a datacenter, an internal network fabric called <strong>Jupiter</strong> connects everything at extremely high bandwidth; between datacenters, a backbone called <strong>B4</strong> connects campuses globally.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="640" height="260" fill="#FBF8EF"/>
+        <text x="20" y="26" font-size="14" font-weight="bold">zooming out, one layer at a time →</text>
+        <g font-size="12.5">
+          <rect x="20" y="50" width="80" height="40" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="60" y="74" text-anchor="middle">rack</text>
+          <path d="M100 70 L 130 70" stroke="#242121" stroke-width="2" marker-end="url(#ar)"/>
+          <rect x="130" y="50" width="80" height="40" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="170" y="74" text-anchor="middle">row</text>
+          <path d="M210 70 L 240 70" stroke="#242121" stroke-width="2" marker-end="url(#ar)"/>
+          <rect x="240" y="50" width="90" height="40" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="285" y="74" text-anchor="middle">cluster</text>
+          <path d="M330 70 L 360 70" stroke="#242121" stroke-width="2" marker-end="url(#ar)"/>
+          <rect x="360" y="50" width="110" height="40" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="415" y="74" text-anchor="middle">datacenter</text>
+          <path d="M470 70 L 500 70" stroke="#242121" stroke-width="2" marker-end="url(#ar)"/>
+          <rect x="500" y="50" width="110" height="40" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="555" y="74" text-anchor="middle">campus</text>
+        </g>
+        <text x="60" y="120" font-size="12" fill="var(--ink-soft)">Jupiter: fast fabric</text>
+        <text x="60" y="138" font-size="12" fill="var(--ink-soft)">connects machines</text>
+        <text x="60" y="156" font-size="12" fill="var(--ink-soft)">within a datacenter</text>
+        <text x="360" y="120" font-size="12" fill="var(--ink-soft)">B4: backbone network</text>
+        <text x="360" y="138" font-size="12" fill="var(--ink-soft)">connects campuses</text>
+        <text x="360" y="156" font-size="12" fill="var(--ink-soft)">across the globe</text>
+        <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — physical hierarchy from rack to campus (original diagram)</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="tab">the scheduler</div>
+    <h2>Borg: the thing that decides where software actually runs</h2>
+    <p>Borg is Google's cluster operating system — think of it as the layer that turns "a room full of machines" into "a pool of compute you can hand a program to." (If you know Kubernetes: Borg is its direct ancestor.)</p>
+    <p>You give Borg a <strong>job</strong> — could be a long-running server, could be a one-off batch process — made of one or many identical <strong>tasks</strong>. Borg finds machines with free capacity, starts your tasks there, and then keeps watching them. A crashed task gets killed and restarted, possibly on a completely different machine.</p>
+    <p>Two details make this genuinely resilient rather than just "auto-restart":</p>
+    <ul>
+      <li><strong>Naming survives relocation.</strong> If a task can move to a new machine at any time, you can't hardcode its IP. So Borg gives every task a stable name via the <strong>Borg Naming Service (BNS)</strong> — something like <code>/bns/cluster/user/job/task-number</code> — which resolves to wherever that task currently lives.</li>
+      <li><strong>Placement respects failure domains.</strong> Borg won't just pack a job's tasks onto whatever's free — it deliberately spreads them so they don't all share one point of failure, like a single rack's top-of-rack switch.</li>
+    </ul>
+    <p>Borg also enforces resource limits: if a task tries to use more CPU/RAM than it declared, Borg kills and restarts it — the reasoning being a task that crash-loops visibly is better than one silently starving its neighbors.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">storage</div>
+    <h2>The storage stack: from raw disk to a global database</h2>
+    <p>Storage is layered, each layer hiding the mess of the one below it:</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="640" height="260" fill="#FBF8EF"/>
+        <rect x="60" y="20" width="520" height="42" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+        <text x="320" y="46" text-anchor="middle" font-size="13.5">Bigtable / Spanner / Blobstore — database-like services</text>
+        <path d="M320 62 L 320 82" stroke="#242121" stroke-width="2" marker-end="url(#ar2)"/>
+        <rect x="60" y="88" width="520" height="42" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+        <text x="320" y="114" text-anchor="middle" font-size="13.5">Colossus — cluster-wide filesystem (successor to GFS)</text>
+        <path d="M320 130 L 320 150" stroke="#242121" stroke-width="2" marker-end="url(#ar2)"/>
+        <rect x="60" y="156" width="520" height="42" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+        <text x="320" y="182" text-anchor="middle" font-size="13.5">D — per-machine fileserver (disk + flash)</text>
+        <text x="320" y="230" text-anchor="middle" font-size="12.5" fill="var(--ink-soft)">each layer hides the layer below it from the one above</text>
+        <defs><marker id="ar2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — the storage stack, bottom to top (original diagram)</div>
+    </div>
+    <ul>
+      <li><strong>D</strong> — the lowest layer, a fileserver running on nearly every machine. You wouldn't want to use this directly — you'd have to remember which machine holds your data.</li>
+      <li><strong>Colossus</strong> — sits on top of D, gives you one cluster-wide filesystem with normal filesystem semantics plus replication and encryption. This is the successor to the original Google File System (GFS).</li>
+      <li><strong>Bigtable / Spanner / Blobstore</strong> — database systems built on Colossus. <strong>Bigtable</strong> is a huge, sparse, sorted key-value store (rows × columns × timestamp) with eventually-consistent cross-datacenter replication. <strong>Spanner</strong> trades some of that flexibility for real global consistency via an SQL-like interface. Each of these makes a different consistency/performance tradeoff.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">plumbing</div>
+    <h2>The rest of the plumbing, briefly</h2>
+    <ul>
+      <li><strong>Chubby</strong> — a lock service, using the Paxos consensus algorithm, used for two main things: distributed locking, and <em>master election</em> (if 5 replicas of a job exist but only one should actually do the work, Chubby is what picks which one).</li>
+      <li><strong>Borgmon</strong> — the monitoring layer. It periodically scrapes metrics from every running task, both for real-time alerting and for building historical graphs used in capacity planning.</li>
+      <li><strong>Stubby / gRPC</strong> — Google's internal RPC framework (gRPC is its open-source descendant). Even calls that could technically be a local function call are often made as RPCs, because it keeps the door open to move that logic to a different server later without a rewrite.</li>
+      <li><strong>Protocol buffers</strong> — the data format carried by those RPCs. Compared to XML: simpler, 3–10x smaller on the wire, 20–100x faster to parse.</li>
+      <li><strong>GSLB (Global Software Load Balancer)</strong> — routes traffic at three levels: DNS-level geographic routing, service-level routing, and RPC-level routing within a datacenter — always aiming for the closest datacenter that still has spare capacity.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">worked example</div>
+    <h2>Tying it together: "Shakespeare," a toy search service</h2>
+    <p>The chapter walks through a hypothetical service that lets you search where a word appears across Shakespeare's works, to show how these pieces cooperate.</p>
+    <p><strong>Two components:</strong> a batch job (a MapReduce: map → shuffle → reduce) that indexes the text once and writes results into a Bigtable, and an always-on frontend that serves user queries against that index.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 700 260" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="700" height="260" fill="#FBF8EF"/>
+        <g font-size="12">
+          <rect x="20" y="30" width="80" height="42" fill="#fff" stroke="#242121" stroke-width="2"/>
+          <text x="60" y="55" text-anchor="middle">browser</text>
+          <path d="M100 51 L 140 51" stroke="#242121" stroke-width="2" marker-end="url(#ar3)"/>
+          <text x="120" y="42" font-size="10.5">1: DNS</text>
+
+          <rect x="140" y="30" width="90" height="42" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="185" y="55" text-anchor="middle">GSLB</text>
+
+          <path d="M185 72 L 185 100" stroke="#242121" stroke-width="2" marker-end="url(#ar3)"/>
+          <text x="205" y="90" font-size="10.5">2: routes to</text>
+          <rect x="140" y="106" width="90" height="42" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="185" y="131" text-anchor="middle">GFE</text>
+
+          <path d="M230 127 L 280 127" stroke="#242121" stroke-width="2" marker-end="url(#ar3)"/>
+          <text x="240" y="118" font-size="10.5">3: RPC</text>
+          <rect x="280" y="106" width="110" height="42" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="335" y="131" text-anchor="middle">Shakespeare</text>
+          <text x="335" y="144" text-anchor="middle" font-size="10">frontend</text>
+
+          <path d="M390 127 L 440 127" stroke="#242121" stroke-width="2" marker-end="url(#ar3)"/>
+          <text x="400" y="118" font-size="10.5">4: via GSLB</text>
+          <rect x="440" y="106" width="110" height="42" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="495" y="131" text-anchor="middle">Shakespeare</text>
+          <text x="495" y="144" text-anchor="middle" font-size="10">backend</text>
+
+          <path d="M550 127 L 600 127" stroke="#242121" stroke-width="2" marker-end="url(#ar3)"/>
+          <text x="560" y="118" font-size="10.5">5</text>
+          <rect x="600" y="106" width="80" height="42" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="640" y="131" text-anchor="middle">Bigtable</text>
+        </g>
+        <text x="350" y="220" text-anchor="middle" font-size="13" fill="var(--ink-soft)">whole round trip: a few hundred milliseconds</text>
+        <defs><marker id="ar3" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — life of a request, five hops from browser to data (original diagram)</div>
+    </div>
+
+    <h3>The N+2 sizing exercise — the part worth remembering</h3>
+    <p>This is a small, concrete preview of the capacity-planning mindset the rest of the book returns to constantly. Say load testing shows one backend task handles ~100 QPS, and peak expected traffic is ~3,470 QPS. Naively that's 35 tasks. But:</p>
+    <ul>
+      <li>During a routine rolling update, one task is always briefly unavailable → down to 34 tasks of headroom.</li>
+      <li>If a machine also happens to fail during that same update → down to 35 tasks serving, which is <em>exactly</em> peak load, with zero margin.</li>
+    </ul>
+    <p>So the real answer is <strong>N+2</strong>: 37 tasks, not 35 — two full tasks of spare capacity, so a routine update <em>and</em> an unrelated failure can happen at the same time without falling behind. The chapter then geo-distributes those 37 across regions matching real traffic split (US, Europe, Asia get N+2; South America deliberately gets only N+1, accepting a small latency risk during that region's own failures in exchange for ~20% less hardware spend there).</p>
+    <div class="callout"><b>The general lesson:</b> "how many do I need" always means "how many do I need if the thing I expect to go wrong (a rolling update) happens at the same time as the thing I don't expect (a random failure)."</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>Vocabulary you'll keep seeing</h2>
+    <table class="recap">
+      <tr><th>Term</th><th>What it is</th></tr>
+      <tr><td>Borg</td><td>Cluster scheduler — decides which machine runs which task, restarts failures, spreads tasks across failure domains</td></tr>
+      <tr><td>BNS</td><td>Naming layer so a moving task still has a stable address</td></tr>
+      <tr><td>Colossus / Bigtable / Spanner</td><td>Cluster filesystem → NoSQL store → globally-consistent SQL-like store, in increasing order of consistency guarantees</td></tr>
+      <tr><td>Chubby</td><td>Distributed lock service; also used for master election</td></tr>
+      <tr><td>Borgmon</td><td>Metrics scraping + alerting + historical graphs</td></tr>
+      <tr><td>Stubby/gRPC + protobufs</td><td>Internal RPC framework and its compact wire format</td></tr>
+      <tr><td>GSLB</td><td>Load balancing at DNS, service, and RPC levels — always toward the nearest datacenter with spare capacity</td></tr>
+      <tr><td>N+2 sizing</td><td>Capacity headroom that survives a routine event and an unrelated failure happening together</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 2, CC BY-NC-ND 4.0 · sre.google/sre-book/production-environment</footer>
+</div>
+</body>
+</html>

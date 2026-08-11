@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.21 — Handling Overload</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/21-handling-overload.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 21: Handling Overload</h1>
+    <p class="subtitle">Load balancing eventually fails somewhere — this chapter is about what happens next: adaptive throttling, criticality, and why "reject fast" beats "fall over."</p>
+    <div class="source-note">📖 Based on <em>Chapter 21</em> of Google's SRE book — <a href="https://sre.google/sre-book/handling-overload/" target="_blank">sre.google/sre-book/handling-overload</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="20-load-balancing-in-the-datacenter.html">← Ch.20 Load Balancing in the Datacenter</a><a href="22-addressing-cascading-failures.html">next: Ch.22 Addressing Cascading Failures →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the premise</div>
+    <h2>Even perfect load balancing eventually fails somewhere</h2>
+    <p>No matter how good the load balancing (Chapter 20's whole subject), some part of the system will eventually get overloaded — the real question is how gracefully it degrades when that happens. The first line of defense is often a <strong>degraded response</strong>: something cheaper to compute than the full, accurate answer — search a smaller slice of the candidate set, or serve a local, slightly-stale cache instead of hitting canonical storage. Under truly extreme overload, even degraded responses may be infeasible, and errors become the only honest option — which is exactly why the rest of this chapter is about making that failure mode as controlled and cheap as possible.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">measuring load</div>
+    <h2>"Queries per second" is a trap</h2>
+    <p>This is the chapter's sharpest early lesson, stated from hard experience: QPS, or any static proxy for request cost ("how many keys does this read"), makes a poor capacity metric — because the actual resource cost per query is a moving target. It can drift gradually, or shift suddenly overnight if a new software version happens to make some request type dramatically cheaper or more expensive. A metric that quietly stops meaning what it used to mean is a bad foundation for provisioning decisions.</p>
+    <p>The fix: measure capacity in <strong>actual consumed resources</strong> directly — CPU cores, memory — normalized as a "cost" figure that accounts for real performance differences across CPU architectures. In practice, CPU consumption alone turns out to be a remarkably good single signal for most services, for two structural reasons: on garbage-collected platforms, memory pressure naturally shows up as increased CPU usage anyway, and on other platforms it's often feasible to simply over-provision the non-CPU resources enough that they're very unlikely to become the actual bottleneck first.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">quotas</div>
+    <h2>Per-customer limits: containing overload before it spreads</h2>
+    <p>Internal services with many independent client teams routinely hit <em>global</em> overload — not a perfect world, and the chapter treats this as a given rather than a rare edge case. When it happens, the critical property is <strong>fault isolation</strong>: only the misbehaving customer should see errors; everyone else should be unaffected. That requires provisioning based on negotiated per-customer quotas set in advance, not first-come-first-served.</p>
+    <div class="math">
+      Example: a backend with 10,000 CPUs allocated worldwide<br>
+      Gmail: up to 4,000 CPU-sec/sec · Calendar: up to 4,000 · Android: up to 3,000<br>
+      Google+: up to 2,000 · everyone else: up to 500
+    </div>
+    <p>Notice those numbers sum to well over 10,000 — deliberately. The service owner is betting that not every customer will simultaneously peak at their full quota at once, which is a reasonable bet in practice and lets capacity be used more efficiently than strict, non-overlapping reservations would allow. Making this work requires aggregating real-time usage data across every backend task and pushing effective limits back down to each one — including the genuinely tricky part of computing, in real time, how much CPU any individual request actually consumed, especially for servers using a shared thread pool rather than one thread per request.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">client-side throttling</div>
+    <h2>Rejecting a request still costs something — adaptive throttling accounts for that</h2>
+    <p>The naive assumption — "rejecting a request is basically free compared to processing it" — doesn't hold universally. For some services (a simple in-memory lookup, say), the protocol overhead of receiving and rejecting a request is nearly identical to the overhead of actually serving it. If a backend is rejecting the majority of its incoming traffic, it can end up spending nearly all its CPU purely on the act of saying no.</p>
+    <p><strong>Adaptive throttling</strong> solves this by moving the rejection decision to the <em>client</em>, before the request ever reaches the network. Each client tracks two rolling counts over its last two minutes: <code>requests</code> (attempted) and <code>accepts</code> (actually accepted by the backend). Under healthy conditions these are equal. As the backend starts rejecting more, the client computes a local rejection probability that grows with how far <code>requests</code> has pulled ahead of <code>accepts</code>:</p>
+    <div class="math">
+      reject probability ≈ (requests − K·accepts) / (requests + 1)<br>
+      where K is the accepts multiplier (Google's typical default: K = 2)
+    </div>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 180" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="640" height="180" fill="#FBF8EF"/>
+        <text x="20" y="24" font-size="13" font-weight="bold">what K controls</text>
+        <rect x="30" y="45" width="270" height="100" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+        <text x="165" y="70" text-anchor="middle" font-weight="bold">K = 1.1 (aggressive)</text>
+        <text x="165" y="92" text-anchor="middle" font-size="11.5">only 1 in 10 accepted</text>
+        <text x="165" y="108" text-anchor="middle" font-size="11.5">requests gets rejected</text>
+        <text x="165" y="126" text-anchor="middle" font-size="11.5">by the backend itself</text>
+
+        <rect x="330" y="45" width="280" height="100" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+        <text x="470" y="70" text-anchor="middle" font-weight="bold">K = 2 (Google default)</text>
+        <text x="470" y="92" text-anchor="middle" font-size="11.5">more waste at the backend,</text>
+        <text x="470" y="108" text-anchor="middle" font-size="11.5">but state (e.g. "quota freed up")</text>
+        <text x="470" y="126" text-anchor="middle" font-size="11.5">propagates to clients faster</text>
+      </svg>
+      <div class="diagram-caption">sketch — the K multiplier trade-off in adaptive throttling (original diagram)</div>
+    </div>
+    <p>Why prefer the "wasteful" K=2 default? Because it deliberately over-sends slightly more than will actually be accepted, which means the backend's real-time state (e.g., "I have headroom again") propagates back to clients faster — a client that's throttling itself too aggressively would otherwise take longer to notice the backend has recovered. For services where rejection genuinely costs nearly as much as processing, lowering K (e.g., to 1.1) trades that faster state-propagation for far less wasted backend effort on rejections.</p>
+    <div class="callout"><b>Why this design is genuinely elegant:</b> the whole mechanism runs on purely local client-side information — no extra RPC, no added latency, no new external dependency — yet it converges to a stable equilibrium where, even under severe overload, the backend settles into rejecting roughly one request for every one it actually processes, rather than being crushed under an unbounded flood.</div>
+    <p>One honest limitation: clients that only send requests to a given backend sporadically have a much thinner view of that backend's recent state, which weakens how well adaptive throttling can work for them — and cheaply widening that view tends to be expensive.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">criticality</div>
+    <h2>Not all requests deserve equal protection under load</h2>
+    <p>Google's RPC layer assigns every request one of four <strong>criticality</strong> levels, and this becomes the shared vocabulary that quota systems, per-task overload protection, and throttling all key off of:</p>
+    <table class="recap">
+      <tr><th>Level</th><th>Meaning</th></tr>
+      <tr><td>CRITICAL_PLUS</td><td>Reserved for the most critical requests — failure causes serious user-visible impact</td></tr>
+      <tr><td>CRITICAL</td><td>Default for production traffic — user-visible impact on failure, but less severe; services must provision for all expected CRITICAL + CRITICAL_PLUS load</td></tr>
+      <tr><td>SHEDDABLE_PLUS</td><td>Default for batch jobs — partial unavailability is expected and tolerable; can retry minutes or hours later</td></tr>
+      <tr><td>SHEDDABLE</td><td>Frequent partial, and occasional full, unavailability is expected and acceptable</td></tr>
+    </table>
+    <p>The chapter is explicit that four levels were deliberately chosen as "enough" — more granularity was debated and rejected, because every added level costs real operational overhead to keep every criticality-aware system correctly handling it.</p>
+    <div class="callout"><b>Criticality is orthogonal to latency requirements.</b> Search-as-you-type suggestions are a good example: highly sheddable (fine to just not show them under load) yet still latency-sensitive when they <em>do</em> show — criticality and QoS/latency targets are two genuinely independent dimensions, not the same knob wearing two names.</div>
+    <p>Criticality propagates automatically through the RPC stack — if request A triggers downstream requests B and C, they inherit A's criticality by default unless deliberately overridden. The chapter notes this replaced a mess of incompatible, ad hoc criticality notions that had organically evolved independently across different Google systems before standardization — the practice now is to set criticality as close to the actual browser/mobile client as possible (typically right at the HTTP frontend), and only override it deliberately at specific points deeper in the stack where it's genuinely warranted.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">per-task protection</div>
+    <h2>Utilization signals: protecting one task from itself</h2>
+    <p>The most generally useful per-task signal is the <strong>executor load average</strong> — essentially, count active threads (running or waiting-ready) in the process, smooth with exponential decay, and start rejecting lower-criticality requests as that count exceeds available processors. The smoothing matters: a request with a large fan-out that briefly spawns a burst of short-lived operations causes only a brief, mostly-absorbed spike — but if load stays elevated because operations are genuinely long-lived, the task correctly starts shedding load rather than letting the spike ride out unmitigated.</p>
+    <p>This is deliberately pluggable — memory pressure is another common signal, and multiple signals can be combined, with rejection triggered once any (or a combination) crosses its configured threshold.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">handling the error</div>
+    <h2>What a client should do when a request is rejected</h2>
+    <p>The chapter draws a sharp distinction between two very different overload shapes:</p>
+    <ul>
+      <li><strong>A large fraction of tasks in the datacenter are overloaded</strong> — ideally this shouldn't happen at all if cross-datacenter load balancing were perfect and instantaneous. When it does, the correct response is: don't retry — let the error propagate all the way back to the caller.</li>
+      <li><strong>Only a small subset of tasks are overloaded</strong> — far more common in practice, typically caused by local imperfections (a task that happened to just receive an unusually expensive request). Here, an immediate retry is usually the right call, since the rest of the datacenter likely has genuine spare capacity.</li>
+    </ul>
+    <p>Retries aren't treated specially by the load balancing policy itself — a retry is indistinguishable from a fresh request, and simply relying on subsetting means it's likely (though not guaranteed) to land on a different backend. Deliberately guaranteeing a different task every time would add real API complexity for limited additional benefit — so the system doesn't bother.</p>
+
+    <h3>Three brakes on retry-driven amplification</h3>
+    <ul>
+      <li><strong>Per-request retry budget</strong> — cap of 3 attempts. Past that, the chapter's reasoning is direct: if a request has already failed 3 times, the whole datacenter is probably overloaded, and retrying further is unlikely to help.</li>
+      <li><strong>Per-client retry budget</strong> — a client only retries while its own retry ratio stays under 10%. Worked example: without this cap, a datacenter rejecting most traffic could see request volume balloon to nearly 3x from retries alone (from the 3-attempt cap); adding the 10% retry-ratio cap on top brings that growth down to roughly 1.1x — a dramatically smaller amplification of an already-bad situation.</li>
+      <li><strong>Retry-count metadata + "don't retry" signaling</strong> — each request carries a counter of how many times it's already been attempted. Backends keep a histogram of these counters from recent traffic; if the histogram shows a lot of retries flowing in (implying peers are <em>also</em> overloaded), the backend can return an explicit "overloaded — don't retry" response instead of the standard retryable error, short-circuiting further attempts immediately rather than waiting for the client's own budget to eventually catch up.</li>
+    </ul>
+
+    <h3>Retry only one layer up — never let it cascade</h3>
+    <p>In a deep dependency stack (Frontend → Backend A → Backend B → DB Frontend), only the layer <em>immediately above</em> a rejecting service should retry. If the DB Frontend rejects a request, Backend B retries (within its own budget) — but once Backend B gives up, it must return "overloaded, don't retry" (or a degraded response) to Backend A, not silently let Backend A retry independently on top of B's own retries. Skipping this discipline causes a <strong>combinatorial retry explosion</strong>: each layer retrying independently multiplies attempts geometrically down the stack, potentially turning one overloaded backend into a much larger, self-inflicted traffic storm across the entire dependency chain.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">an easy-to-miss cost</div>
+    <h2>Connections themselves aren't free</h2>
+    <p>A subtlety the chapter flags explicitly: modeling load purely from request volume ignores the standing CPU and memory cost of simply <em>maintaining</em> a large pool of open connections — negligible at small scale, genuinely problematic at Google's scale. Idle connections still cost periodic health-check overhead; with a very large number of low-traffic clients, that background health-checking cost can actually exceed the cost of serving their real requests.</p>
+    <p>A related, sharper problem: sudden <strong>connection bursts</strong> — the chapter's example is a large batch job spinning up a huge number of worker tasks simultaneously, all trying to establish backend connections at once, which can overload a backend purely through connection-negotiation overhead before a single real request is even served. Two mitigations:</p>
+    <ul>
+      <li><strong>Feed real utilization into cross-datacenter balancing</strong> — basing routing on actual cluster utilization rather than just request counts naturally reroutes this kind of load toward datacenters with genuine spare capacity.</li>
+      <li><strong>Batch proxy tasks</strong> — insert a dedicated proxy tier between batch clients and real backends, so the pattern becomes <code>batch client → batch proxy → backend</code> instead of hitting backends directly. When a huge batch job spins up, only the proxy tier absorbs the connection-storm impact, acting as a fuse that protects both the actual backends and any higher-priority clients sharing them — with the added benefit of fewer total backend-facing connections, which typically improves the load balancing quality against the real backend pool too.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">the philosophy</div>
+    <h2>The right mental model: keep accepting up to real capacity, not "shut off" under stress</h2>
+    <p>The chapter closes with what it frames as the central overload-handling principle, and it's a genuine correction to a common intuition: <strong>a task under load should not simply refuse all traffic.</strong> The goal is a task that keeps serving exactly as much traffic as it can genuinely handle — continuing right up to its real capacity, rejecting gracefully and cheaply past that point — rather than either collapsing entirely or reflexively shutting the gate the moment things get busy.</p>
+    <div class="fails"><b>What "ignoring degradation conditions" actually looks like in practice:</b> work piles up, memory exhausts (or the task burns nearly all its CPU on memory thrashing), latency collapses as traffic gets dropped and remaining tasks compete brutally for scarce resources — and left unchecked, one overloaded component's failure can trigger failures in the components depending on it, cascading into a much larger outage than the original trigger. (Chapter 22 covers exactly this cascade dynamic next.)</div>
+    <p>The chapter's own stated target: a properly provisioned task should keep serving at its provisioned rate, with no significant latency impact, even under 2x to 10x its provisioned load — accepting that at <em>some</em> point every system does eventually break down, and that pushing that breaking point meaningfully higher is genuinely hard, ongoing engineering work, not a one-time fix.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>QPS is a poor capacity metric</td><td>Real resource cost per query drifts — measure actual CPU/memory consumption instead</td></tr>
+      <tr><td>Per-customer quotas</td><td>Contain global overload to the misbehaving customer, protecting everyone else sharing the backend</td></tr>
+      <tr><td>Adaptive throttling</td><td>Moves rejection to the client using purely local state, converging to ~1 reject per 1 accept under severe overload</td></tr>
+      <tr><td>Criticality (4 levels)</td><td>A shared, RPC-propagated vocabulary letting every overload-handling system shed load consistently by importance</td></tr>
+      <tr><td>Executor load average</td><td>The main per-task signal — active thread count vs. available processors, smoothed against brief fan-out spikes</td></tr>
+      <tr><td>Retry budgets (3 per-request, 10% per-client)</td><td>Bound retry amplification from ~3x down to ~1.1x during broad overload</td></tr>
+      <tr><td>Retry only one layer up</td><td>Prevents a combinatorial retry explosion cascading down a deep dependency stack</td></tr>
+      <tr><td>Keep accepting up to real capacity</td><td>The core philosophy — degrade gracefully at the edge, don't shut the gate reflexively</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 21, CC BY-NC-ND 4.0 · sre.google/sre-book/handling-overload</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.10 — Postmortem Culture: Learning from Failure</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/10-postmortem-culture-learning-from-failure.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part II — Practices</div>
+    <h1 class="title">Chapter 10: Postmortem Culture — Learning from Failure</h1>
+    <p class="subtitle">A real Google outage, told twice — once badly, once well — plus a "postmortem without action is indistinguishable from no postmortem," straight from the VP of 24/7 Operations.</p>
+    <div class="source-note">📖 Based on <em>Chapter 10</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/postmortem-culture/" target="_blank">sre.google/workbook/postmortem-culture</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="09-incident-response.html">← Ch.9 Incident Response</a><a href="11-managing-load.html">next: Ch.11 Managing Load →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the case study</div>
+    <h2>A routine rack decommission that wiped every satellite globally</h2>
+    <p>Google runs small proxy/cache racks called <strong>satellites</strong> in third-party colocation facilities, alongside its own datacenters — these get regularly installed and decommissioned, largely through automation. Decommissioning ends with <strong>diskerase</strong>, an irreversible full-drive wipe. A satellite rack was marked for decommission; the disk-erase step succeeded, but the rest of the automated workflow failed partway through. To debug it, an engineer simply reran the decommission process.</p>
+    <div class="fails"><b>The retry hit a genuine, latent bug.</b> On the first run, the code correctly fetched the specific machines to target. On the retry, because that rack's machines had already been processed, the lookup returned an <em>empty</em> list — and the underlying API treated an empty list not as "operate on zero machines" but as "no filter at all," meaning "operate on everything." Within minutes, every satellite machine, globally, had its disks wiped.</div>
+    <p>Because satellites had no data users couldn't get from Google's core datacenters, no data was lost — machines just went dark and stopped accepting connections, so traffic rerouted to core clusters, causing a modest latency increase for two days while satellites were physically reinstalled. Good capacity planning meant very few users even noticed. The team spent weeks afterward auditing and hardening the decommission automation to be genuinely idempotent. Three years later, a similar incident recurred — but the postmortem's action items from the first incident dramatically reduced its blast radius and severity the second time around, real proof the process worked.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the bad version</div>
+    <h2>What a genuinely weak postmortem looks like — and why each part fails</h2>
+    <p>The chapter presents a deliberately flawed fictionalized postmortem for this exact incident, then dissects it piece by piece. The failures are worth naming individually, since each is a genuinely common, recognizable pattern:</p>
+    <ul>
+      <li><strong>Missing context.</strong> The document assumes deep familiarity with internal jargon ("satellite," "diskerase") with no background section or glossary to orient an outside reader — meaning the postmortem is only useful to people who already understood the incident, defeating its entire purpose.</li>
+      <li><strong>Key details omitted.</strong> No concrete impact numbers, no depth in the root-cause section, and an empty "Recovery Efforts" section — leaving readers with no real picture of what actually happened or how it got fixed. The chapter's own memorable line: even a rough, honestly-labeled estimate beats no data at all, because you can't confirm something is fixed if you never measured it in the first place.</li>
+      <li><strong>Weak action items.</strong> Almost entirely mitigative rather than preventative (the one "preventative" item essentially proposes making humans less error-prone, which the chapter flags as fundamentally unreliable — better to plan for a future where people are exactly as fallible as they are today, and build systems that tolerate that). Every item shares the same priority, so nobody can tell what to do first. Vague verbs like "improve" and "make better" have no measurable success criteria. Only one of four items even has a tracking bug.</li>
+      <li><strong>Counterproductive finger-pointing.</strong> Specific engineers are named and blamed directly in multiple sections — root cause, "things that went poorly," even an action item that singles someone out by name for "succumbing to pressure."</li>
+      <li><strong>Animated, judgmental language.</strong> Phrases like "careless ignorance," "which is ridiculous," and an exclamation-mark-laden "I can't believe we survived this one!!!" — dramatic language that distracts from the substance and actively damages the sense of safety needed for people to be fully honest in the next incident.</li>
+      <li><strong>Missing ownership.</strong> Four names listed as co-owners, with almost no individual ownership on any action item — diffused responsibility that in practice means nobody's actually accountable for follow-through.</li>
+      <li><strong>Limited audience and delayed publication.</strong> Shared only with the immediate team, and published four months after the incident — by which point memories had already faded, and (in this case) the incident had already recurred once before the postmortem even existed.</li>
+    </ul>
+    <div class="callout"><b>Quoting Ben Treynor Sloss, Google's VP of 24/7 Operations, directly on why action items matter so much:</b> to users, a postmortem with no follow-up action is functionally indistinguishable from no postmortem at all — which is why Google requires at least one high-priority tracking bug attached to every postmortem following a user-affecting outage, with very few exceptions, personally reviewed.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">the good version</div>
+    <h2>The actual postmortem — what genuinely good writing looks like</h2>
+    <p>The chapter then presents the <em>real</em> postmortem written for this exact incident (with sensitive figures redacted), and it's worth studying for what it does differently, point by point:</p>
+    <ul>
+      <li><strong>Real, specific ownership.</strong> Five named owners, each tied to a specific responsibility area (postmortem itself, datacenter automation, network, server management) rather than one undifferentiated blob of names.</li>
+      <li><strong>Company-wide sharing by default</strong> — sent to all engineering employees, not just the immediate team, and published within days rather than months.</li>
+      <li><strong>Genuine quantitative rigor</strong> — QPS lost, percentage of global traffic affected, latency increases broken down by region, revenue impact by product line (with honest error bars where certainty wasn't possible), and even second-order effects like a dependent service's cache-hit-rate drop.</li>
+      <li><strong>A rich, mechanism-level root cause.</strong> Not "a bug caused an outage" but the exact RPC sequence, the specific empty-list-as-no-filter behavior, and why the workflow's "run once" semantics didn't protect against a second, independently-triggered manual run of the same workflow.</li>
+      <li><strong>Both honest successes and honest failures.</strong> "Things that went well" includes real structural credit — core clusters were already capacity-planned to absorb the failover, automatic traffic-draining kicked in as designed. "Things that went poorly" is a genuinely long, specific, blameless list — missing sanity checks, an under-rate-limited decommission process, monitoring safety-check thresholds that didn't fire symmetrically in both directions, reinstall automation that couldn't handle the required concurrency. A "where we got lucky" section is included too, honestly noting core GFEs and YouTube's separately-run CDN infrastructure were structurally unaffected purely by architectural accident, not by any deliberate mitigation.</li>
+      <li><strong>Action items organized into five clear themes</strong> — prevention/risk education, emergency response, monitoring/alerting, provisioning, and cleanup — each with a real priority, a single owner, and a tracking bug. Several items are explicitly preventative and systemic, not just reactive patches: disallowing any single operation from touching machines across namespace or class boundaries; requiring an external safety-check service to approve destructive operations before they execute; rejecting API calls that omit an expected constraint value entirely, rather than silently interpreting the omission as "unrestricted."</li>
+      <li><strong>A genuinely useful glossary and appendix</strong> — defining internal terms for outside readers, with supplementary graphs (core-vs-edge traffic recovery curves, peering-link strain) explained in plain language rather than assumed to be self-evident.</li>
+    </ul>
+    <div class="callout"><b>The chapter's summary of why this version works:</b> clarity for outsiders, concrete and measurable action items, genuine blamelessness (focused on system design gaps, not individual decisions), real analytical depth across the whole organization's exposure — not just the proximate failure — and both promptness and appropriate conciseness, with lengthy raw material (chat logs, full timelines) linked out rather than dumped inline.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">organizational incentives</div>
+    <h2>A postmortem culture has to be actively cultivated, not just declared</h2>
+
+    <h3>Model and enforce blameless language, deliberately</h3>
+    <p>The chapter's own worked example: a manager gets confronted with "why aren't you making sure everyone finishes their training" — a leading question that instantly triggers defensiveness. The reframed, constructive version instead observes that the on-caller missed relevant training that would have sped up resolution, then pivots directly to systemic fixes: should training be a hard prerequisite before joining on-call? Should the team be reminded that escalating when stuck is never shameful — especially when it reduces customer pain? And, more fundamentally, should the team rely less on training retention alone, since it's easy to forget exactly the details you need in a stressful, high-pressure moment?</p>
+    <p>Two further concrete practices: involve <em>every</em> incident participant in actually writing the postmortem, not just one team in isolation — key contributing factors are easy to miss when only part of the picture is represented — and establish a clear, structured review process specifically to catch blameful language or narrow perspective before a postmortem gets published widely.</p>
+
+    <h3>Reward postmortem outcomes, not just postmortem existence</h3>
+    <ul>
+      <li><strong>Reward closing action items, not just writing the document.</strong> Rewarding the writing alone, without equally rewarding the follow-through, produces a predictable, unhealthy cycle of postmortems that pile up unimplemented.</li>
+      <li><strong>Reward organizational-scale impact</strong> — peer bonuses, strong performance reviews, promotion consideration for lessons that get applied well beyond the original team.</li>
+      <li><strong>Highlight the compounding payoff of fewer outages</strong> — genuinely improved reliability frees teams to spend more time on features and less on repeated firefighting, which is itself a motivating, visible outcome worth calling out in reviews and presentations.</li>
+      <li><strong>Publicly recognize postmortem owners as domain experts</strong> — giving someone the chance to present their findings, and letting a reputation as "the person who figured out that failure class" become a genuine form of peer recognition.</li>
+      <li><strong>Gamify it where it fits your culture.</strong> Google runs biannual "FixIt" weeks specifically for closing postmortem action items, with small tokens of recognition (and real bragging rights) for whoever closes the most — plus an internal leaderboard tracking progress.</li>
+    </ul>
+
+    <h3>Share postmortems as widely as genuinely possible</h3>
+    <p>Announce new postmortems on internal channels broadly, not just to the affected team; share a notable one at company all-hands meetings; run cross-team review sessions where a team walks others through their incident live and answers questions — Google runs informal, open "Postmortem Reading Clubs" at several offices specifically for this. A monthly cross-functional group (developers, SREs, and organizational leadership together) reviews the postmortem <em>process</em> itself, not just individual incidents. Wheel of Misfortune training exercises (from the original SRE book) can directly reenact a real past postmortem, with the original incident commander present to help keep the simulation realistic. A recurring weekly outage report, and a periodic "greatest hits" digest, both help spread the lessons further than any single incident's own audience would naturally reach.</p>
+
+    <h3>Recognizing when postmortem culture is actually breaking down</h3>
+    <ul>
+      <li><strong>Avoiding association.</strong> The chapter's own dialogue example: two engineers gossip about a "huge blow-up" and are visibly relieved they're not involved in writing or reviewing it. This kind of disengagement is a real warning sign — countered by actively reviewing high-visibility postmortems for blameful language, and highlighting cases where genuine participation was rewarded rather than punished.</li>
+      <li><strong>Senior leadership failing to reinforce blamelessness.</strong> The chapter's example has a VP breaking blameless norms mid-meeting ("someone must have known this was a bad idea beforehand — why didn't anyone listen to them?"). The suggested recovery move is a gentle, generic redirection back to systemic causes — asking whether there were warning signs the team collectively missed or dismissed, rather than hunting for who specifically should have spoken up.</li>
+      <li><strong>No time to actually write good postmortems.</strong> An overloaded team produces rushed, low-quality postmortems with incomplete action items — directly increasing the odds of recurrence. The chapter's framing: postmortems are letters written to your own future teammates, so a consistently low quality bar quietly teaches the wrong lessons going forward. Prioritizing postmortem work and tracking its completion the same way you'd track any other deliverable is the concrete fix.</li>
+      <li><strong>Repeating incidents.</strong> If the same failure keeps recurring, that's a signal to dig deeper rather than write yet another isolated postmortem — are action items taking too long to close? Is feature velocity structurally winning out over reliability work? Are the wrong action items being captured in the first place? Is a service simply overdue for a real refactor rather than another point fix? Bringing together the people who wrote postmortems for each recurrence, together, to discuss the pattern as a whole is the chapter's recommended move.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">tools and templates</div>
+    <h2>Bootstrapping a postmortem practice with real infrastructure</h2>
+    <p>A consistent, shared template makes postmortems more accessible to readers outside the original team, and can be customized over time with domain-specific fields (hardware details for a datacenter team, OS versions for a mobile team) as a team's practice matures. Google's own template is shared publicly in Google Docs format, and several other companies (PagerDuty among them) publish their own versions too — there's no single canonical format, and the chapter is explicit that starting with something simple beats waiting for a perfect template.</p>
+    <p>Internally, Google's incident-management tooling automatically pre-populates a new postmortem with real incident metadata — who held each incident role, the detailed timeline and chat logs, which services were actually affected, incident severity, and how the issue was originally detected — removing a lot of manual transcription work up front. A structured postmortem checklist walks the author through required steps: a complete impact assessment, root-cause analysis detailed enough to actually drive real action items, tech-lead sign-off on the action items themselves, and confirmation the postmortem was genuinely shared with the wider organization, not just the immediate team.</p>
+    <p>Completed postmortems are stored in a searchable internal repository (Requiem) dating back to 2009, with metadata parsed out automatically for search, reporting, and trend analysis — and every resulting action item becomes a tracked bug in the same centralized bug-tracking system used for everything else, so follow-through can be monitored the same way any other engineering commitment would be. This structured data layer is also what makes org-wide trend analysis possible — postmortem volume per team over time, mean incident duration, time-to-detect, time-to-resolve, and blast radius — surfacing systemic instability patterns that would be very hard to spot from any single postmortem read in isolation.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>A postmortem without action items is indistinguishable from no postmortem</td><td>Ben Treynor Sloss's own framing, and the basis for Google's mandatory tracking-bug policy</td></tr>
+      <tr><td>Even a rough estimate beats no data</td><td>You can't confirm something is fixed if you never measured its impact in the first place</td></tr>
+      <tr><td>Plan for a future where people are as fallible as today</td><td>"Train people to be more careful" is a weak, unreliable action item compared to a systemic fix</td></tr>
+      <tr><td>Blameless doesn't mean vague</td><td>The "good" postmortem names exact mechanisms and root causes — it just never names people to blame</td></tr>
+      <tr><td>Reward closing action items, not just writing postmortems</td><td>Rewarding only the writing produces a backlog of unimplemented lessons</td></tr>
+      <tr><td>Share as widely as possible, promptly</td><td>Company-wide sharing within days, not months, kept details fresh and let the lessons actually spread</td></tr>
+      <tr><td>Watch for disengagement and repeat incidents as warning signs</td><td>Both indicate the postmortem culture itself needs deliberate attention, not just the next individual write-up</td></tr>
+      <tr><td>Structured tooling compounds the payoff</td><td>Centralized storage and bug-tracking integration make org-wide trend analysis possible, not just single-incident learning</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 10, CC BY-NC-ND 4.0 · sre.google/workbook/postmortem-culture</footer>
+</div>
+</body>
+</html>

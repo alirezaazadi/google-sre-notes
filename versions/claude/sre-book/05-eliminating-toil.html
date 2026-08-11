@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.5 — Eliminating Toil</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/05-eliminating-toil.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part II — Principles</div>
+    <h1 class="title">Chapter 5: Eliminating Toil</h1>
+    <p class="subtitle">"Toil" isn't just "work I dislike." It's a precisely defined category — and once you can name it, you can start systematically killing it.</p>
+    <div class="source-note">📖 Based on <em>Chapter 5</em> of Google's SRE book — <a href="https://sre.google/sre-book/eliminating-toil/" target="_blank">sre.google/sre-book/eliminating-toil</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="04-service-level-objectives.html">← Ch.4 SLOs</a><a href="06-monitoring-distributed-systems.html">next: Ch.6 Monitoring →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">definition</div>
+    <h2>Toil isn't a feeling — it's six specific traits</h2>
+    <p>The opening move of the chapter is a deliberate narrowing: toil isn't "grungy work," isn't "chores I don't enjoy," and isn't the same as <em>overhead</em> (necessary admin like team meetings, HR paperwork, performance reviews — real, but not what this chapter is about). It's a specific category of operational work, and the more of these six traits a task has, the more it counts as toil:</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 300" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="300" fill="#FBF8EF"/>
+        <g font-size="12.5">
+          <rect x="20" y="20" width="200" height="60" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="120" y="45" text-anchor="middle" font-weight="bold">Manual</text>
+          <text x="120" y="63" text-anchor="middle" font-size="10.5">hands-on-keyboard time,</text>
+          <text x="120" y="76" text-anchor="middle" font-size="10.5">even to run a script</text>
+
+          <rect x="240" y="20" width="200" height="60" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="340" y="45" text-anchor="middle" font-weight="bold">Repetitive</text>
+          <text x="340" y="63" text-anchor="middle" font-size="10.5">1st/2nd time isn't toil —</text>
+          <text x="340" y="76" text-anchor="middle" font-size="10.5">novel work never is</text>
+
+          <rect x="460" y="20" width="200" height="60" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="560" y="45" text-anchor="middle" font-weight="bold">Automatable</text>
+          <text x="560" y="63" text-anchor="middle" font-size="10.5">a machine could do it</text>
+          <text x="560" y="76" text-anchor="middle" font-size="10.5">— no real judgment needed</text>
+
+          <rect x="20" y="100" width="200" height="60" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="120" y="125" text-anchor="middle" font-weight="bold">Tactical</text>
+          <text x="120" y="143" text-anchor="middle" font-size="10.5">reactive / interrupt-driven,</text>
+          <text x="120" y="156" text-anchor="middle" font-size="10.5">not planned</text>
+
+          <rect x="240" y="100" width="200" height="60" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="340" y="125" text-anchor="middle" font-weight="bold">No enduring value</text>
+          <text x="340" y="143" text-anchor="middle" font-size="10.5">system is unchanged</text>
+          <text x="340" y="156" text-anchor="middle" font-size="10.5">once you're done</text>
+
+          <rect x="460" y="100" width="200" height="60" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="560" y="125" text-anchor="middle" font-weight="bold">O(n) with growth</text>
+          <text x="560" y="143" text-anchor="middle" font-size="10.5">scales linearly with</text>
+          <text x="560" y="156" text-anchor="middle" font-size="10.5">traffic/service size</text>
+        </g>
+        <text x="340" y="205" text-anchor="middle" font-size="13" fill="var(--ink-soft)">— not every toil task has all six, but the more it matches, the more it's toil —</text>
+      </svg>
+      <div class="diagram-caption">sketch — the six traits of toil (original diagram)</div>
+    </div>
+
+    <p>Two of these deserve a second look because they're the ones people misjudge most:</p>
+    <ul>
+      <li><strong>"Automatable" isn't the same as "currently unautomated."</strong> The bar is whether a machine <em>could</em> do it, or whether the need for it could be designed away entirely — not whether someone has gotten around to writing the script yet. There's a subtlety the chapter flags explicitly: a task isn't automatically "not toil" just because it needs human judgment right now. If a poorly designed system pages someone several times a day, each requiring judgment, that's still toil — it's a signal the system needs a redesign, not proof that a human must stay in the loop forever.</li>
+      <li><strong>"No enduring value" is the sharpest test.</strong> If the service is in the same state after the task as before it, that's toil, even if the task itself was tedious and skill-intensive. Cleaning up a service's entire alerting config, removing years of clutter — grungy, yes, but it leaves the system permanently better, so it's <em>not</em> toil.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">the budget</div>
+    <h2>Why toil gets a hard ceiling, and where the floor comes from</h2>
+    <p>This is the same 50% cap introduced in Chapter 1, revisited with the actual arithmetic behind it. Toil expands to fill all available time if nobody bounds it — so Google caps it explicitly, and treats persistent overshoot as an organizational bug, not a personal failing.</p>
+    <div class="math">
+      6-person on-call rotation → 1 week primary + 1 week secondary per 6-week cycle<br>
+      → floor of 2/6 ≈ 33% toil, just from being on the rotation<br><br>
+      8-person rotation → 2/8 = 25% floor<br><br>
+      Actual measured average across Google SREs (quarterly survey): ~33%
+    </div>
+    <p>Notice what this floor implies: even a perfectly-run team can't get toil below roughly <code>2/rotation size</code>, just from on-call coverage alone. Bigger rotations genuinely buy you a lower toil floor — one concrete reason team-sizing itself is a toil-reduction lever, not just a staffing decision.</p>
+    <p>The survey data also flags where toil actually comes from, in order: <strong>interrupts</strong> (non-urgent pings and emails) rank highest, then <strong>on-call/urgent response</strong>, then <strong>releases and pushes</strong> — notable because releases are usually already automated to some degree, meaning there's still real room to push further there.</p>
+    <div class="callout"><b>Averages hide outliers.</b> A team-wide 33% average can coexist with individuals at 0% (pure project work) and others at 80% (buried). A lopsided distribution like that is itself the signal — it usually means toil needs to be redistributed across the team, not that the average is "fine."</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">the opposite of toil</div>
+    <h2>What actually counts as engineering</h2>
+    <p>If toil is manual, repetitive, and leaves no lasting trace, engineering is its mirror image: novel, judgment-driven, and it permanently changes the system for the better. The chapter splits real SRE activity into four buckets:</p>
+    <table class="recap">
+      <tr><th>Category</th><th>What it looks like</th></tr>
+      <tr><td>Software engineering</td><td>Writing/modifying code — automation scripts, tools, frameworks, reliability/scalability features</td></tr>
+      <tr><td>Systems engineering</td><td>Configuring production systems in ways that produce a lasting improvement from a one-time effort — monitoring setup, load balancer config, architecture consulting</td></tr>
+      <tr><td>Toil</td><td>Repetitive, manual, tied to running the service, no lasting improvement</td></tr>
+      <tr><td>Overhead</td><td>Admin not tied to running the service — hiring, meetings, self-assessments, training</td></tr>
+    </table>
+    <p>The target is that engineering work (the first two rows) should average at least 50% of an SRE's time — averaged over a quarter or a year, because toil is naturally spiky (an incident-heavy week can blow past the target temporarily without being a problem). What matters is the long-run trend: if a team is <em>consistently</em> well under 50% engineering time, that's the signal something structural needs fixing.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">nuance</div>
+    <h2>Toil in small doses isn't the enemy</h2>
+    <p>The chapter is careful not to moralize toil out of existence entirely. Small, predictable, repetitive tasks can genuinely be calming — quick wins, low stress, low risk — and some people actively prefer them. A little toil is fine, and completely normal in any engineering role, including this one.</p>
+    <div class="fails"><b>The problem is scale, not existence.</b> Toil becomes toxic in large quantities, for reasons that compound on each other:</div>
+    <ul>
+      <li><strong>Career stagnation</strong> — you can't build a promotion case out of grunt work alone, however impactful any one instance of it was.</li>
+      <li><strong>Low morale → burnout</strong> — everyone has a personal toil ceiling, even people who don't mind small amounts.</li>
+      <li><strong>Organizational confusion</strong> — SRE's whole pitch to new hires is "engineering org, not an ops shop"; a team drowning in toil quietly breaks that promise.</li>
+      <li><strong>Slower feature velocity</strong> — a team buried in manual work can't ship the automation or features that would have reduced next quarter's toil.</li>
+      <li><strong>Bad incentives set for other teams</strong> — being too willing to absorb toil teaches product-dev counterparts that they can keep offloading operational work onto SRE instead of fixing root causes themselves.</li>
+      <li><strong>Attrition</strong> — even engineers personally tolerant of toil will watch their best teammates leave for more rewarding work elsewhere if the team's toil load stays high.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Six toil traits</td><td>Manual, repetitive, automatable, tactical, no enduring value, scales O(n) with growth</td></tr>
+      <tr><td>Toil ≠ overhead ≠ "work I dislike"</td><td>Overhead (meetings, HR) is separate; grungy work with lasting impact isn't toil either</td></tr>
+      <tr><td>On-call sets a toil floor</td><td>Rotation size directly determines the minimum toil % a team can reach (2/rotation size)</td></tr>
+      <tr><td>"Automatable" ≠ "automated yet"</td><td>The bar is whether it *could* be automated or designed away — repeated human-judgment pages can still signal a design flaw</td></tr>
+      <tr><td>Small toil is fine, big toil is toxic</td><td>Career stagnation, burnout, slower velocity, and bad precedent all compound once toil crosses a personal or team threshold</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 5, CC BY-NC-ND 4.0 · sre.google/sre-book/eliminating-toil</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.3 — Embracing Risk</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/03-embracing-risk.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part II — Principles</div>
+    <h1 class="title">Chapter 3: Embracing Risk</h1>
+    <p class="subtitle">Why 100% reliability is a bug, not a goal — and how the error budget turns "how much risk is OK?" from a political fight into a math problem.</p>
+    <div class="source-note">📖 Based on <em>Chapter 3</em> of Google's SRE book — <a href="https://sre.google/sre-book/embracing-risk/" target="_blank">sre.google/sre-book/embracing-risk</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="02-the-production-environment-at-google-from-the-viewpoint-of-an-sre.html">← Ch.2 Production Environment</a><a href="04-service-level-objectives.html">next: Ch.4 SLOs →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the reframe</div>
+    <h2>Reliability isn't free, and past a point it isn't even wanted</h2>
+    <p>The intuitive assumption is "more reliable = better." The chapter's core claim is that this stops being true past a certain point, for two separate reasons:</p>
+    <ul>
+      <li><strong>Users can't perceive it.</strong> A user on a phone with a flaky cellular connection and a shaky WiFi network cannot tell the difference between a backend that's 99.99% available and one that's 99.999% available — the weakest link in the chain (usually their own network) already dominates their experience.</li>
+      <li><strong>Cost scales nonlinearly.</strong> Each additional "nine" of availability tends to cost roughly an order of magnitude more than the last one — in redundant hardware, and in engineers who could otherwise be building features instead of shaving down failure rates nobody will notice.</li>
+    </ul>
+    <div class="callout"><b>The reframe:</b> reliability isn't a virtue to maximize — it's a resource to spend deliberately. A team should treat its availability target as both a floor <em>and</em> a ceiling: exceeding it by a lot isn't a win, it's wasted opportunity cost that could have gone into shipping features instead.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">measuring it</div>
+    <h2>Turning "reliability" into one number</h2>
+    <p>To manage something you have to measure it, and the chapter narrows "risk" down to one tractable proxy: <strong>unplanned downtime</strong>, expressed as a target availability — the familiar "how many nines" framing (99.9%, 99.99%, 99.999%...). Each additional nine is a 10x cut in allowed downtime.</p>
+    <div class="math">
+      Time-based availability = uptime / (uptime + downtime)<br>
+      At 99.99% target → ~52.6 minutes of allowed downtime per year
+    </div>
+    <p>But at Google's scale, "uptime" as a clock-time metric barely makes sense — a globally distributed service is essentially always serving <em>something</em> for <em>someone</em>, somewhere. So instead of clock time, the real metric is a <strong>yield-based</strong> one: the fraction of requests that succeed, over a rolling window.</p>
+    <div class="math">
+      Aggregate availability = successful requests / total requests<br>
+      2.5M requests/day at 99.99% target → up to 250 failed requests allowed that day
+    </div>
+    <p>This also generalizes cleanly beyond user-facing systems: a batch pipeline can define "success" as records processed correctly, and get the same style of availability number even though it isn't "up" continuously the way a web server is.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">setting the target</div>
+    <h2>How do you pick the number in the first place?</h2>
+    <p>This is the harder, less mechanical half of the chapter — the target itself is a business decision, not an engineering one, but SRE has to help translate business intent into an actual number. Three separate levers matter:</p>
+
+    <h3>1. What do users actually expect?</h3>
+    <p>Different products earn different targets. The book contrasts two real Google cases: <strong>Google Apps for Work</strong> (enterprise customers running their daily business on Gmail/Calendar/Docs) gets a strict target — an outage there is an outage for every dependent business, so it might carry a 99.9% external target backed by an even stricter internal one, with contractual penalties for missing it. <strong>YouTube circa 2006</strong>, by contrast, was a fast-growing consumer product still finding its shape — a lower availability target was the right call, because shipping features mattered more than squeezing out the last nine.</p>
+
+    <h3>2. Not all failures are equal</h3>
+    <p>A steady trickle of small errors and one dramatic full outage can add up to the identical error budget spend, but they are not equally bad. The chapter's sharpest example: a contacts app that occasionally fails to render a profile picture is a bad but survivable experience; a bug that shows one user <em>another user's private contacts</em> is a trust-destroying event, serious enough that taking the whole service down during the fix is the right call — even though "the service is down" sounds, on paper, like the worse outcome.</p>
+    <p>Symmetrically, some services can tolerate scheduled downtime just fine. Ads Frontend, mostly used during business hours by advertisers configuring campaigns, could run planned maintenance windows and simply not count them as "unplanned downtime" against the budget.</p>
+
+    <h3>3. Cost — put a literal price on the next nine</h3>
+    <p>Where revenue scales with request success, you can price a reliability improvement directly:</p>
+    <div class="math">
+      Target improves 99.9% → 99.99% (a 0.09% availability gain)<br>
+      Service revenue: $1,000,000<br>
+      Value of that improvement = $1,000,000 × 0.0009 = $900<br><br>
+      → only worth doing if it costs Google less than $900 to deliver
+    </div>
+    <p>When there's no clean revenue-per-request link, the chapter suggests a different anchor: measure the background error rate of the internet itself (typically ~0.01–1% across ISPs). Push your own error rate below that floor and further improvement disappears into noise the user was already experiencing anyway.</p>
+
+    <h3>Availability isn't the only knob — latency counts too</h3>
+    <p>AdWords (ads next to search results) and AdSense (ads on third-party pages) both serve ads, but have opposite latency philosophies. AdWords ads must never slow down search — that's a hard invariant. AdSense ads just need to not be the slowest thing on the page they're embedded in, which is usually a much looser bar. That slack let Google consolidate AdSense serving into fewer locations, saving real operational cost — a reminder that "reliability" and "speed" targets both deserve the same deliberate, not-more-than-necessary treatment.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">infrastructure is different</div>
+    <h2>When your "users" are other engineering teams</h2>
+    <p>Consumer products usually have one product owner to negotiate a target with. Shared infrastructure — a storage system, a caching layer — often has many clients with contradictory needs, and no single owner to arbitrate. The chapter's example is Bigtable: a client serving live user requests wants request queues to be <em>empty</em> (so nothing waits); a client running offline batch analysis over the same Bigtable wants queues to <em>never be empty</em> (so throughput never idles). Literally opposite definitions of "healthy."</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 210" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="210" fill="#FBF8EF"/>
+        <rect x="30" y="30" width="270" height="140" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.5"/>
+        <text x="165" y="58" text-anchor="middle" font-size="14" font-weight="bold">low-latency client</text>
+        <text x="165" y="82" text-anchor="middle" font-size="12.5">wants: queue always</text>
+        <text x="165" y="98" text-anchor="middle" font-size="12.5">near-empty</text>
+        <text x="165" y="128" text-anchor="middle" font-size="12">→ well-provisioned</text>
+        <text x="165" y="145" text-anchor="middle" font-size="12">low-latency cluster</text>
+
+        <rect x="360" y="30" width="270" height="140" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2.5"/>
+        <text x="495" y="58" text-anchor="middle" font-size="14" font-weight="bold">batch / offline client</text>
+        <text x="495" y="82" text-anchor="middle" font-size="12.5">wants: queue never</text>
+        <text x="495" y="98" text-anchor="middle" font-size="12.5">idle (max throughput)</text>
+        <text x="495" y="128" text-anchor="middle" font-size="12">→ cheaper, "runs hot"</text>
+        <text x="495" y="145" text-anchor="middle" font-size="12">throughput cluster</text>
+
+        <text x="330" y="195" text-anchor="middle" font-size="12.5" fill="var(--ink-soft)">same Bigtable software — split into two service tiers</text>
+      </svg>
+      <div class="diagram-caption">sketch — same infrastructure, two incompatible client goals, solved by tiering (original diagram)</div>
+    </div>
+
+    <p>The resolution isn't to make everything ultra-reliable (too expensive at that scale) or to pick a single winner (unfair to the loser) — it's to <strong>split into explicit service tiers</strong>: low-latency clusters with slack capacity for the first client, throughput clusters running "hot" with less redundancy for the second, at 10–50% of the low-latency cluster's cost. Clients then self-select the tier matching their actual need and budget. The same trick reappears for frontend infrastructure (reverse proxies, load balancers): because a dropped request there is unconditionally lost — there's no backend to mask the failure — those systems get engineered for extremely high reliability almost without negotiation, unlike most consumer-facing backends.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the mechanism</div>
+    <h2>The error budget: turning the target into a release-velocity dial</h2>
+    <p>Once a target exists, the chapter's second half shows what to actually <em>do</em> with it. The underlying tension it's solving: product development is measured on shipping velocity, SRE is measured on reliability — and each side has better visibility into their own half of that tradeoff than the other's. Left alone, this becomes a negotiation driven by politics and force of personality rather than data.</p>
+    <p>The fix: define the error budget as <code>1 − SLO</code>, have a neutral third party (the monitoring system) measure actual reliability, and let the gap between target and actual be the shared, objective number both teams manage against.</p>
+
+    <div class="math">
+      SLO: 99.999% success/quarter → error budget = 0.001% failure allowed<br>
+      Actual: an incident causes 0.0002% of quarterly queries to fail<br>
+      → that incident alone spent 20% of the quarter's error budget
+    </div>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 640 180" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="640" height="180" fill="#FBF8EF"/>
+        <text x="30" y="26" font-size="13" font-weight="bold">quarterly error budget, being spent down</text>
+        <rect x="30" y="40" width="580" height="40" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+        <rect x="30" y="40" width="120" height="40" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+        <text x="90" y="65" text-anchor="middle" font-size="12">spent (outages,</text>
+        <text x="90" y="0" text-anchor="middle" font-size="1"></text>
+        <text x="90" y="78" text-anchor="middle" font-size="11" dy="-2">risky launches)</text>
+        <text x="380" y="65" text-anchor="middle" font-size="13">remaining budget → OK to keep shipping</text>
+        <path d="M150 95 L 150 110" stroke="#B84B2A" stroke-width="2" marker-end="url(#ar4)"/>
+        <text x="150" y="128" text-anchor="middle" font-size="12" fill="#B84B2A">budget low → releases slow down or pause</text>
+        <defs><marker id="ar4" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#B84B2A"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — the error budget as a shared release-velocity dial (original diagram)</div>
+    </div>
+
+    <p>As long as budget remains, product development can ship. Once it's exhausted, releases slow, pause, or roll back until reliability recovers — and critically, <strong>this isn't SRE unilaterally saying no</strong>; it's a rule both sides agreed to in advance, so it defuses blame during the actual incident. It also runs in both directions: a datacenter failure that eats the budget slows releases for everyone (shared ownership of uptime); and if a team keeps missing launches because the target is stricter than the business actually needs, that's a legitimate signal to loosen the SLO rather than grind harder against it.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>100% is the wrong target</td><td>Users can't perceive it past a point, and cost grows non-linearly per extra nine</td></tr>
+      <tr><td>Availability = request success rate</td><td>More meaningful than clock-time uptime for globally distributed, always-partially-up systems</td></tr>
+      <tr><td>Target-setting levers</td><td>User expectations, failure type/severity, direct cost-per-nine, and non-availability metrics like latency</td></tr>
+      <tr><td>Infrastructure tiering</td><td>Contradictory client needs get solved by splitting into explicit service levels, not by picking a winner</td></tr>
+      <tr><td>Error budget = 1 − SLO</td><td>Converts the dev-vs-SRE standoff into one shared, neutral number that gates release velocity</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 3, CC BY-NC-ND 4.0 · sre.google/sre-book/embracing-risk</footer>
+</div>
+</body>
+</html>

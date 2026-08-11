@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.26 — Data Integrity</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/26-data-integrity-what-you-read-is-what-you-wrote.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 26: Data Integrity — What You Read Is What You Wrote</h1>
+    <p class="subtitle">"Nobody wants backups — they want restores." Soft deletion, tiered backups, out-of-band validation, and two real disaster stories: Gmail's tape restore and Google Music's runaway deletion bug.</p>
+    <div class="source-note">📖 Based on <em>Chapter 26</em> of Google's SRE book — <a href="https://sre.google/sre-book/data-integrity/" target="_blank">sre.google/sre-book/data-integrity</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="25-data-processing-pipelines.html">← Ch.25 Data Processing Pipelines</a><a href="27-reliable-product-launches-at-scale.html">next: Ch.27 Reliable Product Launches →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the reframe</div>
+    <h2>Data integrity is whatever users perceive it to be</h2>
+    <p>The chapter's opening move deliberately resists a clean technical definition: <em>data integrity is whatever users think it is.</em> A UI bug that shows an empty Gmail inbox for too long erodes user trust exactly as much as data actually being gone — because from the user's seat, an inaccessible mailbox and a lost one are indistinguishable. Google learned "how long is too long" the hard way: a real 2011 Gmail incident took four days to resolve, which the chapter treats as clearly too long — leading to a working threshold of roughly 24 hours as the point past which unavailability starts reading as data loss to users, regardless of what's actually true underneath.</p>
+
+    <h3>Why data integrity is actually the stricter requirement</h3>
+    <p>It's tempting to assume uptime is the harder bar to clear — an hour of email downtime a year (99.99%) sounds annoying but survivable. But apply that same 99.99% target to <em>data correctness</em> instead of availability, and the picture flips completely:</p>
+    <div class="math">
+      99.99% "good bytes" in a 2 GB file → up to 200 KB of garbled data<br>
+      → executables with random opcodes, databases that won't even load<br>
+      → catastrophic, not "mostly fine"
+    </div>
+    <p>This is the chapter's central point: uptime and data integrity are <em>independent</em> requirements per service, and disagreeing with users about which one matters more is a conversation you never want to be having <em>after</em> their data is already gone.</p>
+
+    <h3>The surprising equivalence: fast detection + fast repair ≈ perfect integrity</h3>
+    <p>The chapter's worked example is genuinely counterintuitive: imagine an artifact corrupted exactly once a year, caught immediately, and fully repaired within 30 minutes. Ignoring any other downtime, that's 99.99% <em>availability</em> for the year — and from the user's perspective, effective data integrity is also close to 100%, because they never actually experienced the corrupted state. <strong>The real secret to strong data integrity isn't preventing every possible failure — it's proactive detection paired with rapid repair.</strong></p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the tension</div>
+    <h2>Uptime, latency, scale, velocity, privacy — five things pulling against each other</h2>
+    <p>Most cloud applications juggle these five properties simultaneously, and no single storage technology optimizes for all of them at once. Many real systems end up mixing ACID and BASE APIs deliberately: an application might use a fast, highly-available blob store for the bulk of its data (accepting weaker consistency), while trusting small amounts of authoritative metadata to a slower, Paxos-backed store — precisely because those pieces genuinely need strong consistency and the rest doesn't.</p>
+    <div class="fails"><b>The hidden cost of this mixing:</b> once an application spans multiple datastores with different consistency models, referential integrity <em>between</em> them becomes a real, ongoing engineering problem — schema changes, migrations, and evolving integration points accumulate complex relationships that "no single engineer fully groks." And if each datastore is backed up independently and uncoordinated, restoring from those backups means untangling combinations of restored-vs-live data across every store — a genuinely hard reconciliation problem that grows directly out of the original velocity-driven architecture choice.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">backups vs. archives</div>
+    <h2>A distinction that sounds pedantic and isn't</h2>
+    <div class="callout"><b>The chapter's sharpest one-liner:</b> "No one really wants to make backups; what people really want are restores." A real backup can be loaded straight back into the live application. An archive exists for compliance, audit, and discovery — it's fine if recovering from it takes a week, because that's not its job.</div>
+    <p>Confusing the two is dangerous: if a disaster strikes and your "backup" is actually archive-grade (slow, hard to reload, not integration-tested with your live system), you'll discover the gap exactly when you can least afford to. The right cadence for real backups is driven directly by how much recent data loss you can tolerate — daily, hourly, or even continuous streaming, depending on the answer.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the goal, restated</div>
+    <h2>Data integrity is the means; data availability is the goal</h2>
+    <p>The chapter's cautionary tale here is a real (unnamed) email provider that suffered a week-long outage, initially announced the data as permanently gone, then — days later — reversed course and announced the data actually still existed. The damage was already done: furious users had already moved to new accounts and new providers.</p>
+    <div class="fails"><b>The lesson, stated bluntly:</b> from a user's perspective, data integrity without regular, timely availability is functionally indistinguishable from no data at all. Preserving bytes correctly on disk means nothing if users can't reach them when they need to.</div>
+
+    <h3>Selling backups by selling restores</h3>
+    <p>Backups are famously the neglected chore of system administration — low visible payoff, ongoing drain on time, easy to deprioritize. The chapter's fix isn't more nagging — it's reframing the whole conversation: don't ask teams to "practice their backups." Have them define real <strong>SLOs for data availability</strong> under specific failure modes, then practice and demonstrably prove they can actually meet those SLOs. Backups become an unglamorous implementation detail in service of a goal people actually care about.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">failure taxonomy</div>
+    <h2>24 combinations — because there's no single failure mode</h2>
+    <p>The chapter frames data loss along three independent axes, each with multiple values, producing a genuine combinatorial space you have to plan against rather than a single scenario to defend:</p>
+    <table class="recap">
+      <tr><th>Axis</th><th>Range</th></tr>
+      <tr><td>Root cause</td><td>User action, operator error, application bug, infrastructure defect, faulty hardware, site catastrophe</td></tr>
+      <tr><td>Scope</td><td>Widespread (many entities) vs. narrow (a small subset)</td></tr>
+      <tr><td>Rate</td><td>Big-bang (1M rows replaced by 10, in a minute) vs. creeping (10 rows deleted per minute, for weeks)</td></tr>
+    </table>
+    <p>A protection strategy tuned for one combination can be completely useless against another — a design that gracefully handles a slow-creeping application bug offers zero protection when the colocation datacenter catches fire. Google's own study of 19 real recovery efforts found the most common user-visible cause was <strong>data deletion or referential-integrity loss from software bugs</strong> — and the hardest variant was low-grade, creeping corruption discovered <em>weeks to months</em> after the triggering bug first shipped. That specific failure shape — needing to restore different users' data to different, individually-chosen points in time (called <strong>point-in-time recovery</strong>, or internally "time-travel") — is genuinely difficult to support simultaneously across ACID and BASE stores while still meeting uptime, latency, and cost targets. The chapter is candid that a solution offering full point-in-time recovery <em>everywhere</em>, at reasonable cost, essentially doesn't exist — most real systems settle for a tiered strategy instead (below), sacrificing some point-in-time precision for practicality.</p>
+
+    <h3>Replication is not recoverability</h3>
+    <div class="fails"><b>The chapter's most important correction to a common misconception:</b> "we have something even better than backups — replication!" is a trap. Replicated datastores sync a corrupted row or an errant delete to every replica, often before you can even isolate the problem — replication protects against a dead machine, not against bad data.</div>
+    <p>True protection requires <strong>diversity</strong> — genuinely different storage layers and media, not just more copies of the same layer. A bug or zero-day exploit in one filesystem driver can silently corrupt every "backup" that happens to sit on that same filesystem too. There's a real tension baked into this, though: the further down the stack you push a snapshot (database row → full filesystem export → full disk image), the stronger the isolation, but also the slower and less frequent that snapshot becomes — trading recency for depth of protection.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">defense in depth</div>
+    <h2>Three layers, each covering what the last one misses</h2>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="200" fill="#FBF8EF"/>
+        <g font-size="12">
+          <rect x="20" y="30" width="200" height="140" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.5"/>
+          <text x="120" y="55" text-anchor="middle" font-weight="bold">1. Soft deletion</text>
+          <text x="120" y="78" text-anchor="middle" font-size="10.5">catches user &amp; developer</text>
+          <text x="120" y="94" text-anchor="middle" font-size="10.5">mistakes — days to weeks</text>
+
+          <rect x="240" y="30" width="200" height="140" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2.5"/>
+          <text x="340" y="55" text-anchor="middle" font-weight="bold">2. Backups</text>
+          <text x="340" y="78" text-anchor="middle" font-size="10.5">tiered — catches what</text>
+          <text x="340" y="94" text-anchor="middle" font-size="10.5">soft deletion misses</text>
+
+          <rect x="460" y="30" width="200" height="140" rx="6" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.5"/>
+          <text x="560" y="55" text-anchor="middle" font-weight="bold">3. Early detection</text>
+          <text x="560" y="78" text-anchor="middle" font-size="10.5">out-of-band validation —</text>
+          <text x="560" y="94" text-anchor="middle" font-size="10.5">catches creeping corruption</text>
+        </g>
+      </svg>
+      <div class="diagram-caption">sketch — the three defense-in-depth layers, each covering a progressively rarer failure class (original diagram)</div>
+    </div>
+
+    <h3>Layer 1: Soft deletion</h3>
+    <p>Immediately marking deleted data as inaccessible to normal code paths — but not actually destroying it for some window — turns out to be the primary defense against the single most common failure category: accidental deletion, whether by users, developers, or account hijackers (who routinely delete a victim's data before repurposing the account). Gmail's own trash folder, retaining messages for 30 days, is the chapter's direct example. For developer-facing platforms, "lazy deletion" plays the analogous role — storage-layer-controlled, invisible to the calling application, giving a safety window even when the app itself made no explicit soft-delete call.</p>
+    <p>Common retention windows are 15–60 days; Google's own experience is that the large majority of hijacking and integrity issues surface within 60 days, so retaining much beyond that yields diminishing returns. One sharp, practical warning: the most devastating deletion incidents tend to come from developers <em>unfamiliar</em> with existing deletion code, especially in offline batch pipelines — which is why building soft-delete directly into the platform API (and actually enabling it by default) matters more than relying on every future engineer to remember to call it correctly.</p>
+
+    <h3>Layer 2: Tiered backups</h3>
+    <p>The chapter's guiding principle here: let your actual recovery <em>needs</em> drive backup strategy, not the reverse. Concretely, that means answering three questions honestly before choosing a scheme: how much recent data can you tolerate losing (drives incremental-vs-continuous cadence), how fast must recovery complete (drives how "local" and quick-to-restore your nearest tier needs to be), and how far back must you be able to reach (drives retention length, at real ongoing cost).</p>
+    <table class="recap">
+      <tr><th>Tier</th><th>Storage</th><th>Retention</th><th>Restore time</th></tr>
+      <tr><td>1 — nearest</td><td>Same/similar tech as live data</td><td>Hours to single-digit days</td><td>Minutes</td></tr>
+      <tr><td>2 — local distributed</td><td>Random-access distributed filesystem, same site</td><td>Single/low-double-digit days</td><td>Hours</td></tr>
+      <tr><td>3+ — offsite</td><td>Nearline/tape, offsite media</td><td>Weeks to 30–90 days (common)</td><td>Much longer</td></tr>
+    </table>
+    <p>Google's typical practical range across many services is 30–90 days of backup retention, with the exact number depending on each service's tolerance for loss and how much it's separately invested in the early-detection layer below.</p>
+
+    <h3>Layer 3: Early detection — out-of-band validation</h3>
+    <p>Bad data doesn't sit still — it propagates. References fan out, dependent transactions accumulate, and every day that passes before detection makes eventual recovery harder and messier. This is precisely why relying purely on a consensus algorithm's theoretical correctness (Chapter 23's Paxos, or Bigtable's eventual consistency) isn't sufficient on its own: real implementations are full of timeouts, retries, and edge-case workarounds that can behave unexpectedly at scale. The chapter's blunt maxim: <strong>trust storage systems, but verify.</strong></p>
+    <p>Real, concrete example: Gmail runs daily validators that have caught actual production data-integrity bugs, giving developers enough confidence to ship changes to production storage more than once a week — a direct callback to Chapter 17's point that good test coverage <em>increases</em> velocity rather than slowing it down. Google Drive validates that file contents actually match folder listings — a mismatch there means files silently going missing, which is disastrous — and their validators were built to <em>automatically fix</em> detected inconsistencies, turning what would have been a 2013 "all-hands, files-are-disappearing" emergency into a routine "fix the root cause Monday" ticket instead.</p>
+    <div class="callout"><b>Getting the validation strictness right is its own balancing act.</b> Too strict, and ordinary, legitimate changes constantly trip false alarms until engineers just stop trusting (and eventually disable) the validator entirely. Too loose, and real user-affecting corruption slips through silently. The chapter's practical guidance: validate only the invariants whose violation would genuinely devastate users — not everything that's merely inconvenient if wrong.</div>
+    <p>At scale, validation itself gets expensive — Gmail devotes meaningful compute to its daily validators, and the extra reads measurably hurt cache hit rates. Mitigations include rate-limiting knobs and sharding the largest validators across multiple days rather than running everything daily. The chapter's organizational recommendation: most small product teams genuinely can't afford to build and maintain the full validation stack (job management, dashboards, alerting, playbooks, APIs) themselves — so a central infrastructure team should own the shared validation <em>framework</em>, while individual product teams own just the business-logic checks specific to their own data.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">testing recovery</div>
+    <h2>You don't actually know recovery works until you've done it</h2>
+    <p>The chapter's lightbulb analogy lands well: you often don't discover a bulb is dead until you flip the switch and the room stays dark. Backup and recovery systems fail the same silent way — they can sit in a broken state for a long time, completely undetected, until the one moment you actually need them.</p>
+    <div class="fails"><b>The chapter's single strongest imperative in this section:</b> the only test that should actually let you sleep at night is a <em>full, end-to-end</em> recovery test — not a partial check, not "we verified the backup file isn't empty." A recovery that worked last quarter can still be broken today; only continuously, automatically re-testing the whole pipeline gives you real confidence. Manual, occasional recovery drills are treated as drudgery and consequently get skipped or done shallowly — automating and running them continuously is what actually makes the practice trustworthy.</div>
+    <p>Concrete things worth explicitly verifying, not assuming: are the backups actually valid and non-empty; do you have enough compute to run the full restore-plus-post-processing pipeline; does it complete in a reasonable wall-clock time; can you actually monitor its progress as it runs; and are you free of hidden dependencies on something outside your control (like an offsite tape vault that isn't staffed 24/7)?</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 1</div>
+    <h2>Gmail, February 2011: the first large-scale GTape restore</h2>
+    <p>A significant amount of Gmail user data disappeared despite the service's many internal safeguards and redundancy layers — this specific failure originated <em>inside</em> Gmail's own internal recovery mechanisms, not from an external storage-layer bug, which is exactly why the tape-based offsite backup layer (GTape) existed as a genuinely independent fallback in the first place.</p>
+    <div class="callout"><b>Why this worked as well as it did: rehearsal, not luck.</b> This was Gmail's first large-scale <em>real</em> use of GTape — but similar recovery scenarios had been simulated repeatedly beforehand. That preparation let the team deliver an accurate time estimate up front, actually beat that estimate, and recover 99%+ of affected data — a direct, concrete payoff of the "test recovery continuously" principle above, not a stroke of good fortune.</div>
+    <p>The chapter also uses this incident to explain why Google — despite having enormous disk capacity and fast internal networks — still keeps tape as a genuine defense-in-depth layer: tape backup guards independently against both an internal Gmail redundancy failure <em>and</em> a broader, unrelated device-driver or filesystem-level vulnerability affecting the underlying disk medium itself. This incident specifically was the first scenario — Gmail's own internal mechanisms fell short of what was needed. Recovery also required genuine cross-team cooperation from groups with no ordinary connection to Gmail or data recovery at all — made tractable specifically because it followed a rehearsed, choreographed plan rather than being improvised from scratch under pressure.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 2</div>
+    <h2>Google Music, March 2012: a privacy pipeline that deleted the wrong thing</h2>
+    <p>A user reports skipped tracks; investigation finds the track's metadata is missing its pointer to the actual audio file. Digging into <em>why</em> reveals the real problem: a privacy-compliant deletion pipeline — designed to remove a user's data within a reasonable time after they delete it — had deleted audio references it should never have touched.</p>
+
+    <h3>Root cause: a race condition that grew more likely as the service scaled</h3>
+    <p>Large deletion pipelines commonly stage work across multiple short-lived secondary copies of data to parallelize efficiently without hammering live storage directly. The original design assumed strict timing between pipeline stages (e.g., "stage two always runs at least 3 hours after stage one finishes"), which let stage two safely assume its inputs were already correct without extra checking. As data volume grew, upstream stages started taking <em>longer</em> — and once actual elapsed time between stages could occasionally fall short of that original 3-hour assumption, a race condition became possible: the pipeline could nondeterministically delete the wrong audio references for a small, then growing, fraction of data. When the pipeline was refactored for efficiency as the service scaled, this exact probability rose sharply — eventually becoming common enough for real users to notice.</p>
+
+    <h3>The scale of the damage — and the size of the recovery</h3>
+    <div class="math">
+      ~600,000 audio references deleted incorrectly, affecting ~21,000 users<br>
+      436,223 tracks recoverable from offsite tape backups<br>
+      ~161,000 tracks had never been backed up before deletion<br>
+      Total data recalled: 1.5 petabytes, across 5,475 individual restore jobs
+    </div>
+    <p>Two things made this recovery uniquely hard compared to Gmail's: backup tapes for Google Music were stored offsite and had to be <em>physically trucked in</em> (more storage capacity, but far slower to retrieve), and the scale of individual restore requests was too large to issue by hand — literally would have taken a human operator, typing one restore command per minute, over three days straight, with near-certain mistakes along the way. SRE built a programmatic solution to issue all 5,475 restores instead.</p>
+    <p>The team split into two parallel tracks rather than working sequentially: the most experienced SREs drove the physical/logistical recovery (tape recall, library maintenance, loading), while developers hunted the actual root cause in parallel — deliberately not waiting for root-cause certainty before starting the very slow physical recovery process, since that path alone would take days regardless.</p>
+    <div class="callout"><b>A genuine advantage: recent DiRT (disaster recovery) testing.</b> This incident happened just weeks after Google's annual DiRT exercise, so the tape team already had direct, current experience with a tool built specifically for exactly this kind of mass-restore scenario — including the (counterintuitive) discovery from earlier drills that manual tape-loading by datacenter technicians was actually hundreds of times <em>faster</em> than the vendor's robotic tape-library automation for a restore at this scale.</div>
+    <p>Even with all of that preparation, the physical recovery still ran longer than the initial two-day estimate — some tapes had been omitted by a vendor, 17 turned out to be physically bad (mitigated by pre-existing redundant encoding across tapes), and the final steps got further delayed by an unrelated, fully-engaging production incident. Total elapsed time: just under 7 days for the primary 436,223-track recovery. For the ~161,000 tracks that had no backup at all, store-bought/promotional tracks were simply re-issued from the original store copies (unaffected by the bug), while user-uploaded originals had to be actively re-requested from affected users' own devices — a process that took over another week to fully wind down.</p>
+    <p>The long-term fix: redesigning the deletion pipeline to eliminate the timing-dependent race condition structurally, plus new production monitoring specifically watching for anomalous, large-scale deletion rate spikes — aimed at catching the <em>next</em> version of this exact failure class automatically, long before a user ever has to notice a skipped track and file a support ticket.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the throughline</div>
+    <h2>Four general SRE principles, as applied specifically to data</h2>
+    <ul>
+      <li><strong>Beginner's mind.</strong> Never assume you fully understand a complex system well enough to declare it can't fail in a given way — that's precisely the assumption that let Google Music's race condition go unnoticed as it slowly grew more probable.</li>
+      <li><strong>Trust but verify.</strong> No API — however well-engineered — is bug-free at 100% correctness 100% of the time. Out-of-band validation exists specifically because algorithmic guarantees and real implementations aren't the same thing.</li>
+      <li><strong>Hope is not a strategy.</strong> Untested recovery paths reliably fail exactly when you actually need them — this is the lightbulb principle again, restated as a company-wide maxim.</li>
+      <li><strong>Defense in depth.</strong> No single layer — soft deletion, backups, or validation — is sufficient alone; each exists specifically to catch what the others miss, and every individual strategy eventually fails as the environment around it changes.</li>
+    </ul>
+    <div class="callout"><b>The chapter's closing "revisit and reexamine" example is a genuinely useful gut-check:</b> a service that never bothered backing up an index (trivially rebuildable from source data via MapReduce) adds a user-facing annotation feature — and suddenly that same index contains genuinely irreplaceable user data. The backup strategy that was completely correct on day one becomes silently wrong the moment the underlying data's nature changes — which is exactly why data integrity strategy needs periodic re-examination, not a one-time decision made at launch and never revisited.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Fast detection + fast repair ≈ perfect integrity</td><td>Users experience unavailability, not corruption — catching and fixing quickly is often enough</td></tr>
+      <tr><td>Backups vs. archives</td><td>Only backups need to reload fast enough to actually rescue a live service — archives serve a different job entirely</td></tr>
+      <tr><td>Replication ≠ recoverability</td><td>Corrupted data syncs to every replica just as fast as good data does</td></tr>
+      <tr><td>24 failure-mode combinations</td><td>No single strategy protects against every root cause × scope × rate combination — you need layered defenses</td></tr>
+      <tr><td>Three-layer defense in depth</td><td>Soft deletion → tiered backups → out-of-band validation, each catching what the previous layer misses</td></tr>
+      <tr><td>Test recovery end-to-end, continuously</td><td>A broken restore path is invisible until the exact moment you need it — the lightbulb problem</td></tr>
+      <tr><td>Gmail 2011 / Google Music 2012</td><td>Real proof that rehearsed, layered defenses turn potential catastrophes into (very hard, but) manageable recoveries</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 26, CC BY-NC-ND 4.0 · sre.google/sre-book/data-integrity</footer>
+</div>
+</body>
+</html>

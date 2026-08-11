@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.7 — Simplicity</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/07-simplicity.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part I — Foundations (closes here)</div>
+    <h1 class="title">Chapter 7: Simplicity</h1>
+    <p class="subtitle">"Zombie Code Slayer" badges, the Borg-to-Omega rewrite that never fully happened, and a DNS service that unknowingly depended on itself.</p>
+    <div class="source-note">📖 Based on <em>Chapter 7</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/simplicity/" target="_blank">sre.google/workbook/simplicity</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="06-eliminating-toil.html">← Ch.6 Eliminating Toil</a><span>Part II — Practices →</span></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the epigraph</div>
+    <h2>Gall's Law, and why it matters here</h2>
+    <p>The chapter opens with Gall's Law: <em>"a complex system that works is invariably found to have evolved from a simple system that worked."</em> Simplicity correlates directly with reliability — simple software breaks less often, and when it does break, it's faster and easier to actually fix. For SRE specifically, simplicity isn't just a code-quality nicety confined to individual functions — it's explicitly an <strong>end-to-end</strong> goal, extending to system architecture, tooling, and the processes used to manage the entire software lifecycle.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">measuring it</div>
+    <h2>Code complexity is measurable; system complexity mostly isn't</h2>
+    <p>Code-level complexity has real, established tooling — <strong>cyclomatic complexity</strong> (counting distinct code paths through a block; no loops or conditionals = a score of 1) is well-supported across most IDEs. What's genuinely underdeveloped is understanding whether a given measured complexity is <em>necessary</em> or purely accidental, and how one component's complexity ripples outward into the larger system around it.</p>
+    <p>System-level complexity has no equivalent rigorous standard — naively counting microservices and their communication paths (a system-level analog to cyclomatic complexity) explodes combinatorially for any sizable real system, quickly becoming useless. The chapter instead offers several practical, if imperfect, proxies:</p>
+    <ul>
+      <li><strong>Training time</strong> — how long until a new team member can go on-call? Poor documentation is often a major hidden source of subjective complexity.</li>
+      <li><strong>Explanation time</strong> — how long to whiteboard a comprehensive high-level view of the service for a newcomer?</li>
+      <li><strong>Administrative diversity</strong> — how many different ways exist to configure similar settings across different parts of the system? Is configuration centralized, or scattered?</li>
+      <li><strong>Diversity of deployed configurations</strong> — how many genuinely unique binary/flag/environment combinations are actually running in production right now?</li>
+      <li><strong>Age</strong> — older systems accumulate hidden fragility via <strong>Hyrum's Law</strong>: over time, users of an API come to depend on literally every observable aspect of its implementation, not just its documented contract — making even "safe," backward-compatible-looking changes surprisingly risky.</li>
+    </ul>
+    <div class="callout"><b>The chapter's blunt bottom line:</b> complexity in any living software system will keep increasing unless something actively counteracts it — and that countervailing effort is genuinely worth making, even though it's hard to measure precisely.</div>
+  </section>
+
+  <section card class="card">
+    <div class="tab">why SRE specifically</div>
+    <h2>Complexity is an externality — someone has to internalize it</h2>
+    <p>Production systems are almost never designed holistically end-to-end — they grow organically as teams bolt on features and launch new products. Any single change might look simple in isolation, but every change touches its neighbors, and overall complexity compounds quietly. The chapter's own example: adding retries in one component can overload a downstream database and destabilize the entire system — or simply make it much harder to reason about which path a given request actually takes through the stack.</p>
+    <div class="fails"><b>The economic framing that makes this click:</b> the cost of complexity almost never lands on whoever introduced it — in economic terms, complexity is a genuine externality. It's absorbed instead by whoever has to keep working in and around it afterward. That's precisely why the system needs a deliberate champion for simplicity — nobody's default local incentives naturally produce one.</div>
+    <p>SREs are a natural fit for this role specifically because their job already requires treating the system as a genuine whole, not just their own narrow component — they need real insight into everything their service touches, not just the code they personally wrote. Product development teams, by contrast, often lack that production-wide visibility, and frequently find real value in consulting SRE precisely for that outside, systemic perspective.</p>
+    <div class="callout"><b>Two concrete reader actions the chapter recommends directly:</b> before an engineer's first on-call shift, have them draw (and redraw) system diagrams themselves — and maintain a canonical, kept-current set of these diagrams in team documentation, since drawing the system out is often what actually surfaces a hidden design problem. Separately: ensure an SRE reviews every major design doc, specifically checking whether the proposal adds real architectural complexity — and if it does, an SRE is often well-positioned to suggest a simpler alternative before it ships.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 1</div>
+    <h2>End-to-end API simplicity — when "flexible" quietly means "undocumented"</h2>
+    <p>A chapter author's earlier startup used a generic key/value <code>bag</code> data structure as the universal RPC parameter type — every call took a bag and returned a bag, with shared core libraries handling serialization, encryption, and logging generically. On the surface, this looked maximally simple and flexible.</p>
+    <div class="fails"><b>The abstraction's simplicity was borrowed against its clients, not actually free.</b> The exact set of expected keys, value types, and semantics for each service needed to be carefully documented — and usually wasn't. Backward/forward compatibility became genuinely hard to maintain as parameters were silently added, removed, or changed over time, since the type system itself couldn't catch any of it.</div>
+    <p><strong>Lesson:</strong> a structured schema (Protocol Buffers, Apache Thrift) can look more complex up front than a generic key/value bag — but it actually produces a <em>simpler</em> end-to-end system, because it forces the upfront design decisions and documentation that the generic approach let everyone quietly skip.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 2</div>
+    <h2>Project lifecycle complexity — Borg, Omega, and why the rewrite never fully landed</h2>
+    <p>Borg (Chapter 2's cluster scheduler) accumulated real complexity over years of evolving hardware, features, and growing scale. <strong>Omega</strong> was conceived as a cleaner, more principled ground-up replacement supporting the same use cases — a genuinely tempting proposition when staring at a tangled, organically-grown system.</p>
+    <div class="fails"><b>Three compounding problems doomed the full migration:</b> Borg kept evolving <em>while</em> Omega was being built, so Omega was perpetually chasing a moving target rather than a fixed one; early estimates of how hard it would be to keep improving Borg turned out too pessimistic, while expectations for Omega's own ease turned out too optimistic — "the grass isn't always greener" in practice; and the team badly underestimated the true cost of migration itself — millions of lines of configuration across thousands of services and many SRE teams meant a multi-year migration window during which <em>both</em> systems would need to be supported and maintained simultaneously.</div>
+    <p>The actual outcome: rather than a full cutover, ideas that emerged from Omega's design work were fed back directly into Borg itself — and many of Omega's core concepts went on to jump-start <strong>Kubernetes</strong>, the now-widely-used open-source container orchestration system.</p>
+    <div class="callout"><b>The chapter's sharpest, most transferable lesson:</b> when weighing a rewrite, don't just compare the hoped-for new system against your <em>current</em> system as it stands today. Compare it against what your <em>current</em> system would look like if you invested that same amount of effort directly improving it instead. A rewrite is sometimes genuinely the right call — but only once you've honestly weighed both costs, including the full migration lifecycle, not just the appeal of a clean rewrite versus a messy status quo.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">regaining simplicity</div>
+    <h2>Simplification is mostly subtraction — and it needs to be treated as a real feature</h2>
+    <p>Most simplification work is literally about removing things — sometimes directly (deleting a dependency on unused fetched data), sometimes via redesign (fetching shared data once and forwarding it, instead of two components separately re-fetching the same thing).</p>
+    <div class="callout"><b>The chapter is emphatic that leadership has to actively celebrate this, not just tolerate it.</b> Simplification is efficiency — it saves engineering time and cognitive load, the same way an optimization saves compute or network resources — and should be measured and celebrated with the same enthusiasm as a shiny new feature launch. Google's own internal example: engineers who delete significant amounts of code earn an intranet "Zombie Code Slayer" badge — a small, genuine cultural signal that removing code is just as valuable as adding it. (Quoting Dijkstra directly: "if we wish to count lines of code, we should not regard them as 'lines produced' but as 'lines spent.'")</div>
+    <p>Concretely, this means <strong>staffing</strong> simplification work, not just hoping it happens between other priorities — if product developers and SREs don't see simplification as genuinely good for their careers, it simply won't get done. The chapter's suggested mechanism: reserve an explicit slice of engineering time (10% is offered as one example) specifically for simplicity work — with the important caveat that this isn't a license to freely add complexity with the other 90%; it's a dedicated, protected budget aimed specifically at removing it.</p>
+
+    <h3>The team-splitting trap</h3>
+    <p>As a system grows more complex, there's a natural temptation to split the SRE team into smaller groups, each scoped to a narrower slice of the whole. This is sometimes genuinely necessary — but the chapter flags a real downside: narrower scope can quietly reduce each smaller team's motivation or ability to drive <em>larger</em>, cross-cutting simplification efforts, since nobody retains a full end-to-end view anymore. One mitigation: designate a small, rotating group of SREs who deliberately maintain working (if shallower) knowledge across the <em>entire</em> stack, specifically empowered to push for conformity and simplification company-wide, not just within one narrow slice.</p>
+
+    <h3>What to look for while diagramming</h3>
+    <p>The act of drawing your system out (as recommended above) often surfaces genuine structural problems directly, including two specific patterns worth actively hunting for:</p>
+    <ul>
+      <li><strong>Amplification</strong> — when a timed-out or errored call gets retried at multiple layers simultaneously, the total number of underlying RPCs can multiply out far beyond what any single layer's retry policy alone would suggest.</li>
+      <li><strong>Cyclic dependencies</strong> — a component that depends on itself, often indirectly through several intermediate hops. This can quietly gut system integrity — most dangerously, it can make a genuine <em>cold start</em> of the whole system literally impossible, since nothing in the cycle can come up first.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 3</div>
+    <h2>Untangling Display Ads' "spiderweb" of acquired products</h2>
+    <p>Google's Display Ads business absorbed several independently-developed acquisitions (DoubleClick, AdMob, Invite Media) that each needed to interoperate with existing Google infrastructure and each other — a website using DoubleClick for Publishers needed to show AdSense-chosen ads; bidders using DoubleClick Bid Manager needed access to Ad Exchange's real-time auctions. The resulting web of interconnected backends became genuinely hard to reason about — tracing traffic through the system was difficult, capacity provisioning for each individual piece was imprecise, and at one point the team had to add explicit tests just to confirm no infinite loops existed in the query flow.</p>
+    <p>Ads-serving SREs were the natural drivers of standardization here specifically because, unlike any single component's dedicated developer team, SRE was on-call for the <em>entire</em> stack, giving them the necessary cross-cutting view. Their first concrete moves: draft real uniformity standards (a single way to copy large datasets, a single way to perform external data lookups, shared templates for monitoring/provisioning/config) and work incrementally with each developer team to actually adopt them.</p>
+    <p>Before this effort, each product had a separate frontend/auction program — meaning an ad request that needed to hit two different targeting systems required rewriting the request mid-flight to satisfy the second system's expectations, adding real processing overhead and genuinely opening the door to unwanted loops. The fix wasn't a big-bang rewrite — new shared logic (behind feature flags) was incrementally added to common programs covering all the necessary use cases, with functionality gradually consolidated into fewer backends and flags removed only once the transition was safely complete. Once unified, the auction server could talk directly to both targeting systems, and any data lookup needed by multiple targeting systems only had to actually happen <em>once</em>, inside the now-unified auction server.</p>
+    <div class="callout"><b>The chapter's memorable naming of the underlying anti-pattern:</b> just as duplicated logic inside a single program is a well-known "code smell" pointing at a deeper design flaw, <strong>redundant lookups scattered across a single request</strong> are the systems-level equivalent — a genuine "system smell" worth actively hunting for. And the broader lesson: integrating an already-running external system into your own infrastructure works best done <em>incrementally</em>, not all at once — and having well-defined, jointly-agreed standards (with real SRE and developer buy-in) gives managers a concrete, endorsable blueprint for removing complexity, rather than an abstract, hard-to-prioritize aspiration.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 4</div>
+    <h2>Running hundreds of microservices on one shared platform</h2>
+    <p>Over roughly 15 years, Google accumulated many successful, largely independent product verticals (Search, Ads, Gmail among them) — many with their own dedicated SRE team and a fully bespoke production stack: custom development workflow, custom CI/CD, custom monitoring. Each bespoke stack carried real, ongoing overhead in maintenance and development cost, and made it genuinely harder to move either services or engineers between teams.</p>
+    <p>A group of social-networking SRE teams converged their separate production stacks onto a single, shared, managed microservices platform — owned by one dedicated SRE group, compliant with best practices by default, and bundling previously under-adopted reliability and debuggability features automatically rather than leaving each team to rediscover them independently. New in-scope services were required to use the shared platform going forward; legacy services either migrated or were phased out over time.</p>
+    <p>A key design principle: services are <strong>managed, not hosted</strong> — the platform deliberately empowers individual teams to keep managing their own services effectively themselves, rather than stripping away their control and responsibility. Shared tooling (UI, API, and CLI) gives every team a genuinely unified developer experience, even though many different underlying systems sit beneath that shared surface.</p>
+    <div class="callout"><b>An unexpected, genuinely significant outcome:</b> the platform's quality and built-in feature set turned out good enough that developer teams could run hundreds of services with essentially <em>no deep SRE engagement at all</em>. This directly reshaped how SRE engagement itself works at Google more broadly — helping normalize <strong>tiered SRE engagement</strong>, spanning everything from light design-review consulting all the way up to genuinely deep involvement (shared on-call responsibility), rather than treating "full SRE ownership or nothing" as the only two available options.</div>
+    <p><strong>Lesson:</strong> moving from sparse, ad hoc standards to a truly standardized shared platform is a genuine long-term investment — each individual step can feel merely incremental, but the cumulative effect is what actually makes running services at real scale tractable. Critically: developers need to see real, tangible value at <em>every</em> stage of the transition, not just a distant payoff waiting at the very end — chase incremental wins unlocked along the way, rather than asking people to buy into one enormous refactor that only pays off once everything is finally, fully complete.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 5</div>
+    <h2>The DNS service that secretly depended on itself</h2>
+    <p>Inside Google production, a client looking up a service's IP address typically goes through a lookup service called Svelte. To find <em>Svelte's own</em> address, in turn, the client historically used pDNS (Production DNS) — accessed via a load balancer that itself looked up the actual pDNS server addresses... using Svelte.</p>
+    <div class="fails"><b>pDNS had an unintentional, transitive dependency on itself.</b> Because pDNS was heavily replicated, and the specific data needed to break out of the loop was virtually always available <em>somewhere</em> in production already, this went unnoticed for a long time — everyday lookups simply never hit the edge case. But a genuine <em>cold start</em> of the entire system from nothing would have been structurally impossible. The chapter's own quoted, evocative description from an SRE on the team: "we were like cave dwellers who could only light fires by running with a torch lit from the last campfire" — the system could perpetuate itself once running, but had no way to bootstrap itself back up from a true, complete cold state.</div>
+    <p><strong>Fix:</strong> a low-level component was modified to maintain a locally cached list of nearby Svelte server IP addresses, in local storage, on every Google production machine directly — breaking the circular dependency outright, and as a genuinely useful side effect, also removing an implicit pDNS dependency that many other unrelated services had silently accumulated without realizing it. Going forward, the team also introduced an explicit whitelist restricting exactly which services are permitted to talk to pDNS at all, and worked to actively shrink that whitelist over time.</p>
+    <p><strong>Lesson:</strong> be deliberate and explicit about your service's dependency surface — an explicit whitelist prevents dependencies from accumulating silently and unintentionally, and it's genuinely worth actively hunting for circular dependencies specifically, since (as this case shows) they can hide successfully for a very long time precisely because normal, warm-system operation never happens to expose them.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Simplicity is end-to-end</td><td>Extends beyond code to architecture, tooling, and lifecycle process — not a per-function code-review concern alone</td></tr>
+      <tr><td>Complexity is an externality</td><td>The cost rarely lands on whoever introduced it — SRE's whole-system view makes them a natural, needed champion for simplicity</td></tr>
+      <tr><td>Structured schemas beat generic key/value bags</td><td>Forcing upfront design decisions produces a genuinely simpler end-to-end system, even though it looks more "rigid" at first glance</td></tr>
+      <tr><td>Compare a rewrite against an *improved* status quo, not today's status quo</td><td>Borg vs. Omega shows migration cost is easy to badly underestimate — and ideas can still be salvaged even without a full cutover</td></tr>
+      <tr><td>Celebrate deletion as much as creation</td><td>Google's "Zombie Code Slayer" badge treats code removal as a genuine, rewarded achievement, not an invisible chore</td></tr>
+      <tr><td>Redundant lookups are a "system smell"</td><td>The same instinct that flags duplicated code inside one program applies at the system level too</td></tr>
+      <tr><td>Managed, not hosted</td><td>A shared platform can standardize reliability without stripping teams of real ownership over their own services</td></tr>
+      <tr><td>Explicit dependency whitelists prevent silent circularity</td><td>pDNS's self-dependency hid successfully for years precisely because normal operation never exposed the cold-start gap</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 7, CC BY-NC-ND 4.0 · sre.google/workbook/simplicity</footer>
+</div>
+</body>
+</html>

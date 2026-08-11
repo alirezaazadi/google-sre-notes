@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.17 — Identifying and Recovering from Overload</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/17-identifying-and-recovering-from-overload.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part III — Processes (opens here)</div>
+    <h1 class="title">Chapter 17: Identifying and Recovering from Overload</h1>
+    <p class="subtitle">Two-thirds of a team leaves in one window, and a sister team in Sydney stays perfectly healthy while Zürich unravels on nearly the same workload — perceived overload is still overload.</p>
+    <div class="source-note">📖 Based on <em>Chapter 17</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/overload/" target="_blank">sre.google/workbook/overload</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="16-canarying-releases.html">← Ch.16 Canarying Releases</a><a href="18-sre-engagement-model.html">next: Ch.18 SRE Engagement Model →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the definition</div>
+    <h2>When operational load outstrips a team's ability to manage it</h2>
+    <p>Operational load splits into pages, tickets, and ongoing operational responsibilities — pages and urgent tickets specifically function as <strong>interrupts</strong>, pulling engineers away from the project work that actually reduces future load (directly building on Chapter 29 of the original SRE book). A team enters <strong>operational overload</strong> when urgent issues continually preempt project work, blocking real progress on key priorities — beyond just derailing service improvements, overload measurably increases the rate of human error. Google's own general threshold: operational work capped at 50% of an engineer's time — a team needs real confidence it can sustain the engineering work that reduces its own operational load over the long run, not just survive the current week.</p>
+  </section>
+
+  <section card class="card">
+    <div class="tab">the two flavors</div>
+    <h2>Real overload vs. perceived overload — and why the distinction barely matters in practice</h2>
+    <p><strong>Work overload</strong> is objective: the number of assigned tasks genuinely can't be completed within their deadlines. <strong>Perceived overload</strong> is more subjective — a team feels overwhelmed even when the underlying task volume hasn't meaningfully changed, often triggered by several organizational or workload changes landing in a short window with too little communication from leadership to process them.</p>
+    <div class="callout"><b>Perceived overload has a genuine psychological mechanism behind it, not just a mood.</b> When workload is hard to estimate or predict, cognitive biases distort judgment — a large ticket queue can look impossible to clear even if it's actually quick work, and simply *starting the day* believing you're overloaded measurably changes how much you actually get done that day, independent of the real task volume. Frequent interruptions paired with external stressors (fear of letting teammates down, job insecurity, personal conflict, poor sleep) can turn even a genuinely small workload into perceived overload.</div>
+    <p>Poor prioritization compounds both kinds identically — when everything looks equally urgent, real overload drives people into unsustainable continuous hours, while perceived overload can often be meaningfully relieved just by reprioritizing, freeing space to actually address root causes. The chapter's recommended first move either way: quantify the real work before assuming the workload itself needs to change — track ticket and page volume over time, take a one-time snapshot where every team member lists their actual current tasks, and separately examine the psychosocial stressors (recent reorgs, reprioritizations) layered on top. Only with that fuller picture in hand should a team start deciding what to actually change.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 1</div>
+    <h2>Real overload: two-thirds of a team leaves in one window</h2>
+    <p>A Google internal storage SRE team supporting Gmail, Drive, Groups, and other backends lost two-thirds of its members — including its most senior engineer and manager — within a short window, for entirely unrelated personal reasons. Fewer people covering the same operational and project load produced immediate, obvious overload, worsened by siloed expertise: each remaining member's knowledge was narrowly scoped to a different part of production, so work couldn't simply be redistributed evenly. New hires and interns would eventually help, but ramping them up itself demanded real time and energy the team didn't currently have.</p>
+    <p>Tickets piled up as project work fell behind, with new high-priority work already scheduled to land soon regardless. Attempting to shed work hit two genuine psychological barriers: dropping in-progress work felt like wasted effort — a textbook <strong>sunk cost fallacy</strong>, even though most of the backlog genuinely felt worth finishing; and investing time in automation or root-cause fixes felt less urgent than immediately-pressing interrupts, so it kept losing out to whatever felt most on fire that day.</p>
+    <div class="callout"><b>The actual fix: get everyone in one room and triage literally everything at once.</b> The team listed every single responsibility — project backlog, operational work, tickets — filling a whiteboard, then triaged each item together. Seeing the full scope in one place is what actually let them redefine real priorities and identify what could be minimized, handed off, or simply dropped.</div>
+    <p>Concrete actions: deployed low-effort automation that wasn't urgent but meaningfully cut operational load once live; documented common problems to enable genuine self-service, removing repetitive requests from the queue entirely; closed as many backlogged tickets as reasonable (most turned out obsolete, redundant, or simply less urgent than they'd originally seemed); fixed the underlying monitoring behind nonactionable alert-generated tickets rather than repeatedly triaging the same noise; and, for anything genuinely uncertain, dropped it but flagged it for a second triage pass later — when that pass finally happened, almost none of the deferred items turned out important enough to actually resume.</p>
+    <div class="math">
+      Result: 1 day of intensive triage + 1 day of documentation/automation<br>
+      → cleared several months of accumulated interrupt backlog
+    </div>
+    <p><strong>Lasting change:</strong> triage now happens every two weeks rather than waiting for another crisis; the technical lead periodically checks queue depth; and a concrete ceiling — no more than <strong>10 open tickets per person</strong> — triggers a defined response if crossed: remind the team to close stale tickets, sync directly with whoever's overloaded and redistribute, prompt individuals to work their queue, run a team-wide fix-it day, or assign dedicated work to address a ticket's actual root cause rather than just closing the symptom repeatedly.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">case study 2</div>
+    <h2>Perceived overload: Zürich unravels while Sydney stays healthy on nearly the same load</h2>
+    <p>A two-site SRE team (Sydney and Zürich, six or seven on-callers each) had Sydney remain operationally healthy throughout, while Zürich spiraled into serious overload — despite the two sites sharing much of the same underlying service portfolio. Before things went wrong, Zürich was stable: a relatively steady service count, ongoing improvement projects (load balancing work among them), and an SLO mismatch against external dependencies that simply hadn't caused visible problems yet.</p>
+
+    <h3>The compounding triggers</h3>
+    <ul>
+      <li>New, noisier, less-integrated services were onboarded with genuinely untuned monitoring — page volume crept upward gradually, slowly enough that nobody clearly noticed the trend as it happened.</li>
+      <li>Two team members left simultaneously — the technical lead manager among them — cutting the on-call rotation down to five.</li>
+      <li>SREs felt genuinely under-equipped on the new services, frequently needing to ask developers basic questions — a situation that arguably warranted handing a service back to its development team, except the team had never done that before and simply didn't consider it a real, viable option.</li>
+      <li>A policy shift required moving previously-ignored email alerts into actual tracked tickets — surfacing real, pre-existing technical debt that project planning had never accounted for.</li>
+      <li>A new <strong>3-day ticket SLO</strong> — meant to shrink the backlog — instead meant on-callers had to immediately tackle follow-up work right after their shift ended, with no real rest in between, and correspondingly less time for other operational duties.</li>
+    </ul>
+    <p>A new manager, shared across three teams and not personally part of the on-call rotation, didn't directly feel the accumulating stress — and when the team explained the situation, nothing changed. Feeling unheard, the team grew increasingly distant from management, and unhappiness cascaded across the group over several months.</p>
+
+    <h3>How perceived overload became genuinely objective overload</h3>
+    <div class="fails"><b>The chapter's central, striking claim: the number of pages Zürich actually handled hadn't meaningfully changed from previous years.</b> What changed was headcount, cognitive load from unfamiliar services, ticket noise, and the new 3-day SLO — and Sydney, facing broadly comparable underlying load, never experienced the same collapse. As exhaustion set in, real productivity actually declined and tasks began accumulating faster than the team could resolve them — turning what started as perception into genuine, measurable overload. Team members stopped trusting each other to actually finish assigned work, eroding <strong>psychological safety</strong> (Chapter 11 of the original SRE book) — interpersonal risk-taking and open collaboration dropped off, slowing information sharing and compounding the original problem further. Anonymous surveys confirmed the damage directly: team members reported not feeling like they belonged, stopped caring about their own career development, and the team's promotion rate hit an all-time low.</div>
+    <p>The breaking point arrived when upper management assigned new, mandatory company-wide projects on top of an already-struggling team — prompting renewed, more forceful conversations with leadership, which finally revealed the real underlying dynamic: this wasn't simply "too much work," it was a team that had stopped trusting and collaborating with each other.</p>
+
+    <h3>What actually fixed it</h3>
+    <p>A new manager — dedicated solely to this one team, not split across three — adopted a <strong>participatory management style</strong>, actively involving the team in solving its own problems rather than dictating solutions top-down. Simple team-building exercises (some as modest as drinking tea together) helped rebuild baseline trust, from which the team drafted staged goals: short-term stress relief and psychological safety; medium-term confidence-building through training, plus real root-cause investigation; long-term resolution of the structural problems that triggered the whole cascade in the first place.</p>
+    <table class="recap">
+      <tr><th>Timeframe</th><th>Concrete actions taken</th></tr>
+      <tr><td>Short-term (within ~1 month)</td><td>Regular round-table venting/brainstorming sessions; switched to a better load metric (post-shift ticket resolution time, not raw page count); audited and removed spammy, non-actionable alerts; generously silenced known alerts (bounded to a day or up to a week, with anything unfixable in minutes converted to a tracked ticket instead); a dedicated single-team manager restored trust; rebalanced staffing with experienced SREs carrying no baggage from the team's recent history; added purely social events (lunches, board games) to ease interpersonal tension</td></tr>
+      <tr><td>Mid-term (within ~3 months)</td><td>Confined operational work to on-call time specifically, protecting real project time; handed one service's on-call responsibility back to its development team; trained each other, which measurably rebuilt confidence as people realized how much they actually already knew; brought in remote SREs to staff shifts and share fresh perspective; backfilled the two vacant roles; worked through each alert as its silence period expired, using weekly production meetings to actually tune or fix root causes; ran dedicated listening sessions with skip-level management; and simply kept team morale up with visible, credible signs that things were genuinely improving</td></tr>
+      <tr><td>Long-term</td><td>Aligning the team's own SLOs with the SLOs of the backend services they depend on; pushing toward more uniform service configuration (lower cognitive load, and automation reusable across services); systematically revisiting long-neglected services against current production standards</td></tr>
+    </table>
+    <p>Within a few months, on-call shifts grew noticeably quieter, and the team handled a genuinely difficult incident smoothly and collaboratively. New members who joined later, hearing about the team's history during a round-table, said they found it hard to believe — they experienced the team as a warm, safe place to work. About a year after the crisis first escalated, an anonymous survey confirmed the team now genuinely felt both effective and safe.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recognizing it</div>
+    <h2>Symptoms worth actively watching for</h2>
+    <table class="recap">
+      <tr><th>Symptom</th><th>What to watch</th></tr>
+      <tr><td>Decreased morale</td><td>Rants, complaints, and consistently more negative survey results on job conditions and satisfaction — active, judgment-free listening sessions with leaders surface issues that wouldn't otherwise be visible</td></tr>
+      <tr><td>Long or sick-day working hours</td><td>Uncompensated overtime is itself a psychosocial stressor — leaders should model working contractual hours and staying home when genuinely sick</td></tr>
+      <tr><td>More frequent illness</td><td>Chronically overworked people get run down more often — a real, measurable physical signal, not just anecdote</td></tr>
+      <tr><td>An unhealthy task queue</td><td>Regularly review backlog depth, ownership, and what can be delayed or dropped — if urgent matters routinely prevent this review from happening at all, interrupts are very likely accumulating faster than the team can handle them</td></tr>
+      <tr><td>Imbalanced metrics</td><td>Long time-to-close per issue, a high proportion of time spent on toil, and long resolution times specifically for on-call-originated tickets are all worth tracking together</td></tr>
+    </table>
+    <div class="callout"><b>Let the team pick its own measures, don't impose one from outside.</b> There's no universal, one-size-fits-all metric — every team's overload shows up differently, and a manager insisting on a specific measure without first understanding individual work habits risks the team feeling genuinely misunderstood. The chapter's own example: measuring by days-to-fix treats someone who resolves an issue in one focused day identically to someone spreading the same fix across several days interleaved with other work — the metric itself needs to reflect how the team actually works, not an outside assumption about how it should.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">reducing it</div>
+    <h2>Getting a team back to a healthy state</h2>
+    <div class="callout"><b>Giving team members more control and autonomy reduces perceived overload — even under genuine stress, resist the pull toward micromanagement.</b> Keeping the team genuinely in the loop on prioritization decisions, rather than dictating from above, measurably improves both performance and job satisfaction. This does assume a baseline of functional relationships already exists — between management and team, and among team members themselves.</div>
+    <ul>
+      <li><strong>Identify and alleviate psychosocial stressors first.</strong> A team can only function as well as its individual members do — so restoring genuine psychological safety comes before anything else. Focus specifically on what you can actually control (backlog size, alert noise) rather than what you can't (a team member's personal illness). Loop in partner product-development teams honestly — they may genuinely be able to help, or take a project off your plate entirely. As trust rebuilds, assign point people and technical leads to specific areas — genuine expertise ownership builds self-confidence and enables people to take real interpersonal risks again. Keep decision-making transparent and as democratic as practical, so every team member feels real agency in the situation, not just a passive recipient of decisions made elsewhere.</li>
+      <li><strong>Prioritize and triage on a real, recurring cadence.</strong> Case Study 1's whiteboard triage session is the template — sit down together, review the full backlog, and reprioritize deliberately. Case Study 2's team now runs this at the end of every quarter, treating it as a standing practice rather than a one-off crisis response. Where possible, schedule genuinely interrupt-free stretches specifically for hard, qualitatively different work — automation-building, real root-cause investigation — the kind of work that never survives being squeezed into gaps between pages. And when it's genuinely necessary, actually drop work — Case Study 2's decision to hand a service back to its development team is a real, legitimate option, not an admission of failure.</li>
+      <li><strong>Protect yourself going forward.</strong> Establish real workload metrics and revisit them regularly to confirm they're still measuring the right thing. Once a team emerges from overload, keep monitoring for recurrence rather than assuming the crisis fixed itself permanently — Case Study 1's ongoing lightweight triage cadence and Case Study 2's long-term SLO-alignment work are both durable structural fixes, not one-time patches. While actively in overload, prioritize toil-reducing project work even more aggressively than usual — the payoff compounds directly into future capacity. And make watching for early warning signs a genuinely shared team responsibility, not something only management is expected to notice — a manager who senses the team drifting toward overload should raise it directly and early, before it compounds the way it did in Case Study 2.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Operational overload blocks progress on key priorities</td><td>Urgent interrupts continually preempting project work is the defining symptom, not just "feeling busy"</td></tr>
+      <tr><td>Perceived overload is still real overload</td><td>Zürich's near-unchanged page volume still produced genuine, measurable overload through headcount loss and new stressors</td></tr>
+      <tr><td>Sunk cost fallacy blocks the obvious fix</td><td>Dropping in-progress work feels wasteful even when it's clearly the right call under real overload</td></tr>
+      <tr><td>Full-backlog triage in one room is the concrete unlock</td><td>Seeing every task at once is what actually let Case Study 1's team redefine real priorities</td></tr>
+      <tr><td>Psychological safety erodes under sustained overload — and that erosion compounds it further</td><td>Lost trust slows collaboration and information sharing, worsening the original overload in a vicious cycle</td></tr>
+      <tr><td>Let the team choose its own overload metric</td><td>No universal measure fits every team's actual work pattern — imposing one risks the team feeling misunderstood</td></tr>
+      <tr><td>Autonomy and transparent prioritization reduce perceived overload</td><td>Micromanagement under stress is tempting but counterproductive — genuine involvement in decisions helps more</td></tr>
+      <tr><td>Recurring triage cadence prevents recurrence</td><td>Both case studies converted a one-time crisis fix into an ongoing, scheduled practice</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 17, CC BY-NC-ND 4.0 · sre.google/workbook/overload</footer>
+</div>
+</body>
+</html>

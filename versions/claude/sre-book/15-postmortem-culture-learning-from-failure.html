@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.15 — Postmortem Culture</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/15-postmortem-culture-learning-from-failure.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 15: Postmortem Culture — Learning from Failure</h1>
+    <p class="subtitle">Blameless doesn't mean toothless. How Google turns every serious incident into permanent organizational memory — and makes people want to write the report.</p>
+    <div class="source-note">📖 Based on <em>Chapter 15</em> of Google's SRE book — <a href="https://sre.google/sre-book/postmortem-culture/" target="_blank">sre.google/sre-book/postmortem-culture</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="14-managing-incidents.html">← Ch.14 Managing Incidents</a><a href="16-tracking-outages.html">next: Ch.16 Tracking Outages →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">why bother</div>
+    <h2>Without this, the same incident just happens again</h2>
+    <p>At Google's scale and rate of change, incidents are simply inevitable — the chapter treats this as a given, not a failure state. The real risk isn't that incidents happen; it's that without a deliberate mechanism to learn from them, the exact same failure can recur indefinitely, or worse, incidents can compound and cascade into something larger. A <strong>postmortem</strong> is the mechanism: a written record covering the incident, its impact, what was done to mitigate it, the root cause(s), and concrete follow-up actions to prevent recurrence.</p>
+    <p>Postmortems have a real cost in time and effort, so they're not written reflexively for every hiccup — teams define clear triggers in advance, before an incident happens, so nobody has to negotiate in the moment whether "this counts." Common triggers include: user-visible downtime or degradation past a threshold, any data loss, on-call intervention like a rollback or traffic reroute, resolution time past a threshold, or a monitoring failure (which usually means the incident was found manually rather than by an alert — itself a signal worth investigating). Beyond the fixed triggers, any stakeholder can simply request one.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the core principle</div>
+    <h2>Blameless doesn't mean toothless</h2>
+    <p>This is the chapter's central, most influential idea — the phrase "blameless postmortem" has since spread well beyond Google into the wider industry. The starting assumption of a blameless postmortem: <strong>everyone involved had good intentions and acted reasonably given the information they had at the time.</strong> The investigation focuses on the systemic reasons someone had incomplete or misleading information — not on relitigating whether they personally should have known better.</p>
+    <p>The chapter borrows this directly from aviation and healthcare — domains where mistakes can be fatal, and where a culture of treating every "mistake" as a chance to strengthen the system (rather than punish an individual) developed precisely because the alternative, a blame culture, actively suppresses the reporting needed to prevent recurrence. The logic is blunt and important: <strong>you can't "fix" people, but you can fix systems and processes</strong> — so that's where the actual leverage lives.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 170" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="170" fill="#FBF8EF"/>
+        <text x="20" y="26" font-size="13" font-weight="bold">same underlying fact, two very different write-ups</text>
+        <rect x="20" y="45" width="290" height="95" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+        <text x="165" y="68" text-anchor="middle" font-weight="bold" font-size="12.5">Pointing fingers</text>
+        <text x="165" y="90" text-anchor="middle" font-size="10.5">"We need to rewrite this whole</text>
+        <text x="165" y="106" text-anchor="middle" font-size="10.5">backend — I'm tired of fixing</text>
+        <text x="165" y="122" text-anchor="middle" font-size="10.5">the same thing one-by-one!"</text>
+
+        <rect x="350" y="45" width="290" height="95" rx="6" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+        <text x="495" y="68" text-anchor="middle" font-weight="bold" font-size="12.5">Blameless</text>
+        <text x="495" y="90" text-anchor="middle" font-size="10.5">"A rewrite would likely prevent</text>
+        <text x="495" y="106" text-anchor="middle" font-size="10.5">these pages — the current manual</text>
+        <text x="495" y="122" text-anchor="middle" font-size="10.5">is long and hard to fully train on."</text>
+      </svg>
+      <div class="diagram-caption">sketch — the same underlying critique, framed constructively vs. not (original diagram, paraphrasing the book's own example)</div>
+    </div>
+
+    <div class="callout"><b>An important nuance the chapter is careful to state:</b> blameless doesn't mean silent about real problems. A good postmortem absolutely should call out where a service or process needs improvement — the difference is doing so by describing what needs to change and why, not by venting frustration at whoever happened to be on-call when it broke.</div>
+    <div class="fails"><b>A second, easy-to-miss trap:</b> don't let frequent postmortem authorship become a mark against a person or team. If writing postmortems regularly gets treated as evidence someone keeps causing problems, that quietly recreates the exact blame culture the whole practice exists to avoid — and pushes incidents back underground.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">process</div>
+    <h2>Collaboration and review — not a document written in isolation</h2>
+    <p>Google's postmortems live in real-time collaborative documents (Google Docs, with an in-house template), and the chapter names the specific features that matter for this to work well: real-time co-editing (fast data and idea collection while the incident is still fresh), open commenting for crowdsourced input, and email notifications to pull in the right people at the right moment.</p>
+    <p>Every postmortem goes through a genuine review before wider publication, typically by a group of senior engineers checking specific things — not just "does this read well":</p>
+    <ul>
+      <li>Was the key incident data actually captured for posterity?</li>
+      <li>Is the impact assessment complete?</li>
+      <li>Is the root cause analysis deep enough, or does it stop at the first proximate cause?</li>
+      <li>Is the action plan appropriate, and are the resulting bug fixes prioritized correctly — not just filed and forgotten?</li>
+      <li>Was the outcome actually shared with the relevant stakeholders?</li>
+    </ul>
+    <div class="callout"><b>Best practice named directly in the chapter:</b> an unreviewed postmortem might as well not exist. Regular review sessions exist specifically to close out lingering discussion threads, capture stray ideas before they're lost, and formally finalize the document — rather than letting drafts quietly stall in an unfinished state.</div>
+    <p>Once finalized, postmortems are shared as widely as genuinely useful — the goal is maximum relevant reach, not narrow team-only visibility — while still respecting strict internal rules around never including anything that could identify an individual end user, even in an internal-only document.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">making it stick</div>
+    <h2>A culture doesn't sustain itself — it has to be actively cultivated</h2>
+    <p>The chapter is candid that introducing this culture is genuinely hard and requires continuous reinforcement, not a one-time policy announcement. Google leans on visible, social mechanisms to keep it alive:</p>
+    <ul>
+      <li><strong>Postmortem of the month</strong> — a well-written, interesting postmortem gets spotlighted company-wide in a newsletter.</li>
+      <li><strong>An internal postmortem discussion group</strong> — a running forum for sharing and discussing both internal and external postmortems and general best practices.</li>
+      <li><strong>Postmortem reading clubs</strong> — teams gather to discuss a notable postmortem, sometimes one that's months or years old, open to participants and newcomers alike.</li>
+      <li><strong>"Wheel of Misfortune" exercises</strong> — new SREs re-enact a past real postmortem as a live role-play, with the actual original incident commander present to keep it grounded in what genuinely happened rather than a sanitized retelling.</li>
+    </ul>
+    <p>To overcome the natural early skepticism about whether postmortems are "worth" their cost, the chapter suggests easing them in gradually — running a trial period with a handful of complete, genuinely useful postmortems to demonstrate real value before mandating the practice broadly, and using that trial to refine what actually should trigger one going forward.</p>
+
+    <h3>Visible recognition, all the way to the top</h3>
+    <p>The chapter's best illustration of "management participation" isn't abstract — it's concrete: at a Google all-hands (TGIF), an SRE described a release that, despite thorough testing, caused a 4-minute outage of a critical service — kept to just 4 minutes specifically because they immediately rolled back rather than trying to diagnose live. That engineer received two peer bonuses on the spot and a standing ovation from an audience numbering in the thousands, including the company's founders.</p>
+    <div class="callout"><b>The point being made isn't "mistakes are fine."</b> It's that fast, clear-headed incident handling — including the humility to roll back immediately rather than push through — is exactly the behavior worth celebrating loudly and publicly, precisely because visible recognition is what teaches an entire organization that admitting and documenting failure is safe and valued, not something to hide.</div>
+
+    <h3>Closing the loop with the people actually doing the writing</h3>
+    <p>Google regularly surveys teams on how the postmortem process is actually working for them — does the culture genuinely support their work, is writing one becoming its own form of toil (a direct callback to Chapter 5), what best practices have they found, what tooling would actually help. This keeps the process itself accountable to the people using it, rather than calcifying into a rule nobody feels ownership of.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">scaling it up</div>
+    <h2>From individual documents to organizational pattern-matching</h2>
+    <p>Google runs an internal "Postmortems at Google" working group that coordinates the practice across wildly different products — YouTube, Gmail, Google Fiber, Cloud, AdWords, Maps — all converging on the same underlying goal despite very different systems and failure modes. As the sheer volume of postmortems produced monthly across the company grew, tooling to aggregate and analyze them became genuinely necessary — enriched postmortem templates with structured metadata fields specifically to make automated trend analysis possible, letting the organization spot recurring themes across product boundaries that a single team could never see from inside just their own incidents.</p>
+    <p>The chapter closes by naming this as an area of ongoing investment — using aggregated postmortem data (and, forward-looking even for its time, machine learning) to help predict systemic weaknesses, speed up real-time investigation during a live incident, and reduce duplicate work across teams independently rediscovering the same failure mode.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Postmortems prevent recurrence</td><td>Without a formal learning mechanism, the same incident can happen again and again</td></tr>
+      <tr><td>Define triggers in advance</td><td>Removes ambiguity and negotiation about "does this count" in the moment</td></tr>
+      <tr><td>Blameless ≠ toothless</td><td>Focus on systemic causes and honest improvement, not on suppressing real critique</td></tr>
+      <tr><td>Frequent authorship ≠ a black mark</td><td>Stigmatizing postmortem volume quietly recreates blame culture and drives incidents underground</td></tr>
+      <tr><td>Review is mandatory</td><td>An unreviewed postmortem is functionally the same as one that was never written</td></tr>
+      <tr><td>Visible recognition matters</td><td>Publicly celebrating good incident handling teaches the whole org that honesty about failure is safe</td></tr>
+      <tr><td>Aggregate for patterns</td><td>Structured metadata across many postmortems reveals systemic weaknesses no single incident shows alone</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 15, CC BY-NC-ND 4.0 · sre.google/sre-book/postmortem-culture</footer>
+</div>
+</body>
+</html>

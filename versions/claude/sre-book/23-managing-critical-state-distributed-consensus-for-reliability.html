@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.23 — Managing Critical State: Distributed Consensus</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/23-managing-critical-state-distributed-consensus-for-reliability.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 23: Managing Critical State — Distributed Consensus for Reliability</h1>
+    <p class="subtitle">Why heartbeats and STONITH are a "ticking bomb," and how Paxos-family protocols actually let a group of unreliable machines agree on one true answer.</p>
+    <div class="source-note">📖 Based on <em>Chapter 23</em> of Google's SRE book — <a href="https://sre.google/sre-book/managing-critical-state/" target="_blank">sre.google/sre-book/managing-critical-state</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="22-addressing-cascading-failures.html">← Ch.22 Addressing Cascading Failures</a><a href="24-distributed-periodic-scheduling-with-cron.html">next: Ch.24 Distributed Cron →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the problem</div>
+    <h2>Getting several machines to agree on one true answer</h2>
+    <p>Distributed consensus solves a deceptively simple-sounding problem: a group of processes, connected by an <em>unreliable</em> network, need to reliably agree on something — who's the leader, what's in a config, whether a lock is held, what value lives at a key. This shows up everywhere in distributed systems, which is exactly why the chapter treats it as one of the most fundamental building blocks in the field.</p>
+    <div class="callout"><b>The chapter's single strongest piece of advice, stated almost as a warning:</b> whenever you see leader election, critical shared state, or distributed locking, use a formally proven, thoroughly tested consensus algorithm — never an ad hoc approach like heartbeats. Informal solutions don't just risk outages; they risk subtle, hard-to-detect data corruption that can quietly prolong an outage long after the "obvious" problem looks fixed.</div>
+
+    <h3>CAP theorem — the constraint you can't engineer your way around</h3>
+    <p>A distributed system cannot simultaneously guarantee <strong>consistency</strong> (every node sees the same data), <strong>availability</strong> (every node can always answer), and <strong>partition tolerance</strong> (the system keeps working when nodes can't talk to each other). The logic is unavoidable: if two nodes can't communicate, you either stop serving from one of them (sacrificing availability) or let both keep serving independently (sacrificing consistency). Since network partitions are simply inevitable — cables get cut, packets drop, hardware misconfigures — the real design question is never "can I avoid this tradeoff," it's "which side of it does this specific application actually need."</p>
+    <p>The chapter is pointed about the alternative — <strong>BASE</strong> semantics (Basically Available, Soft state, Eventual consistency) — which can handle volumes ACID systems can't, but pushes a real cost onto developers: reconciling "eventually consistent, possibly stale" data is genuinely hard to reason about correctly. The chapter quotes Google engineer Jeff Shute directly on this: developers end up spending huge amounts of time building "extremely complex and error-prone mechanisms to cope with eventual consistency," and that this burden is better solved once, at the database layer, than repeatedly and inconsistently by every application built on top of it.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">why ad hoc fails</div>
+    <h2>Three real case studies of heartbeats and gossip going wrong</h2>
+
+    <h3>Case 1: split-brain via STONITH</h3>
+    <p>A file-server pair uses heartbeats: if one server can't reach its partner, it issues STONITH ("Shoot The Other Node In The Head") and takes over as sole master — a standard industry pattern. Under a genuinely <em>slow</em> network (not a clean partition — just degraded), heartbeat timeouts fire on both sides, both issue STONITH, and — because delivery itself is unreliable — you can end up with both nodes active simultaneously, or both shut down. The root failure: the system was trying to solve <strong>leader election</strong> — which is provably a form of the distributed consensus problem — using nothing but timeouts, which simply cannot solve it correctly.</p>
+
+    <h3>Case 2: escalating to a human doesn't actually fix it</h3>
+    <p>A sharded database avoids Case 1's trap by escalating to a human whenever the primary can't confirm its secondary's health, rather than automatically failing over. This avoids data loss, but at a real cost: reduced availability, and increased operational burden on exactly the engineers who are often <em>already</em> overloaded when this kind of event occurs (since primary/secondary communication problems are frequently a symptom of a bigger, ongoing infrastructure issue). The chapter's blunt conclusion: if the network is degraded enough that an automated consensus system can't safely elect a leader, a stressed human paged in the middle of an incident isn't actually better positioned to make that call correctly.</p>
+
+    <h3>Case 3: gossip-based group membership splits under partition</h3>
+    <p>An indexing/search cluster uses a gossip protocol for node discovery and elects its own leader for coordination. Under a network partition that splits the cluster in two, <em>each side independently (and incorrectly) elects its own leader</em>, and both sides keep accepting writes and deletions — a classic split-brain, with actual data corruption as the result. Same underlying category of problem as Case 1: determining a consistent view of group membership is, again, just another instance of distributed consensus.</p>
+    <div class="fails"><b>The pattern across all three:</b> master election, group membership, distributed locking/leasing, reliable queuing, and any critical shared state that must be viewed consistently — these are all the same underlying problem wearing different names, and they all require the same class of solution: a formally proven consensus algorithm, not a clever-sounding shortcut.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">how it works</div>
+    <h2>The asynchronous consensus problem, and why it's provably hard</h2>
+    <p>The variant that matters for real distributed software is <strong>asynchronous</strong> consensus — no bound on message delay — combined with <strong>crash-recover</strong> semantics (nodes come back, unlike the less realistic crash-fail model). The chapter notes the sobering theoretical result underneath all of this: the <strong>FLP impossibility result</strong> proves that no asynchronous consensus algorithm can guarantee progress in bounded time if the network is truly unreliable. In practice, systems sidestep this not by beating the theorem, but by engineering around it — running enough healthy replicas with good-enough connectivity that progress happens reliably <em>most</em> of the time, plus randomized backoff to prevent retries from synchronizing into their own failure pattern.</p>
+
+    <h3>Paxos, at a glance</h3>
+    <p>Paxos structures agreement as a sequence of numbered proposals. A proposer sends a sequence number; acceptors agree only if they haven't already seen a <em>higher</em> numbered proposal. Once a proposer collects agreement from a <strong>majority</strong>, it commits. The majority requirement is what actually guarantees correctness: any two majorities out of the same group must overlap in at least one node, which makes it structurally impossible for two different values to both get committed under the same proposal number. Acceptors must durably journal every agreement to disk — otherwise a crash-and-restart could silently violate the protocol's own guarantees.</p>
+    <p>Worth remembering: <strong>raw Paxos only lets you agree on one value, once.</strong> It's a primitive, not a product — real systems build much more on top of it, which is the entire next section.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">building on it</div>
+    <h2>From "agree once" to real system components</h2>
+    <p>Consensus primitives are genuinely low-level. What makes them <em>useful</em> is the layer built on top — often consumed as a service (Chubby at Google; Zookeeper, Consul, or etcd elsewhere) rather than a library every team reimplements. The chapter quotes Chubby's own authors on why this matters: providing consensus as a <em>service</em> frees every application team from having to correctly deploy and operate their own highly-available consensus cluster (right replica count, group membership, performance tuning) just to get a lock.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="220" fill="#FBF8EF"/>
+        <g font-size="12">
+          <rect x="30" y="140" width="620" height="50" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="340" y="170" text-anchor="middle" font-weight="bold">Consensus algorithm (Paxos/Raft/Zab) — agree on one value, once</text>
+
+          <path d="M340 140 L 340 110" stroke="#242121" stroke-width="1.5" marker-end="url(#a19)"/>
+
+          <rect x="30" y="60" width="620" height="45" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="340" y="87" text-anchor="middle" font-weight="bold">Replicated State Machine — same ops, same order, on every replica</text>
+
+          <path d="M340 60 L 340 30" stroke="#242121" stroke-width="1.5" marker-end="url(#a19)"/>
+
+          <text x="340" y="18" text-anchor="middle" font-size="12" fill="var(--ink-soft)">datastores · config stores · leader election · locks · queues</text>
+        </g>
+        <defs><marker id="a19" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — consensus is the foundation layer, RSMs are what's actually built on it (original diagram)</div>
+    </div>
+
+    <p>The key architectural idea is the <strong>Replicated State Machine (RSM)</strong>: the same sequence of operations, in the same order, executed identically on every replica — with consensus used purely to agree on <em>that ordering</em>. Any deterministic program can, in principle, become a highly-available service just by being expressed as an RSM. Real-world applications of this pattern:</p>
+    <ul>
+      <li><strong>Replicated datastores/config stores</strong> — consensus sits directly in the critical write path, so throughput and read-consistency tradeoffs matter enormously (Spanner's approach to clock uncertainty, discussed below, is a direct response to this).</li>
+      <li><strong>Leader election for highly-available processing</strong> — a system is written as a simple single-process program, then replicated with a leader elected to be "the one currently running it." Unlike a replicated datastore, consensus here is <em>not</em> in the main work's critical path, so throughput usually isn't the binding concern. (This pattern underlies both GFS/Colossus and Bigtable's master.)</li>
+      <li><strong>Coordination primitives — barriers and locks.</strong> A barrier blocks a group until some condition holds (e.g., "all Map tasks finished" before Reduce starts in MapReduce) — implementing it as an RSM avoids the obvious single point of failure a lone coordinator process would introduce. Locks, similarly, should almost always use <strong>renewable leases with timeouts</strong> rather than indefinite locks — otherwise a crashed process can hold a lock forever.</li>
+      <li><strong>Reliable queuing and messaging.</strong> Leases (not outright removal) should mark a claimed task, so a crashed worker's claim eventually expires and the task becomes available again. <strong>Atomic broadcast</strong> — every participant receiving messages reliably, in the identical order — is, notably, mathematically equivalent to consensus itself.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">performance</div>
+    <h2>Consensus is not inherently slow — but the details matter a lot</h2>
+    <p>The chapter pushes back directly on the common assumption that consensus is simply too slow for high-throughput, low-latency systems. It's genuinely at the core of many of Google's most critical systems and performs well in practice — the caveat is that performance depends heavily on workload shape and deployment choices, and there's no single universally "best" algorithm.</p>
+
+    <h3>Multi-Paxos and the dueling-proposers trap</h3>
+    <p>Multi-Paxos uses a <strong>strong leader</strong>: once elected, it needs only one round trip per proposal instead of the full two-phase protocol every time. Any process can technically attempt to become proposer, but doing so risks <strong>dueling proposers</strong> — competing proposals repeatedly interrupting each other in a livelock that can, in principle, continue indefinitely. Every practical consensus system avoids this either by settling on one elected proposer, or by pre-assigning specific proposal slots to specific replicas via rotation. Leader-election timeouts need careful tuning: too aggressive risks dueling proposers; too passive means longer unavailability windows whenever a real leader failure occurs. Randomizing the timeout (Raft's well-known approach) is the standard fix.</p>
+
+    <h3>Reading without hitting consensus every time</h3>
+    <p>Since many real workloads are read-heavy, forcing every read through full consensus is wasteful when strict up-to-the-millisecond consistency isn't actually required. Google's Photon system is the chapter's concrete example: writes require a strict atomic compare-and-set, but reads can be served from <em>any</em> replica — worst case, stale data just causes some redundant reprocessing, never an incorrect result. When a read genuinely must be current, there are three real options: a full read-only consensus operation, reading from a guaranteed-current stable leader, or <strong>quorum leases</strong> — granting a quorum of replicas a time-bound lease over a subset of data, enabling strongly-consistent <em>local</em> reads at some cost to write latency. Quorum leases shine specifically when reads for a given data subset cluster in one geographic region.</p>
+
+    <h3>The two hard physical limits: network and disk</h3>
+    <div class="math">
+      Typical round-trip times:<br>
+      same datacenter: ~1ms · within the US: ~45ms · New York ↔ London: ~70ms<br><br>
+      Small random disk write: ~10ms → caps consensus throughput near ~100 ops/sec per that write path
+    </div>
+    <p>TCP/IP's connection setup (a full round trip for the handshake, plus "slow start" throttling initial bandwidth) matters less for the small, persistently-connected consensus group itself, but becomes a real cost when <em>huge numbers</em> of individual clients each try to hold their own persistent connection to the cluster. The chapter's fix: <strong>regional proxies</strong> that hold the persistent long-haul connections on clients' behalf, while also conveniently centralizing sharding, load balancing, and leader discovery logic.</p>
+    <p>On the disk side: acceptors must durably log every commitment <em>before</em> replying — that write is unavoidable for correctness. Practical optimizations: combine the consensus log and the RSM's own transaction log into a single physical log (fewer disk seeks); batch multiple client operations into a single proposal to amortize the fixed disk/network cost across more real work; and pipeline multiple in-flight proposals (similar to TCP's sliding window) rather than idling while waiting for each individual round trip to complete.</p>
+
+    <h3>Fast Paxos isn't always actually faster</h3>
+    <p>Fast Paxos lets clients send proposals directly to every acceptor in parallel, skipping the leader hop. This sounds strictly better, but the chapter shows it's genuinely workload-dependent: if the client's own link to the acceptors is the slow leg (a long-haul connection) while the acceptors are fast to each other, Fast Paxos substitutes <em>N</em> parallel messages across the slow link for what Classic Paxos would have done as just one slow-link message plus fast parallel replication among the acceptors themselves. Due to how tail latencies behave, Classic Paxos frequently wins in exactly this common real-world topology.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">deploying it</div>
+    <h2>How many replicas, and where</h2>
+    <div class="math">
+      Non-Byzantine fault tolerance: 2f+1 replicas tolerate f failures<br>
+      3 replicas → tolerates 1 failure (the practical minimum)<br>
+      5 replicas → tolerates 2 failures (Google's typical default — see below)
+    </div>
+    <p>Why 5, not 3, in practice? Because most downtime comes from <em>planned</em> maintenance, not surprise failures — 3 replicas already leaves zero slack the moment one goes down for routine maintenance; if an <em>unplanned</em> failure then hits during that exact window, the whole consensus system goes unavailable. 5 replicas absorbs a planned maintenance event <em>and</em> a simultaneous unplanned failure without losing quorum.</p>
+    <div class="fails"><b>Losing quorum entirely is not just "unavailable" — it risks real, unrecoverable data loss</b>, since the durable logs of the missing replicas may hold decisions no surviving replica ever saw. Forcing a reconfiguration to recover is possible but always carries genuine data-loss risk, which is exactly why the decision to force it versus wait for a replica to come back deserves real deliberation, not a reflexive script.</div>
+    <p>There's a genuinely counterintuitive point here: <strong>adding a 6th replica to a 5-replica system can reduce availability</strong>, not improve it. Five replicas tolerate 40% simultaneous loss (2 of 5) for quorum; six replicas only tolerate 33% (2 of 6) — because the majority threshold moves from 3 to 4. Combined with placement, this gets sharper still: if five replicas are spread one-per-datacenter across five sites, losing any one datacenter still leaves a spare in every remaining group. Add a sixth replica into one of those <em>existing</em> five datacenters instead of a new sixth site, and losing that one datacenter now removes two spares from the group simultaneously — a structurally worse failure profile than before you "improved" redundancy.</p>
+
+    <h3>Failure domains and the geography tradeoff</h3>
+    <p>A failure domain is whatever a single failure can plausibly take out together — one machine, one rack's power supply, one datacenter, or an entire region hit by a natural disaster. Spreading replicas across larger failure domains buys more resilience but costs latency, since round-trip time (and usually operation latency) grows with distance. The chapter's grounding question: is the extra resilience actually worth it, given where your <em>clients</em> physically are? Spanning a consensus group across a wide geography to survive, say, a New York-area disaster is pointless if all your actual clients are also in that same New York failure domain — they'd be down anyway, so the system would simply be paying a latency tax with zero real benefit.</p>
+    <p>Two failure domains you can never fully engineer away, regardless of geographic spread: bugs in the software itself, and human operational error — both reasons real, independent, offline snapshots still matter even inside a robust multi-region consensus deployment.</p>
+
+    <h3>Quorum composition — geography inside the group itself matters too</h3>
+    <p>The chapter's worked example: five replicas spread as two in central US, one on the US east coast, two in Europe. In the common case, US-based transactions reach quorum without ever waiting on Europe, and Europe reaches quorum via just the east-coast replica — which functions as a "linchpin" connecting two overlapping regional quorums. Lose that one east-coast replica, though, and system latency jumps sharply: now every EU-originating transaction must reach all the way to central US directly, a much longer round trip than EU-to-east-coast ever was. This is a genuine structural fragility in simple majority quorums when replica latencies are highly uneven. <strong>Hierarchical quorums</strong> — say, nine replicas in three geographic groups of three, where a quorum needs a majority of <em>groups</em>, each satisfied by a majority within that group — reduce this fragility, at the real resource cost of running more total replicas.</p>
+
+    <h3>Colocating leaders creates a hidden bandwidth bottleneck</h3>
+    <p>A consensus leader sends proposal messages carrying the <em>full</em> proposed data payload, while every other replica sends back only small acknowledgments — meaning the leader's outgoing bandwidth is disproportionately loaded compared to everyone else. In a heavily sharded system, if the algorithm that assigns leadership isn't deliberately balancing leaders across datacenters (say, by naively favoring the fastest machines, or the longest-running processes — both of which can accidentally correlate with a single site), one datacenter can end up hosting a disproportionate share of leaders. If that specific datacenter then fails, leadership has to fail over en masse, and the network link between the two remaining datacenters can suddenly be hit with a traffic pattern nobody had provisioned for — exactly the kind of surprise capacity gap you'd most want to have already tested for.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">monitoring</div>
+    <h2>What actually needs watching in a live consensus system</h2>
+    <table class="recap">
+      <tr><th>Signal</th><th>Why it matters</th></tr>
+      <tr><td>Member count / health per group</td><td>A process can be "running" but still unable to make real progress (e.g., hardware fault)</td></tr>
+      <tr><td>Persistently lagging replicas</td><td>Distinguishes recovering, lagging, and fully caught-up-and-participating members</td></tr>
+      <tr><td>Leader presence</td><td>A leader-based system with no leader is fully unavailable — this alone is a critical alert</td></tr>
+      <tr><td>Leader change rate</td><td>Frequent changes ("flapping") hurt performance and often signal network issues; a *decreasing* term number can signal a serious bug</td></tr>
+      <tr><td>Consensus transaction number</td><td>Should steadily increase — a healthy, unambiguous progress signal</td></tr>
+      <tr><td>Proposals seen vs. agreed</td><td>Directly indicates whether the system is functioning correctly</td></tr>
+      <tr><td>Throughput and latency</td><td>Standard, but essential context for interpreting all of the above together</td></tr>
+    </table>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Heartbeats can't solve leader election</td><td>Leader election is provably a form of distributed consensus — timeouts alone are structurally insufficient</td></tr>
+      <tr><td>CAP theorem</td><td>Consistency, availability, and partition tolerance can't all hold at once — partitions are inevitable, so pick deliberately</td></tr>
+      <tr><td>Majority quorums (2f+1)</td><td>3 replicas tolerate 1 failure; 5 tolerate 2 — Google's typical default balances planned maintenance against unplanned failure</td></tr>
+      <tr><td>More replicas can mean less availability</td><td>6 replicas need a 4-node majority (33% tolerance) vs. 5 replicas needing 3 (40% tolerance)</td></tr>
+      <tr><td>RSMs are the real building block</td><td>Consensus agrees on ordering once; replicated state machines are what actually run deterministic logic identically everywhere</td></tr>
+      <tr><td>Reads don't always need full consensus</td><td>Quorum leases and stable-leader reads let read-heavy workloads scale without sacrificing correctness where it matters</td></tr>
+      <tr><td>Leader colocation is a hidden risk</td><td>Unbalanced leader placement can create a bandwidth bottleneck and an untested failover traffic spike</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 23, CC BY-NC-ND 4.0 · sre.google/sre-book/managing-critical-state</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.14 — Configuration Design and Best Practices</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/14-configuration-design-and-best-practices.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part II — Practices</div>
+    <h1 class="title">Chapter 14: Configuration Design and Best Practices</h1>
+    <p class="subtitle">"Hot green tea" vs. specifying the water temperature, boiling time, and cup size — why the best configuration interface is the one that asks the fewest questions.</p>
+    <div class="source-note">📖 Based on <em>Chapter 14</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/configuration-design/" target="_blank">sre.google/workbook/configuration-design</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="13-data-processing-pipelines.html">← Ch.13 Data Processing Pipelines</a><a href="15-configuration-specifics.html">next: Ch.15 Configuration Specifics →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the definition</div>
+    <h2>Configuration as a human-computer interface</h2>
+    <p>Systems are never truly fixed — business needs, infrastructure, and requirements keep shifting. When behavior needs to change faster than a full code rebuild-and-redeploy cycle allows, <strong>configuration</strong> is the low-overhead lever: a human-computer interface for adjusting system behavior without touching code. Any system can be reasoned about as three components — the software, the data set it works on, and its configuration — though in practice the boundaries between them blur constantly (Apache modules that embed Lua, stored SQL procedures that amount to real applications).</p>
+    <div class="callout"><b>Configuration differs from code in a genuinely important way: it usually lives in an untested, sometimes untestable environment.</b> A code change is typically a slow, incremental, reviewed, tested process. A single configuration change can have dramatic, immediate effect — one bad firewall rule can lock you out of your own system entirely. And configuration changes often have to be made under real pressure, mid-incident — which is exactly why the interface's usability directly determines reliability. The chapter draws a direct parallel to early aircraft cockpits: confusing controls and indicators caused real accidents regardless of pilot skill, and the same usability-reliability link applies just as strongly to swapping a control stick for a `.conf` file and a monitoring dashboard.</div>
+    <p>The chapter deliberately separates <strong>philosophy</strong> (structuring configuration, finding the right abstraction level — independent of any specific language or tooling) from <strong>mechanics</strong> (language choice, deployment strategy, system interactions) — because implementation details don't matter if the configuration itself demands too much confusing input from the user, and even the simplest input can become painful through a cumbersome interface (the old Linux kernel config process, which forced restarting the entire sequence just to fix one parameter, is the chapter's own cautionary example).</p>
+  </section>
+
+  <section card class="card">
+    <div class="tab">philosophy</div>
+    <h2>The ideal configuration is no configuration at all</h2>
+    <p>In an ideal world, a system automatically infers correct configuration from its deployment context, workload, or existing surrounding configuration. Most real systems can't fully reach that ideal — but it names the right direction of travel: away from a large pile of tunables, toward genuine simplicity. Historically, mission-critical systems (the chapter's own example: a NASA spacecraft control panel) offered huge numbers of controls, but required correspondingly extensive human training — a tradeoff that doesn't scale to most of the modern software industry, where that level of dedicated operator training simply isn't feasible.</p>
+
+    <h3>Infrastructure-centric vs. user-centric</h3>
+    <p>Every configuration interface, at bottom, is just a system asking the user questions. Two ways to frame that: the <strong>infrastructure-centric view</strong> favors offering as many knobs as possible, letting users tune toward perfection; the <strong>user-centric view</strong> treats every configuration question as a tax on the user's actual goal — fewer knobs is better, because answering questions is a chore standing between the user and their real task. The chapter favors the user-centric view directly, and notes something genuinely counterintuitive: limited configuration options often drive <em>better</em> adoption than maximally flexible software, precisely because onboarding effort drops sharply when something mostly works out of the box.</p>
+
+    <h3>Questions should sit close to what the user actually wants</h3>
+    <div class="callout"><b>The chapter's own tea-making analogy, worth holding onto:</b> a system with few configuration options lets a user ask for "hot green tea" and get roughly that. A system with many options makes the user specify water volume, boiling temperature, tea brand, steeping time, cup type, and cup volume — theoretically closer to perfect, but at a real cost that often outweighs the marginal benefit. When a user states a high-level goal rather than exact steps, the underlying system stays free to improve its own implementation over time — when the user specifies every step explicitly, the system is locked into following them exactly, forever. Kubernetes/Mesos-style job scheduling is the chapter's concrete real-world parallel: describe *what* you want run, not *which specific machine* it should run on.</div>
+
+    <h3>Mandatory vs. optional questions</h3>
+    <p><strong>Mandatory</strong> questions must be answered for any functionality at all (who to bill for an operation, say); <strong>optional</strong> ones refine quality without gating core function (worker process count). The chapter's clear recommendation: minimize mandatory questions relentlessly — not because any single one costs much, but because an engineer's day is an endless accumulation of small individual steps, and principled reduction compounds into real productivity gains. The most direct path: convert a mandatory question into an optional one by supplying a safe, broadly-applicable default (defaulting to dry-run rather than requiring the user to explicitly declare it).</p>
+
+    <h3>Dynamic defaults — smarter than any single hardcoded value</h3>
+    <p>A default doesn't have to be static. The chapter's concrete examples: a computationally intensive system can default its thread count to however many execution cores are actually available, rather than asking the user to guess a number appropriate to whatever platform they happen to be running on; a Java process running alone in a container can automatically size its heap to the container's actual available memory. Both remove a question the user would otherwise have had to answer correctly, purely by inferring the right value directly from context — while still allowing an explicit override for anyone who genuinely needs to constrain resource usage differently.</p>
+    <div class="fails"><b>Defaults are both an opportunity and a real responsibility — most users simply keep whatever default they're given.</b> The chapter's outside-computing illustration is genuinely striking: countries where organ donation defaults to opt-in (with an easy opt-out) see dramatically higher donor rates than countries defaulting to opt-out — the mere choice of default measurably reshapes real-world outcomes at population scale. Choosing the wrong default in a configuration system does real, if less dramatic, harm the same way.</div>
+    <p>And if a meaningful share of users start reporting friction with a particular dynamic default, that's a genuine signal the underlying decision logic no longer matches your actual user base — worth a broader fix rather than just adding yet another override knob for the unhappy minority. Conversely, an optional question with no clear real use case is a strong candidate for outright removal — every added knob is cognitive load for every future user, whether or not they ever touch it.</p>
+
+    <h3>Escaping simplicity, without abandoning it</h3>
+    <p>Power users still exist, and a purely simple interface can't always serve them. The chapter rejects the tempting-but-wrong fix of finding a "lowest common denominator" complexity level that satisfies everyone — that approach drags <em>every</em> use case, including the simplest ones, down into low-level detail. The better model: keep the high-level default ("green tea") as the primary interface, and let power users layer explicit, optional overrides on top ("...and steep for five minutes exactly") — the same pattern high-level languages like C++ or Java use when embedding raw machine or VM instructions inside otherwise high-level code, or the "Advanced options" panel many consumer apps tuck behind their simple default view.</p>
+    <div class="callout"><b>Optimize for the sum of hours spent configuring across the whole organization, not just the difficulty of any one setting.</b> That total includes decision paralysis when faced with too many options, the time lost correcting a wrong turn, and the general loss of confidence (and resulting slower pace of change) that comes with a more complex surface. A design that accomplishes something complex in fewer, individually harder steps can genuinely beat one with more, easier steps — if it keeps the common case dramatically simpler for the vast majority of users. And if more than a small minority of users regularly need the complex path, that's a signal your assumptions about the "common use case" were wrong in the first place, and worth real user research to correct.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">mechanics</div>
+    <h2>Separate configuration from the data it produces</h2>
+    <p>The chapter's answer to the old "is configuration code or data" debate: keep both, but keep them <em>separate</em>. The system's own infrastructure should operate on plain, static data (Protocol Buffers, YAML, JSON) — but users don't have to interact with that raw data directly. They can work through a higher-level interface (a Python-based DSL, Jsonnet, or no language at all — a web UI) that compiles down into that static representation, much the way C++ source compiles into machine code.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 160" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="160" fill="#FBF8EF"/>
+        <g font-size="12">
+          <rect x="20" y="55" width="180" height="50" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="110" y="85" text-anchor="middle" font-weight="bold">User interface</text>
+          <path d="M200 80 L 230 80" stroke="#242121" stroke-width="2" marker-end="url(#a27)"/>
+          <path d="M230 90 L 200 90" stroke="#242121" stroke-width="1.5" marker-end="url(#a27)"/>
+          <rect x="230" y="55" width="180" height="50" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="320" y="76" text-anchor="middle" font-weight="bold" font-size="11">Static data</text>
+          <text x="320" y="93" text-anchor="middle" font-size="10">(JSON/proto/YAML)</text>
+          <path d="M410 80 L 440 80" stroke="#242121" stroke-width="2" marker-end="url(#a27)"/>
+          <rect x="440" y="55" width="180" height="50" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="530" y="85" text-anchor="middle" font-weight="bold">System infra</text>
+        </g>
+        <text x="320" y="30" text-anchor="middle" font-size="11" fill="var(--ink-soft)">the UI can show current config too — the relationship is bidirectional</text>
+        <defs><marker id="a27" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — separating the user-facing interface from the static data the system actually consumes (original diagram)</div>
+    </div>
+    <p>This separation buys real flexibility: different organizational or product requirements can be accommodated (specific internal languages, externalized configuration for end users) without changing what the underlying infrastructure actually consumes, and the same system can support multiple front-end languages simultaneously — genuinely useful during a migration or after an acquisition, where teams may have inherited different configuration conventions. Because the final output is plain static data, it can also be analyzed directly — loaded into a database and queried to see which configuration parameters are actually in use, by whom, which is genuinely useful both for identifying dead features worth removing and for measuring the blast radius of a buggy option. Retaining metadata about how a given piece of configuration was originally ingested (the source file path, the compiling tool) makes it much easier to trace a problematic setting back to its actual author later.</p>
+    <p>It's entirely acceptable for the interface layer and the internal data format to both simply be plain data (JSON in, JSON consumed) — but the chapter cautions against tightly coupling the two regardless. An internal data structure can freely extend beyond what configuration actually supplies, holding implementation-specific detail that never needs to be user-visible at all.</p>
+
+    <h3>Tooling is not optional</h3>
+    <p><strong>Semantic validation</strong> matters at least as much as syntax validation — syntactically valid configuration can still reference a nonexistent directory from a typo, or request a thousand times more RAM than actually exists because of a unit mismatch. The guiding question for every possible misconfiguration: can it be caught the moment the user commits it, rather than discovered only after the change has already gone live?</p>
+    <p>On pure syntax, the chapter recommends the same baseline tooling any serious programming language would offer: editor syntax highlighting (including for any domain-specific "syntactic sugar" layered on top of a reused base language), a linter to catch common inconsistencies, and an automatic formatter — minimizing unproductive formatting debates and lowering the cognitive cost of context-switching between projects. Whitespace-sensitive configuration formats especially benefit here, since incorrect indentation can silently produce very different — and very costly — behavior.</p>
+
+    <h3>Ownership and change tracking</h3>
+    <p>Every piece of configuration should have a clear, single owner — directory-level ownership, for instance, makes it straightforward to know exactly who's responsible for a given change. This directly echoes the blameless postmortem culture from Chapter 10: the goal isn't assigning fault, it's being able to quickly and confidently understand who changed what, and how that change actually affected the system — whether the cause was an honest mistake or something malicious.</p>
+    <p>Versioning configuration (checking it into Git or Subversion, even when it's normally edited through a web UI or remote API) lets you reconstruct exactly what the configuration looked like at any past point in time. Logging both the change itself <em>and</em> its actual application to the running system matters too — committing a new configuration version doesn't always mean it's been applied yet, and during incident response, being able to quickly enumerate the full set of edits that went into a suspected change is what enables a confident rollback and lets you notify anyone else whose own configuration was affected by the same change.</p>
+  </section>
+
+  <section card class="card">
+    <div class="tab">safe application</div>
+    <h2>Three properties a safe configuration change actually needs</h2>
+    <ul>
+      <li><strong>Gradual deployment</strong> — never an all-or-nothing global push. Rolling the change out incrementally (the same instinct behind Kubernetes' rolling update strategy, and directly related to canarying, covered in Chapter 16) lets you detect a problem and abort before it becomes a 100% outage.</li>
+      <li><strong>The ability to roll back</strong> — rolling back a bad configuration change is almost always faster and more reliable at stopping an active incident than attempting a live patch, since there's inherently lower confidence a hastily written patch will actually fix the problem rather than introduce a new one.</li>
+      <li><strong>Automatic rollback, or at minimum a hard stop, when a change would cause loss of operator control</strong> — the chapter's relatable analogy: desktop OSes prompt a countdown-and-auto-revert when changing screen resolution, specifically because a bad monitor setting could otherwise leave the user with no way to undo it. The same risk shows up constantly in infrastructure — a sysadmin accidentally firewalling themselves out of the very system they're configuring is a genuinely common, avoidable failure mode.</li>
+    </ul>
+    <div class="callout"><b>A critical, easy-to-miss precondition: configuration must be hermetic to be safely rolled forward or backward at all.</b> If a configuration depends on some external resource that can independently change outside the configuration's own version-controlled environment — a reference to live data sitting on a network filesystem, say — rolling back the configuration text alone won't actually restore the old behavior, because the external state it depended on has already moved on. These same three safety properties aren't unique to configuration, either — they apply just as directly to binary upgrades and new dataset pushes.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">the payoff</div>
+    <h2>Google's own applied example: the Canary Analysis Service</h2>
+    <p>The chapter closes by pointing to a real internal system — Google's Canary Analysis Service — as a concrete proof point. The team spent roughly a month specifically working to reduce mandatory configuration questions and find genuinely good defaults for the optional ones. The resulting system, being simple, saw wide internal adoption with very little need for dedicated user support — because the interface was easy enough to understand that users could make changes with real confidence. The chapter is honest that this didn't eliminate misconfiguration or support requests entirely, and never fully will — but deliberate configuration design measurably reduced both.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Configuration is an untested environment by nature</td><td>Unlike code, a single bad setting can have dramatic, immediate, un-reviewed effect</td></tr>
+      <tr><td>User-centric beats infrastructure-centric</td><td>Fewer knobs often drives *better* adoption than maximal flexibility, since onboarding cost drops sharply</td></tr>
+      <tr><td>"Hot green tea," not water temperature and steeping time</td><td>High-level goals let the system improve its own implementation over time; exact steps lock it in place</td></tr>
+      <tr><td>Minimize mandatory questions; convert them to optional with safe defaults</td><td>Small individual steps compound into real productivity loss across an engineer's day</td></tr>
+      <tr><td>Dynamic defaults infer context instead of asking</td><td>Thread count from core count, heap size from container memory — no question needed at all</td></tr>
+      <tr><td>Defaults shape outcomes at scale</td><td>The organ-donation opt-in/opt-out example shows how much a single default choice really matters</td></tr>
+      <tr><td>Separate the user interface from the static data the system consumes</td><td>Enables multiple front-end languages, direct data analysis, and clean decoupling from internal implementation detail</td></tr>
+      <tr><td>Gradual rollout + rollback + hard-stop on lost control</td><td>The three properties that make a configuration change genuinely safe to apply — and safe configuration must be hermetic to actually roll back cleanly</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 14, CC BY-NC-ND 4.0 · sre.google/workbook/configuration-design</footer>
+</div>
+</body>
+</html>

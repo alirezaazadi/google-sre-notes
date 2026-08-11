@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.18 — Software Engineering in SRE</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/18-software-engineering-in-sre.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part III — Practices</div>
+    <h1 class="title">Chapter 18: Software Engineering in SRE</h1>
+    <p class="subtitle">Auxon: how a spreadsheet-and-guesswork problem — capacity planning — became a linear-programming product built by the same engineers who lived the pain firsthand.</p>
+    <div class="source-note">📖 Based on <em>Chapter 18</em> of Google's SRE book — <a href="https://sre.google/sre-book/software-engineering-in-sre/" target="_blank">sre.google/sre-book/software-engineering-in-sre</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="17-testing-for-reliability.html">← Ch.17 Testing for Reliability</a><a href="19-load-balancing-at-the-frontend.html">next: Ch.19 Load Balancing at the Frontend →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">why SRE builds products</div>
+    <h2>SREs are uniquely positioned to build the tools SREs need</h2>
+    <p>Google's scale means most off-the-shelf tooling simply isn't built for what SRE actually needs — so a real, ongoing category of SRE work is building genuine software products, not quick internal scripts. The chapter makes the case for why SREs specifically are well suited to this:</p>
+    <ul>
+      <li><strong>Deep, firsthand production knowledge</strong> shapes better design decisions around scalability and graceful degradation from the start — not bolted on after the fact.</li>
+      <li><strong>Being embedded in the problem</strong> means requirements gathering is nearly automatic — the builder already understands the need intimately.</li>
+      <li><strong>A direct relationship with the user base</strong> (fellow SREs) means frank, high-signal feedback, and an internal audience that's genuinely more tolerant of a rough early UI than an external customer would ever be — which lets a small team launch and iterate faster.</li>
+    </ul>
+    <p>There's also a structural, almost load-bearing reason this matters: SRE headcount is deliberately meant to grow <em>slower</em> than the services it supports (the "team size shouldn't scale directly with service growth" principle from Chapter 1). Sustaining that gap requires continuous automation and tooling investment — and the people who best understand exactly where the operational pain actually is are the same people running production day to day.</p>
+    <p>The benefit runs the other way too: real software projects give SREs genuine career growth, a healthy counterbalance to interrupt-heavy on-call work, and — notably — help attract and retain engineers with a genuine mix of systems and software backgrounds, which itself protects against organizational blind spots.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the case study</div>
+    <h2>Auxon: capacity planning, before and after</h2>
+    <p>The chapter spends most of its length on one detailed case study — Auxon, a tool that automates capacity planning across Google's production fleet, actively used to plan allocation of many millions of dollars of machine resources.</p>
+
+    <h3>Why traditional capacity planning breaks down</h3>
+    <p>The traditional cycle — forecast demand, devise a build/allocation plan, get it reviewed and signed off, deploy — sounds reasonable, but the chapter identifies two structural flaws that compound at scale:</p>
+    <ul>
+      <li><strong>Brittleness.</strong> Almost any small change — a service getting less efficient, adoption spiking faster than forecast, a hardware delivery slipping — can force re-validating, or entirely re-deriving, the whole plan. Worse, each quarter's plan depends on the previous quarter's actual outcome, so a change anywhere cascades forward through every subsequent quarter's numbers too.</li>
+      <li><strong>Laborious and imprecise.</strong> Resources aren't fungible — extra capacity in North America doesn't help a shortfall in Asia if latency requirements demand same-continent serving — so every forecast carries real constraints that spreadsheets handle poorly. And underneath it all is <strong>bin packing</strong>, an NP-hard problem no amount of manual spreadsheet effort can solve well by hand. By the time a request like "50 cores in cluster Y" reaches whoever's doing the packing, all the <em>reasoning</em> behind that specific number has usually been lost — leaving no flexibility to explore alternatives.</li>
+    </ul>
+
+    <h3>The fix: encode intent, not implementation</h3>
+    <p>Auxon's core idea is a genuine reframe: instead of a service owner specifying a concrete resource request, they specify their actual <em>intent</em> — the real requirements and constraints — and let a solver compute the optimal allocation. If demand, supply, or requirements change, you don't manually redo the plan — you just re-run the solver against the updated inputs and get the new optimum automatically.</p>
+
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 240" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="240" fill="#FBF8EF"/>
+        <text x="20" y="24" font-size="13" font-weight="bold">the abstraction ladder — same underlying need, increasing flexibility</text>
+        <g font-size="12">
+          <rect x="20" y="40" width="620" height="38" fill="#F4E1D6" stroke="#B84B2A" stroke-width="1.8"/>
+          <text x="30" y="64" font-size="11.5">1. "50 cores in clusters X, Y, Z" — concrete, brittle, no reasoning attached</text>
+
+          <rect x="20" y="85" width="620" height="38" fill="#F4E1D6" stroke="#B84B2A" stroke-width="1.8"/>
+          <text x="30" y="109" font-size="11.5">2. "50-core footprint, any 3 clusters in region YYY" — more freedom, still opaque why</text>
+
+          <rect x="20" y="130" width="620" height="38" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="1.8"/>
+          <text x="30" y="154" font-size="11.5">3. "meet demand per region with N+2 redundancy" — human-understandable intent ← sweet spot</text>
+
+          <rect x="20" y="175" width="620" height="38" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="1.8"/>
+          <text x="30" y="199" font-size="11.5">4. "run at five nines of reliability" — maximum flexibility, for sophisticated services</text>
+        </g>
+      </svg>
+      <div class="diagram-caption">sketch — the intent abstraction ladder from the chapter (original diagram)</div>
+    </div>
+
+    <p>Google's own experience is that the sweet spot is usually level 3 — enough flexibility to unlock real optimization, while remaining understandable in plain human terms. Level 4 exists and is used by the most sophisticated services, but demands a level of upfront rigor most teams aren't ready to specify.</p>
+
+    <h3>The three inputs intent actually needs</h3>
+    <ul>
+      <li><strong>Dependencies</strong> — services depend on other services, often with hard latency constraints (e.g., "Bar must be within 30ms of Foo"), and those dependencies nest recursively — Bar depends on Baz and Qux, which constrains where Foo can effectively live too.</li>
+      <li><strong>Performance metrics</strong> — the conversion factors between resource types: how many backend Mbps does N frontend queries actually cost? These numbers are the glue that lets the solver translate one service's demand into concrete downstream resource needs.</li>
+      <li><strong>Prioritization</strong> — when there genuinely isn't enough capacity to satisfy everyone, <em>something</em> has to give. Intent-based planning forces that trade-off to be made explicitly and transparently, rather than left to whichever ad hoc, opaque process happened to win in the old spreadsheet world.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">under the hood</div>
+    <h2>Auxon's architecture: from human intent to a solved linear program</h2>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 260" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="260" fill="#FBF8EF"/>
+        <g font-size="11">
+          <rect x="20" y="20" width="150" height="45" fill="#F4E1D6" stroke="#B84B2A" stroke-width="1.8"/>
+          <text x="95" y="47" text-anchor="middle">Intent Config</text>
+          <rect x="20" y="80" width="150" height="45" fill="#F4E1D6" stroke="#B84B2A" stroke-width="1.8"/>
+          <text x="95" y="107" text-anchor="middle">Performance Data</text>
+          <rect x="20" y="140" width="150" height="45" fill="#F4E1D6" stroke="#B84B2A" stroke-width="1.8"/>
+          <text x="95" y="167" text-anchor="middle">Demand Forecast</text>
+          <rect x="20" y="200" width="150" height="45" fill="#F4E1D6" stroke="#B84B2A" stroke-width="1.8"/>
+          <text x="95" y="222" text-anchor="middle">Supply + Pricing</text>
+
+          <path d="M170 42 L 230 100" stroke="#242121" stroke-width="1.3" fill="none"/>
+          <path d="M170 102 L 230 100" stroke="#242121" stroke-width="1.3" fill="none"/>
+          <path d="M170 162 L 230 100" stroke="#242121" stroke-width="1.3" fill="none"/>
+          <path d="M170 222 L 230 100" stroke="#242121" stroke-width="1.3" fill="none"/>
+
+          <rect x="230" y="75" width="180" height="55" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="320" y="98" text-anchor="middle" font-weight="bold">Config Language Engine</text>
+          <text x="320" y="116" text-anchor="middle" font-size="9.5">→ machine-readable protobuf</text>
+
+          <path d="M410 102 L 460 102" stroke="#242121" stroke-width="1.5" marker-end="url(#a16)"/>
+
+          <rect x="460" y="75" width="180" height="55" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.5"/>
+          <text x="550" y="98" text-anchor="middle" font-weight="bold">Auxon Solver</text>
+          <text x="550" y="116" text-anchor="middle" font-size="9.5">mixed-integer / linear program</text>
+
+          <path d="M550 130 L 550 165" stroke="#242121" stroke-width="1.5" marker-end="url(#a16)"/>
+          <rect x="460" y="170" width="180" height="55" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2.5"/>
+          <text x="550" y="193" text-anchor="middle" font-weight="bold">Allocation Plan</text>
+          <text x="550" y="211" text-anchor="middle" font-size="9.5">who gets what, where</text>
+        </g>
+        <defs><marker id="a16" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — Auxon's major components (original diagram)</div>
+    </div>
+    <p>The four inputs feed a config layer, which compiles human-readable intent into a machine-parseable optimization request; the solver — designed to scale across hundreds or thousands of machines in parallel — formulates and solves the resulting mixed-integer/linear program; and the output, the <strong>Allocation Plan</strong>, states exactly which resources go where — and critically, also flags any requirements it <em>couldn't</em> satisfy, whether from a genuine resource shortage or mutually incompatible constraints, so that trade-off stays visible rather than silently dropped.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">building it</div>
+    <h2>Lessons from actually shipping Auxon</h2>
+
+    <h3>Staying the consumer, not just the builder</h3>
+    <p>The team behind Auxon deliberately stayed on production on-call rotations for the services they were building for, throughout development. This wasn't incidental — when Auxon itself failed, the team felt it directly, and feature priorities were shaped by their own lived pain rather than secondhand requests. That dual role (builder <em>and</em> user) is what gave the product real credibility inside SRE.</p>
+
+    <h3>"Approximation" — the Stupid Solver</h3>
+    <p>Early on, the team didn't fully understand the limits of linear programming for this problem, and rather than get stuck, they built a deliberately named "Stupid Solver" — a simple heuristic engine that would never find a truly optimal answer, but proved the overall product vision was achievable at all. The design discipline that made this safe: the solver was fully abstracted behind an interface from day one, so swapping the Stupid Solver for a real optimizer later was a clean, contained change rather than a rewrite.</p>
+    <div class="callout"><b>The generalizable lesson:</b> when facing genuine uncertainty about a hard subproblem, ship a deliberately simple placeholder behind a clean interface rather than blocking on getting it perfect — as long as the interface boundary is real, upgrading later is cheap.</div>
+
+    <h3>Staying "agnostic" to handle a moving target</h3>
+    <p>Auxon aimed to eventually plug into Google's automation systems to directly enact its plans — but those systems were themselves in heavy flux at the time. Rather than build bespoke integrations for each one, the team shaped the Allocation Plan output to be generically useful, letting each downstream automation system build its own integration on its own terms. The same instinct applied to modeling future machine performance data, which was genuinely scarce — abstracting it behind a single interface let users plug in different performance scenarios without Auxon itself needing to have all the answers upfront.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">adoption</div>
+    <h2>Getting people to actually use it</h2>
+    <ul>
+      <li><strong>Set honest expectations.</strong> Separate the aspirational long-term vision from the actual Minimum Viable Product, and be explicit about which is which — overpromising early destroys credibility fast, but underselling makes it hard to justify the activation energy of switching at all. Auxon's balance: promise immediate relief from manual bin-packing pain now, and larger compounding benefits later as the same configuration carries forward into new features.</li>
+      <li><strong>Target the right first customers.</strong> Teams with an already-working (if imperfect) homegrown solution have little incentive to adopt an early, rough alternative. The team deliberately targeted teams with <em>no</em> existing process first — they had to invest setup effort either way, so a new tool wasn't a harder sell than the status quo. Early wins there became genuine, credible advocacy that pulled in later, more skeptical adopters.</li>
+      <li><strong>White-glove early support.</strong> Even highly technical users face a real learning curve with a genuinely new tool — and automation can trigger real, personal anxiety (a fear that a script is quietly replacing someone's job). Working one-on-one with early adopters addresses both the technical and the emotional side directly, and — because SRE teams are globally distributed — creates local champions who can carry that credibility to other teams without the core team needing to be everywhere at once.</li>
+      <li><strong>Design for "come as you are."</strong> Deliberately not requiring adopters to first switch their forecasting tool, turnup automation, or performance-data source lowered the barrier to entry dramatically — and the team explicitly rejected chasing 100% organization-wide adoption as the success bar, recognizing diminishing returns in forcing the tool to fit every last long-tail use case.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">team building</div>
+    <h2>Assembling the right team, at the right time</h2>
+    <p>The chapter recommends a seed team mixing fast-ramping generalists with engineers who bring genuine domain depth — deliberately guarding against the trap of assuming every team's use case looks like your own. For Auxon specifically, the team consulted Google's in-house Operations Research specialists early to bootstrap their understanding of the problem space, then brought on dedicated statistics and optimization expertise later, once the core product's basic functionality already worked and the priority had shifted to refining it. The rough rule of thumb offered: bring in deep specialists once a project is demonstrably off the ground — not before, when their expertise would have little concrete surface to attach to yet.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">choosing projects</div>
+    <h2>What makes a good — or bad — SRE software project</h2>
+    <table class="recap">
+      <tr><th>Good signal</th><th>Bad signal</th></tr>
+      <tr><td>Built by engineers with firsthand domain experience</td><td>Touches too many moving parts simultaneously</td></tr>
+      <tr><td>Highly technical user base → high-signal early feedback</td><td>Requires an all-or-nothing rollout, blocking iterative development</td></tr>
+      <tr><td>Clear, measurable benefit (toil reduction, infra improvement)</td><td>Overly narrow — only benefits one team's specific service</td></tr>
+      <tr><td>Aligns with broader org objectives, easing staffing/support</td><td>Overly generic — tries to fit everyone and ends up fitting no one well</td></tr>
+    </table>
+    <p>The chapter flags a specific structural risk for SRE teams organized around individual services: local incentives naturally push toward "make this great for my one service," with cross-team standardization coming a distant second — which is exactly how narrow, unshared, duplicated tooling proliferates. The corrective isn't to abandon service-specific work — it's active cross-organizational socialization and review, catching disjoint or overlapping efforts before they duplicate each other. When generalization <em>does</em> work, the payoff can be dramatic: an SRE-built layer-3 load balancer eventually became successful enough to be repurposed as the externally-facing Google Cloud Load Balancer product.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">culture</div>
+    <h2>Building a software-development culture inside an ops-rooted org</h2>
+    <p>The chapter is candid about a real friction point: SREs are often strong generalist coders, but frequently lack the traditional product-team muscle of gathering and prioritizing user requirements. The quoted line from an early SRE developer — <em>"I have a design doc; why do we need requirements?"</em> — captures the gap precisely. Pairing engineers with product-minded TPMs or PMs helps blend genuine production expertise with real product discipline.</p>
+    <p><strong>Protected, uninterrupted project time</strong> is called out as simply essential — meaningful software work is close to impossible when constantly thrashing between interrupts, and defending that time deliberately is itself part of running a serious software effort inside SRE.</p>
+    <p>Most SRE software starts as a scrappy side project and later branches one of three ways: it stays a grassroots effort worked on in spare time, it formalizes through structured process, or it earns executive sponsorship and becomes fully staffed. Whichever path it takes, the chapter is firm on one constraint: the SREs building it should keep actually doing SRE work throughout, rather than becoming embedded full-time developers — staying grounded as both builder and user is what keeps the eventual product actually useful in production, not just theoretically elegant.</p>
+
+    <h3>Introducing this model to an organization — practical steps</h3>
+    <ul>
+      <li><strong>Communicate a clear, honest message</strong> tailored to a naturally skeptical audience — SREs are specifically hired for skepticism, so the pitch has to survive genuine scrutiny, not just enthusiasm. You've cleared the first real hurdle once the questions shift from "should we do this at all" to "how exactly will this work."</li>
+      <li><strong>Honestly assess organizational gaps</strong> — does anyone currently play product manager? Does your tech lead have real experience running an agile process? Borrow training, coaching, or consulting time from existing product teams before assuming you need to hire.</li>
+      <li><strong>Launch and iterate, deliberately small at first</strong> — pick early targets that are genuinely achievable and uncontroversial to build real credibility fast, then settle into a steady release cadence (Google's own experience: roughly every six months worked well, with some teams later graduating to push-on-green for tighter feedback loops).</li>
+      <li><strong>Never lower the bar just because it's "internal."</strong> Hold the same standards a dedicated product team would be held to: real code review, real integration testing, and genuine production-readiness review from another SRE team, exactly as you'd expect when onboarding any other service. Credibility here is slow to build and fast to lose.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Intent over implementation</td><td>Encoding *why* a service needs resources, not just a fixed number, makes plans automatically adaptable to change</td></tr>
+      <tr><td>Stupid Solver</td><td>A deliberately simple placeholder behind a clean interface is often the right early move under real uncertainty</td></tr>
+      <tr><td>Stay both builder and user</td><td>Remaining on-call for the systems you build tools for keeps priorities grounded in real pain, not guesswork</td></tr>
+      <tr><td>Target the right first customers</td><td>Teams with no existing solution have the least switching friction and become your best early advocates</td></tr>
+      <tr><td>Agnosticism / "come as you are"</td><td>Not requiring a switch of every adjacent tool lowers adoption barriers dramatically</td></tr>
+      <tr><td>Don't lower internal standards</td><td>Hold internal tools to the same review, testing, and production-readiness bar as any externally-shipped product</td></tr>
+      <tr><td>Stay both builder and consumer</td><td>Keep SREs doing real SRE work even while building — that dual perspective is what keeps the tool honest</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 18, CC BY-NC-ND 4.0 · sre.google/sre-book/software-engineering-in-sre</footer>
+</div>
+</body>
+</html>

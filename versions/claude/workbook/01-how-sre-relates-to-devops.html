@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.1 — How SRE Relates to DevOps</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/01-how-sre-relates-to-devops.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Opening Chapter</div>
+    <h1 class="title">Chapter 1: How SRE Relates to DevOps</h1>
+    <p class="subtitle">"class SRE implements interface DevOps" — two movements that arrived at nearly the same answer from very different starting points.</p>
+    <div class="source-note">📖 Based on <em>Chapter 1</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/how-sre-relates/" target="_blank">sre.google/workbook/how-sre-relates</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><span>← start of Workbook</span><a href="02-implementing-slos.html">next: Ch.2 Implementing SLOs →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the framing</div>
+    <h2>Two answers to the same underlying problem</h2>
+    <p>The chapter's title is also its thesis, expressed as a line of pseudocode: <strong>class SRE implements interface DevOps.</strong> DevOps is a broad philosophy and culture; SRE is Google's own specific, concrete job role and set of practices. The claim isn't that they're identical — it's that SRE is one legitimate, working implementation of the principles DevOps describes, arrived at independently, from a different institutional history.</p>
+    <p>Operations as a discipline is genuinely hard — not just the unsolved question of how to run systems well, but how to run the *teams* that run systems well, a problem people have been chewing on since long before modern computing existed. Despite that long history, reliable production operations has remained stubbornly elusive, in no small part because much of the enterprise world treats operations as a pure cost center — a framing that makes meaningful investment in doing it well genuinely difficult to justify internally.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">DevOps</div>
+    <h2>CALMS — the acronym behind DevOps philosophy</h2>
+    <p>Coined by John Willis, Damon Edwards, and Jez Humble, <strong>CALMS</strong> — Culture, Automation, Lean, Measurement, Sharing — captures DevOps's core commitments. The chapter singles out five ideas as worth understanding individually, even though DevOps treats them as inseparable by design:</p>
+    <ul>
+      <li><strong>No more silos.</strong> A direct reaction against the traditional dev/ops split, and against the broader pattern where siloed knowledge, purely local incentives, and poor cross-team collaboration actively hurt the business.</li>
+      <li><strong>Accidents are normal.</strong> Failures rarely trace back to one person's isolated mistake — they trace back to <em>missing safeguards</em> for when things inevitably go wrong: a confusing interface that nudges the wrong action under pressure, an unarticulated edge case nobody designed for, broken monitoring that hides the problem entirely. Hunting for someone to blame just teaches people to hide problems and deflect responsibility — genuinely unprofitable outcomes. The better investment is speeding recovery, not chasing an unreachable zero-accidents target.</li>
+      <li><strong>Change should be gradual.</strong> Small, frequent changes beat large, infrequent, heavily-negotiated ones — the opposite of the traditional "monthly change committee reviewing a thick binder" model. This is the direct philosophical root of continuous integration and continuous delivery/deployment.</li>
+      <li><strong>Tooling and culture are interrelated — but culture wins.</strong> Tooling matters, especially for change management specifically, but DevOps proponents are emphatic that culture, not tooling, is the real lever. A strong culture can work around broken tooling; the reverse essentially never holds.</li>
+      <li><strong>Measurement is crucial.</strong> Establishing objective reality, verifying a change actually moved the needle, and creating shared ground for cross-functional conversations — in business contexts and in on-call contexts alike.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">SRE</div>
+    <h2>SRE's own concrete principles</h2>
+    <p>Where DevOps is a philosophy, SRE is a job role plus a specific, opinionated set of practices — and unlike DevOps (which grew from cross-company collaboration among practitioners), SRE inherited much of its culture directly from Google's own surrounding engineering norms, before the term spread industry-wide. The chapter lists SRE's defining, concrete tenets:</p>
+    <ul>
+      <li><strong>Operations is a software problem</strong> — and should be solved with software-engineering approaches, from small process fixes all the way up to rewriting a stack to remove single points of failure.</li>
+      <li><strong>Manage by SLOs, not 100% availability</strong> — a collaborative target set jointly by product and SRE, with real cultural weight: an SLO violation sends everyone back to the drawing board, blamelessly, rather than triggering a hunt for fault.</li>
+      <li><strong>Minimize toil.</strong> Any manual, structurally mandated operational task is something SRE actively dislikes — not because such work never happens (it does, plenty), but because at Google, toil is explicitly *not* the job description the way it can be elsewhere. Time spent on toil is time not spent making the service more reliable and scalable through real engineering.</li>
+      <li><strong>The wisdom of production.</strong> Pages, tickets, and operational friction aren't just annoyances to eliminate — they're a direct, unfiltered connection to how the system actually behaves, as opposed to how a whiteboard diagram imagines it behaves. That signal should actively inform better design, not just get automated away and forgotten.</li>
+      <li><strong>Automate this year's job away — with an explicit numeric guarantee behind it.</strong> Google enforces a hard 50% ceiling on toil per SRE. The chapter reframes this deliberately: most people think of it as a cap, but it's more useful to think of it as a <em>guarantee</em> — an explicit, enforced mechanism ensuring engineering time actually gets protected, not just a limit on how bad things are allowed to get.</li>
+      <li><strong>Move fast by reducing the cost of failure.</strong> SRE's real payoff isn't just "more reliable" — it's *faster product development*, because a lower MTTR for common faults means developers spend less time firefighting and more time building, and problems get caught earlier in the lifecycle, when they're cheapest to fix.</li>
+      <li><strong>Share ownership with developers.</strong> Rigid dev/ops boundaries are counterproductive — especially when they create real power or pay imbalances. The chapter's memorable phrase: teams should be willing to "blur the lines," with SREs sometimes instrumenting JavaScript and developers sometimes qualifying kernels — spreading both the knowledge of how to make changes and the authority to make them, rather than any one team jealously guarding a single layer.</li>
+      <li><strong>Use the same tooling, regardless of role or title.</strong> Behavior is heavily shaped by tooling — having SREs and developers use different tools that behave differently under the same conditions is a recipe for exactly the kind of catastrophic, hard-to-predict mismatch that erodes trust in the whole system.</li>
+    </ul>
+    <div class="callout"><b>An important clarification the chapter makes explicit:</b> the original SRE book didn't sufficiently emphasize that product development teams own their own service <em>by default</em> at Google. SRE isn't available — or even warranted — for the large majority of services; SRE principles still inform how services get managed broadly, but direct SRE engagement is the exception, not the default, and even then the ownership model is fundamentally shared, not a full handoff.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">compare and contrast</div>
+    <h2>Genuine overlap, and genuine differences</h2>
+    <p>The chapter lays the two side by side and finds substantial common ground: both accept that change is necessary and healthy; both center collaboration and shared ownership; both favor small, continuous, automatically-tested change over large batched change; both treat the right tooling (and specifically an API-oriented philosophy for managing systems) as critically important, while resisting getting too attached to any one specific toolset; both are fundamentally data- and measurement-driven; and both practice blameless postmortems specifically to defuse the unhelpful, adrenaline-driven reactions that make incidents worse.</p>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 660 220" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="660" height="220" fill="#FBF8EF"/>
+        <g font-size="12">
+          <rect x="20" y="30" width="270" height="160" rx="6" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2.5"/>
+          <text x="155" y="55" text-anchor="middle" font-weight="bold" font-size="14">DevOps</text>
+          <text x="155" y="80" text-anchor="middle" font-size="11.5">wide philosophy &amp; culture</text>
+          <text x="155" y="98" text-anchor="middle" font-size="11.5">context-sensitive, not</text>
+          <text x="155" y="115" text-anchor="middle" font-size="11.5">prescriptive on service</text>
+          <text x="155" y="132" text-anchor="middle" font-size="11.5">management specifics</text>
+          <text x="155" y="158" text-anchor="middle" font-size="11.5" fill="#1e3c66">focus: whole-business</text>
+          <text x="155" y="174" text-anchor="middle" font-size="11.5" fill="#1e3c66">barrier-breaking</text>
+
+          <rect x="370" y="30" width="270" height="160" rx="6" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2.5"/>
+          <text x="505" y="55" text-anchor="middle" font-weight="bold" font-size="14">SRE</text>
+          <text x="505" y="80" text-anchor="middle" font-size="11.5">narrow, concrete job role</text>
+          <text x="505" y="98" text-anchor="middle" font-size="11.5">opinionated framework —</text>
+          <text x="505" y="115" text-anchor="middle" font-size="11.5">error budgets, SLOs,</text>
+          <text x="505" y="132" text-anchor="middle" font-size="11.5">toil ceilings</text>
+          <text x="505" y="158" text-anchor="middle" font-size="11.5" fill="#7a2c14">focus: service &amp;</text>
+          <text x="505" y="174" text-anchor="middle" font-size="11.5" fill="#7a2c14">end-user reliability</text>
+        </g>
+      </svg>
+      <div class="diagram-caption">sketch — DevOps' breadth vs. SRE's narrower, more opinionated concreteness (original diagram)</div>
+    </div>
+    <p>The differences are real, too. DevOps is deliberately broader and more context-sensitive — it says relatively little about the precise mechanics of running a service, choosing instead to focus on dismantling organizational barriers more generally. SRE is narrower, more service- and end-user-oriented, and considerably more opinionated — it arrives with a specific intellectual framework (error budgets chief among them) for how reliability should actually be managed day to day. The chapter's own summary line is genuinely useful: <em>"SRE believes in the same things as DevOps but for slightly different reasons"</em> — SRE would support CI/CD not primarily for the broader business case DevOps emphasizes, but because it directly improves operational practice.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">making it stick</div>
+    <h2>The organizational conditions that actually make either approach work</h2>
+    <p>The chapter closes with a genuinely practical, borrowed-Tolstoy observation: effective operations approaches tend to resemble each other, while broken ones each fail in their own distinctive way — and incentives are usually why.</p>
+    <ul>
+      <li><strong>Narrow, rigid incentives narrow your success.</strong> Tying incentives too tightly to launch speed or to raw reliability numbers invites Goodhart's-Law-style gaming, often by well-intentioned people simply optimizing for what's actually measured. Give people room to find genuine tradeoffs instead of chasing a proxy metric.</li>
+      <li><strong>Fix it yourself — don't pass the blame.</strong> The chapter names blame-shifting as the *core* pathology of the traditional dev/ops split, since separating the two teams naturally lets separate, sometimes conflicting incentives take root. Concrete countermeasures: actively let engineers change code and config when the product genuinely needs it, don't just tolerate that; support real blameless postmortems, which remove the incentive to downplay or hide a problem; and — genuinely institutionalized at Google — allow SRE to withdraw support from a product judged irredeemably operationally difficult, which creates real pressure on product development to fix root causes rather than let operational pain quietly accumulate on someone else's plate.</li>
+      <li><strong>Treat reliability work as a genuinely specialized role.</strong> At Google, SRE and product development are separate orgs with separate management — but they're financially and reputationally interdependent: product success literally funds SRE team growth, giving each side real skin in the other's success, reinforced by consistent high-level management support.</li>
+      <li><strong>"When" can substitute for "whether."</strong> Once an org is large enough, you don't always need a binary "we will / won't support this" decision — sequencing support ("X gets it before Y") can quietly play much the same disciplining role as an outright refusal, without the harder conversation that comes with it.</li>
+      <li><strong>Strive for genuine parity of esteem.</strong> SRE/DevOps practitioners should be evaluated by roughly the same standards, and compensated on roughly the same scale, as their product-development counterparts — otherwise the org quietly signals that reliability work is a lesser career track, undermining everything else.</li>
+    </ul>
+    <div class="fails"><b>A pointed caution the chapter includes directly:</b> simply renaming a team "DevOps" or "SRE" with no actual change in organizational positioning, incentives, or practice — the chapter's own term is "rename-and-shame" — is a hollow move that reliably fails to deliver the promised improvement, then gets blamed on the framework rather than the lack of real change behind the label.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>SRE implements a DevOps interface</td><td>Different institutional histories, substantially overlapping practices — not competing philosophies</td></tr>
+      <tr><td>CALMS</td><td>Culture, Automation, Lean, Measurement, Sharing — the five pillars underlying DevOps philosophy</td></tr>
+      <tr><td>Accidents are normal, not individual failures</td><td>Missing safeguards, not bad actors, are the usual real cause — chase recovery speed, not a zero-accident fantasy</td></tr>
+      <tr><td>50% toil cap is a guarantee, not just a ceiling</td><td>An enforced mechanism protecting engineering time, not merely a limit on how bad things can get</td></tr>
+      <tr><td>The wisdom of production</td><td>Pages and tickets are a direct, unfiltered signal about how the system truly behaves — a design input, not just noise to eliminate</td></tr>
+      <tr><td>Same tools, regardless of role</td><td>Divergent tooling between SRE and dev creates exactly the kind of catastrophic mismatch reliability work exists to prevent</td></tr>
+      <tr><td>Fix incentives, not just process</td><td>Narrow metrics invite gaming; blameless postmortems and real authority to change code remove the incentive to hide problems</td></tr>
+      <tr><td>Rename-and-shame doesn't work</td><td>Relabeling a team without changing incentives, authority, or practice reliably fails to deliver the promised benefit</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 1, CC BY-NC-ND 4.0 · sre.google/workbook/how-sre-relates</footer>
+</div>
+</body>
+</html>

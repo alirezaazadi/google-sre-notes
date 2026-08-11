@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.8 — Release Engineering</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/08-release-engineering.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part II — Principles</div>
+    <h1 class="title">Chapter 8: Release Engineering</h1>
+    <p class="subtitle">Why "it built on my machine" is a bug, not a joke — and how Google turns every release into a reproducible, auditable, cherry-pickable artifact.</p>
+    <div class="source-note">📖 Based on <em>Chapter 8</em> of Google's SRE book — <a href="https://sre.google/sre-book/release-engineering/" target="_blank">sre.google/sre-book/release-engineering</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="07-the-evolution-of-automation-at-google.html">← Ch.7 Automation</a><a href="09-simplicity.html">next: Ch.9 Simplicity →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the role</div>
+    <h2>Release engineering is its own discipline</h2>
+    <p>The chapter's opening move: release engineering isn't "something SREs also do" — at Google it's a distinct job function, sitting between development and SRE, with its own specialized knowledge (source control, compilers, build config languages, package managers, installers). Its whole mandate is: whatever binary and configuration ends up running in production must be traceable back to exactly how it was built — no "unique snowflake" releases, no accidental process drift.</p>
+    <p>Release engineers build the tools that measure things like release velocity (how long from code change to production), and they set the default best practices — compiler flags, build ID formats, required build steps — precisely so individual teams don't each reinvent (and half-break) their own release process from scratch.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">philosophy</div>
+    <h2>Four principles the whole system is built around</h2>
+
+    <h3>1. Self-service</h3>
+    <p>At Google's scale, no central team could possibly gate every team's release manually. So release tooling is built to let each product team run its <em>own</em> release process — deciding their own cadence — with automation handling everything by default, and human involvement only kicking in when something actually goes wrong.</p>
+
+    <h3>2. High velocity</h3>
+    <p>Counterintuitively, releasing <em>more</em> often is treated as a reliability win, not a risk: smaller, more frequent releases mean fewer changes between any two versions, which makes both testing and troubleshooting easier when something does break. Some teams build hourly and hand-pick which build to actually deploy; others go further with a <strong>"push on green"</strong> model — every build that passes all tests deploys automatically, no human selection step at all.</p>
+
+    <h3>3. Hermetic builds</h3>
+    <p>This is the chapter's strictest technical requirement: build the same revision on two different machines, and you must get byte-identical results. That means a build can never quietly depend on whatever compiler or library version happens to be installed on the machine doing the building — every dependency, including the compiler itself, is pinned and versioned as part of the build definition.</p>
+    <div class="callout"><b>Why this matters for bug fixes specifically:</b> if you need to patch something already running in production, you rebuild at the <em>original</em> revision plus just the specific fix — called a <strong>cherry pick</strong> — using the toolchain version from back then, not today's. Otherwise a routine hotfix could silently pull in months of unrelated compiler or dependency changes.</div>
+
+    <h3>4. Enforced policy at every gate</h3>
+    <p>Nearly every step is access-controlled and reviewed: who can approve a source change, who can request a build at a given revision, who can approve a cherry pick, who can actually deploy. Every release also gets an automatically generated changelist report — a full account of exactly what changed since the last release — which becomes the first thing an SRE reaches for when a new release starts misbehaving.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the pipeline</div>
+    <h2>From source to running binary: Blaze → branch → test → package → Rapid</h2>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 700 220" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="700" height="220" fill="#FBF8EF"/>
+        <g font-size="12">
+          <rect x="10" y="70" width="110" height="60" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="65" y="95" text-anchor="middle" font-weight="bold">Blaze</text>
+          <text x="65" y="113" text-anchor="middle" font-size="10.5">hermetic build</text>
+
+          <path d="M120 100 L 150 100" stroke="#242121" stroke-width="2" marker-end="url(#a12)"/>
+          <rect x="150" y="70" width="110" height="60" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="205" y="95" text-anchor="middle" font-weight="bold">Branch</text>
+          <text x="205" y="113" text-anchor="middle" font-size="10.5">+ cherry picks</text>
+
+          <path d="M260 100 L 290 100" stroke="#242121" stroke-width="2" marker-end="url(#a12)"/>
+          <rect x="290" y="70" width="110" height="60" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="345" y="95" text-anchor="middle" font-weight="bold">Test</text>
+          <text x="345" y="113" text-anchor="middle" font-size="10.5">re-run on branch</text>
+
+          <path d="M400 100 L 430 100" stroke="#242121" stroke-width="2" marker-end="url(#a12)"/>
+          <rect x="430" y="70" width="110" height="60" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="485" y="95" text-anchor="middle" font-weight="bold">MPM</text>
+          <text x="485" y="113" text-anchor="middle" font-size="10.5">signed package</text>
+
+          <path d="M540 100 L 570 100" stroke="#242121" stroke-width="2" marker-end="url(#a12)"/>
+          <rect x="570" y="70" width="120" height="60" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="630" y="95" text-anchor="middle" font-weight="bold">Rapid</text>
+          <text x="630" y="113" text-anchor="middle" font-size="10.5">deploy / canary</text>
+        </g>
+        <text x="350" y="175" text-anchor="middle" font-size="12.5" fill="var(--ink-soft)">every stage is logged — a full changelist report ships with every release</text>
+      </svg>
+      <div class="diagram-caption">sketch — the release pipeline, source to deployed binary (original diagram)</div>
+    </div>
+
+    <ul>
+      <li><strong>Blaze</strong> (open-sourced as Bazel) — the build tool. Engineers declare build targets and dependencies; Blaze builds the dependency graph automatically. Every binary carries a build date, revision number, and build ID baked in — so any running binary can be traced straight back to exactly how it was produced.</li>
+      <li><strong>Branching, not merging.</strong> Everything lands on the mainline first, but releases don't ship directly from it. Instead, a release branches off mainline at one specific revision, and bug fixes are cherry-picked <em>into</em> that branch individually — never merged back the other way. This guarantees the branch only ever contains exactly what was deliberately chosen, not whatever else happened to land on mainline in the meantime.</li>
+      <li><strong>Testing, twice.</strong> Continuous tests run against mainline on every submit, for fast general feedback. Then tests run <em>again</em> on the actual release branch — necessary because a branch with cherry-picks can contain a code combination that has literally never existed anywhere on mainline, so passing on mainline doesn't guarantee passing on the branch.</li>
+      <li><strong>Packaging via MPM</strong> (Midas Package Manager) — packages are named, uniquely hashed, and signed. A <strong>label</strong> (like <code>canary</code> or <code>production</code>) can be moved between package versions, so "give me the canary build" always resolves to whichever build currently holds that label — no one has to track version numbers by hand.</li>
+      <li><strong>Rapid</strong> — the orchestrator tying it together, configured via <em>blueprints</em> that define build/test targets, deployment rules, and ownership/ACLs. Because Rapid runs its work as ordinary Borg jobs, it scales to thousands of simultaneous release requests without needing dedicated infrastructure of its own.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">deployment</div>
+    <h2>Matching rollout speed to risk, not to convenience</h2>
+    <p>Simple deployments go straight through Rapid. More complex, higher-stakes rollouts use <strong>Sisyphus</strong>, a general rollout framework with a dashboard for tracking progress and finer control over pacing. The point isn't uniform speed — it's <em>matching</em> rollout pace to how much a mistake there would cost:</p>
+    <table class="recap">
+      <tr><th>Service risk profile</th><th>Typical rollout pace</th></tr>
+      <tr><td>Dev / pre-production</td><td>Hourly builds, auto-pushed the moment tests pass</td></tr>
+      <tr><td>Large user-facing service</td><td>Start in one cluster, then expand exponentially outward</td></tr>
+      <tr><td>Sensitive infrastructure</td><td>Rolled out over days, deliberately interleaved across geographic regions</td></tr>
+    </table>
+    <div class="callout"><b>The underlying logic:</b> the riskiest deployments get the slowest, most staged rollouts — not because slower is inherently safer, but because staged rollout is what turns "a bad release" into "a bad release caught in cluster one, before it ever reaches cluster fifty."</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">config management</div>
+    <h2>Configuration changes are just as dangerous as code changes</h2>
+    <p>The chapter is explicit that configuration deserves the same rigor as binaries — it's a common, underestimated source of production instability. Four different models coexist, each a genuine tradeoff rather than a strictly-better replacement of the last:</p>
+    <ul>
+      <li><strong>Configuration lives on mainline directly.</strong> Simplest — edit, review, apply. But binary releases and config changes become decoupled, which easily causes drift between "what's checked in" and "what's actually running," since a job has to be explicitly restarted to pick up a change.</li>
+      <li><strong>Config bundled inside the same MPM package as the binary.</strong> Simple to deploy (one package, one install) but binds config and binary together tightly — you can't change one without rebuilding both.</li>
+      <li><strong>Config as its own separate MPM "configuration package,"</strong> linked to a binary release via a shared label. This is the hermetic-build principle applied to configuration: you can now cherry-pick a config-only fix (say, flipping a feature flag) and rebuild just the configuration package — without triggering an entirely new binary build for a change that never touched the code.</li>
+      <li><strong>Configuration read live from an external store</strong> (Chubby, Bigtable, etc.) for values that genuinely need to change while the binary keeps running, without a redeploy at all.</li>
+    </ul>
+    <p>There's no single "right" answer among these — project owners pick per-project based on how often their configuration actually needs to change and how tightly it's coupled to a specific binary version.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">for everyone else</div>
+    <h2>This isn't just a Google-scale problem</h2>
+    <p>The chapter closes by generalizing deliberately: every organization, regardless of size, faces the same underlying questions — how to version packages, whether to build continuously or periodically, how often to release, what configuration strategy to use. Google's specific tools (Blaze, MPM, Rapid, Sisyphus) exist because off-the-shelf tooling didn't scale to Google's needs — but the <em>policies</em> those tools enforce are worth defining deliberately at any scale, tooling aside.</p>
+    <div class="fails"><b>The chapter's clearest piece of general advice:</b> budget for release engineering from the very start of a project, not as an afterthought bolted on once things are already painful. Retrofitting good release discipline onto an established system is far more expensive than building it in from day one — and it works best when developers, SREs, and release engineers are collaborating throughout, rather than developers "throwing code over the fence" for someone else to figure out how to ship.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Hermetic builds</td><td>Same revision, same machine-independent result — no dependency on whatever happens to be installed locally</td></tr>
+      <tr><td>Branch + cherry-pick, never merge back</td><td>Guarantees a release branch contains exactly, and only, what was deliberately chosen</td></tr>
+      <tr><td>High release velocity ≠ risk</td><td>Smaller, more frequent releases mean smaller diffs to test and debug when something breaks</td></tr>
+      <tr><td>Rollout pace matches risk</td><td>Dev environments push on green; sensitive infra rolls out over days across regions</td></tr>
+      <tr><td>Four configuration models</td><td>Mainline / bundled-with-binary / separate config package / live external store — each a real tradeoff, not a strict upgrade</td></tr>
+      <tr><td>Start early</td><td>Release engineering is cheaper to build in from day one than to retrofit later</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 8, CC BY-NC-ND 4.0 · sre.google/sre-book/release-engineering</footer>
+</div>
+</body>
+</html>

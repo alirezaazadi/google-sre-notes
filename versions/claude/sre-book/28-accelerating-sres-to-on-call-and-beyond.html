@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Book · Ch.28 — Accelerating SREs to On-Call and Beyond</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../sre-book/28-accelerating-sres-to-on-call-and-beyond.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Site Reliability Engineering · Part IV — Management (opens here)</div>
+    <h1 class="title">Chapter 28: Accelerating SREs to On-Call and Beyond</h1>
+    <p class="subtitle">"Trial by fire" versus real structure — Wheel of Misfortune, reverse-engineering classes, and why "let's burn a search cluster to the ground" is a genuinely good training exercise.</p>
+    <div class="source-note">📖 Based on <em>Chapter 28</em> of Google's SRE book — <a href="https://sre.google/sre-book/accelerating-sre-on-call/" target="_blank">sre.google/sre-book/accelerating-sre-on-call</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><span>← Part III — Practices</span><a href="29-dealing-with-interrupts.html">next: Ch.29 Dealing with Interrupts →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the trap</div>
+    <h2>"Trial by fire" feels efficient and quietly isn't</h2>
+    <p>The chapter opens with a genuinely relatable, cautionary vignette: a new hire, John, is handed the incoming ticket queue on day one, told to ask around when confused, and promised that "eventually it'll just click." This is common, and it's a trap — it implicitly assumes a team's real skill set can be fully absorbed by <em>doing</em> alone, with no structured reasoning behind it. If your ticket queue genuinely is sufficient training for the job, the chapter argues bluntly, <strong>that's not actually an SRE position</strong> — it's ops work wearing an SRE title.</p>
+    <p>The deeper cost isn't just slower ramp-up — it's <strong>trust</strong>. Reliable, global on-call coverage depends on every rotation member genuinely trusting that their fellow on-callers understand the system, can diagnose unfamiliar failures, will ask for help when stuck, and can stay level-headed under real pressure. Trial-by-fire might eventually produce competent operators for engineers already comfortable navigating deep ambiguity — but it reliably alienates other capable people along the way, and there's no guarantee it builds the specific skills a genuinely good SRE needs.</p>
+    <div class="callout"><b>Recommended patterns vs. anti-patterns, straight from the chapter's own table:</b></div>
+    <table class="recap">
+      <tr><th>Recommended</th><th>Anti-pattern</th></tr>
+      <tr><td>Concrete, sequential learning paths</td><td>Menial ticket/alert triage as the primary teaching method</td></tr>
+      <tr><td>Reverse engineering, statistical thinking, first principles</td><td>Training purely via checklists and playbooks</td></tr>
+      <tr><td>Reading and discussing real postmortems</td><td>Treating outages as secrets to be buried</td></tr>
+      <tr><td>Contained, realistic breakages using real tooling</td><td>First real "fix something" chance happens only once already on-call</td></tr>
+      <tr><td>Group disaster role-play, mixing everyone's approaches</td><td>Letting expertise stay siloed in one or two people</td></tr>
+      <tr><td>Early shadow on-call, comparing notes live</td><td>Pushing someone into primary on-call before real holistic understanding</td></tr>
+      <tr><td>Pairing students with experts to revise the training docs themselves</td><td>Treating training docs as static, untouchable except by "the experts"</td></tr>
+      <tr><td>Real, nontrivial project ownership from early on</td><td>Reserving all interesting project work for the most senior people</td></tr>
+    </table>
+  </section>
+
+  <section class="card">
+    <div class="tab">structure over chaos</div>
+    <h2>Give new SREs a visible path, not an undifferentiated pile of tickets</h2>
+    <p>New hires reasonably want honest answers to three questions: <em>what am I working on, how much progress have I made, and when will I actually be ready for on-call?</em> Vague, undefined answers to these — especially for more introspective personalities — can genuinely slow development or drive attrition. The fix is deliberately sequencing the curriculum: front-load abstract concepts that will recur constantly (they pay off repeatedly), while still getting hands-on experience as early as practically possible — theory and practice interleaved, not theory-then-practice as two separate phases.</p>
+
+    <h3>A concrete curriculum shape (the chapter's own example, for a real-time serving stack)</h3>
+    <div class="diagram-wrap">
+      <svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" font-family="Patrick Hand, cursive">
+        <rect width="680" height="220" fill="#FBF8EF"/>
+        <g font-size="12">
+          <rect x="20" y="20" width="120" height="45" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="80" y="47" text-anchor="middle" font-weight="bold" font-size="11">1. Query entry</text>
+          <path d="M140 42 L 170 42" stroke="#242121" stroke-width="2" marker-end="url(#a21)"/>
+          <rect x="170" y="20" width="120" height="45" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2"/>
+          <text x="230" y="47" text-anchor="middle" font-weight="bold" font-size="11">2. Frontend</text>
+          <path d="M290 42 L 320 42" stroke="#242121" stroke-width="2" marker-end="url(#a21)"/>
+          <rect x="320" y="20" width="120" height="45" rx="5" fill="#F4E1D6" stroke="#B84B2A" stroke-width="2"/>
+          <text x="380" y="47" text-anchor="middle" font-weight="bold" font-size="11">3. Mid-tier</text>
+          <path d="M440 42 L 470 42" stroke="#242121" stroke-width="2" marker-end="url(#a21)"/>
+          <rect x="470" y="20" width="120" height="45" rx="5" fill="#DCE6F4" stroke="#2F5FA8" stroke-width="2"/>
+          <text x="530" y="47" text-anchor="middle" font-weight="bold" font-size="11">4. Infrastructure</text>
+        </g>
+        <path d="M530 65 L 230 100" stroke="#242121" stroke-width="1.5" marker-end="url(#a21)"/>
+        <rect x="150" y="105" width="230" height="50" rx="5" fill="#E1E9DD" stroke="#4C6B4F" stroke-width="2.5"/>
+        <text x="265" y="128" text-anchor="middle" font-weight="bold" font-size="12">5. Tying it together</text>
+        <text x="265" y="145" text-anchor="middle" font-size="10.5">debugging, escalation, emergencies</text>
+        <defs><marker id="a21" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#242121"/></marker></defs>
+      </svg>
+      <div class="diagram-caption">sketch — a curriculum ordered by the query's actual path through the system (original diagram)</div>
+    </div>
+
+    <h3>The on-call learning checklist — a genuinely well-designed artifact</h3>
+    <p>Google Search SRE's checklist is worth studying closely for what it deliberately <em>doesn't</em> contain: no step-by-step procedures, no diagnostic playbooks baked in. Instead, each section lists named expert contacts (both SRE and developer), the most useful docs to actually read, concrete "know before moving on" outcomes, and comprehension questions that can only be answered once the underlying material has genuinely been absorbed — not just skimmed.</p>
+    <div class="callout"><b>Why the checklist avoids encoding procedures directly:</b> procedures and playbooks go stale fast in a rapidly changing environment. A checklist built around expert contacts, core docs, and comprehension questions stays useful much longer, because it points to where current truth lives rather than trying to <em>be</em> that truth itself.</div>
+    <p>Some teams gate access progressively as sections are completed — Search SRE calls these earned access tiers <strong>"powerups,"</strong> deliberately playful framing that makes an otherwise dry access-control process feel like visible, motivating progress. Comprehension is checked with real, structural questions — "which backends are in the critical path, and why?", "where's the first likely bottleneck, and what would you do about it?" — not simple recall.</p>
+
+    <h3>Targeted project work, not menial busywork</h3>
+    <p>Real ownership — even something small — builds both a newbie's confidence and senior colleagues' trust in them, since seniors will naturally approach a newcomer to learn about whatever piece they now own. Google's standard "starter project" pattern gives every new engineer a small but genuinely useful early contribution. Patterns that work particularly well for SRE specifically: shipping a trivial user-visible change all the way through the real release pipeline (builds empathy for what developers actually go through); adding monitoring to a genuine blind spot (forces real reasoning about what the system does versus what it's supposed to do); or automating some minor, not-yet-painful-enough-to-fix annoyance (instills the team's actual toil-reduction values directly, through practice, not lecture).</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the deeper goal</div>
+    <h2>Not just operators — reverse engineers, statisticians, improvisers</h2>
+    <p>The chapter names three specific cognitive skills that separate a strong SRE from a traditional systems administrator, and explicitly ties each one to a way of training for it:</p>
+    <ul>
+      <li><strong>Reverse engineering.</strong> SREs constantly encounter systems they've never seen, or systems they thought they knew that have since evolved past their mental model. The trainable habit: dig into debugging surfaces, RPC boundaries, and logs directly to reconstruct how something actually behaves — rather than waiting to be told — until doing so becomes reflexive during a real incident.</li>
+      <li><strong>Statistical, comparative thinking.</strong> The chapter's memorable framing: incident response is navigating a massive decision tree under real time pressure, where only a handful of the hundreds of possible actions can actually be taken. Effectively pruning that tree fast is partly earned through raw experience, but is sharpened by deliberately comparing factors side-by-side — kernel version, CPU architecture, binary version, regional traffic mix — essentially playing "which of these is not like the others" as a disciplined habit, not an occasional lucky guess.</li>
+      <li><strong>Improvisation.</strong> When the standard fix doesn't work and the responsible developer is unreachable, rigid procedural thinking can actively trap you. The chapter's specific warning: bringing too many untested assumptions into your reasoning is what causes troubleshooting to get stuck — sometimes the actual unlock is deliberately "zooming out" and trying a different angle entirely, a skill worth practicing early rather than discovering for the first time mid-incident.</li>
+    </ul>
+
+    <h3>The signature exercise: "Reverse Engineer a Production Service (without help from its owners)"</h3>
+    <p>The chapter's featured example is a genuinely clever training scenario: the entire Google News team has supposedly vanished on a company cruise, unreachable for 30 days — the students are the "newly appointed" team, and must reconstruct the entire serving stack end-to-end using only production's own instrumentation, RPC self-reporting, and monitoring surfaces, tracing a real query from browser to backend and back. Midway through, the instructor deliberately challenges an early assumption ("here's another entry point you missed") — forcing students to confront that their first mental model was too narrow, which is precisely the muscle they need for real production debugging. The exercise closes with each student independently diagramming a real slice of their own future stack and presenting it to a senior SRE — and the chapter notes this genuinely surfaces gaps in even the senior engineer's own up-to-date understanding, since production systems drift constantly and nobody's mental model stays perfectly current for long.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">five practices</div>
+    <h2>Concrete practices for aspiring on-callers</h2>
+
+    <h3>1. A hunger for failure — reading and sharing postmortems</h3>
+    <p>The chapter quotes Santayana directly: "those who cannot remember the past are condemned to repeat it." A well-written postmortem's most valuable future reader might well be someone not even hired yet — which is a genuinely useful framing device while writing one: write it to actually teach, not merely to document. Some teams run "postmortem reading clubs" (original authors as guests of honor) or more informal "tales of fail" sessions where the author walks the room through what happened, live.</p>
+
+    <h3>2. Disaster role-playing — "Wheel of Misfortune"</h3>
+    <p>A weekly ritual (also called "Walk the Plank" at some teams) structured like a tabletop RPG: a "game master" picks primary and secondary on-call volunteers, announces an incoming page, and improvises the unfolding scenario in response to whatever the participants try — often built directly from a real past outage newer members never lived through, or a hypothetical break in a feature about to launch (which levels the playing field, since nobody has an unfair head start). The chapter's quoted former SRE description — "SRE Zork," navigating "a maze of twisty monitoring consoles, all alike" — captures the tone well: serious content, deliberately playful framing, which makes the exercise far less intimidating for someone brand new.</p>
+    <p>The game master's job includes steering participants back on track when they chase a red herring, and injecting realistic complications mid-scenario ("another team just paged you with more information — here's what they say"). Done well, <em>everyone</em> in the room — not just the two on the hot seat — comes away having learned something, whether a new diagnostic trick or simply the satisfying validation that they'd have solved it too, had they been picked.</p>
+
+    <h3>3. Break real things, fix real things</h3>
+    <p>Hypotheticals only go so far — hands-on experience with genuinely real systems is qualitatively better, and the chapter is explicit this needs to happen <em>before</em> a new SRE's first real page, not just after. Ideally this means diverting a genuine (if smaller) live instance away from real user traffic temporarily, fed synthetic load approximating real usage patterns, so newbies practice on the team's actual tools and dashboards rather than a simulated stand-in.</p>
+    <p>Google Search SRE's own quarterly version, affectionately named <strong>"Let's burn a search cluster to the ground!,"</strong> runs a genuinely disciplined format: as a group, predict which observable metrics should change before inflicting any damage; poll everyone's specific guesses and reasoning out loud; then actually break the targeted component and compare the real outcome against those predictions. This isn't just training — the chapter notes it reliably surfaces genuine bugs, precisely because production systems don't always degrade as gracefully as engineers assume they will on paper.</p>
+
+    <h3>4. Documentation as apprenticeship</h3>
+    <p>The on-call learning checklist (introduced above) does triple duty depending on who's reading it: for the student, it marks the boundaries of what their team is actually responsible for and what matters most; for mentors and managers, it's a visible, honest signal of real progress ("what section are you stuck on today?"); and for the whole team, mastering it functions as a kind of social contract — the shared, explicit standard everyone agrees defines "ready for on-call." Search SRE has a clever trick for keeping it perpetually fresh: as each new hire arrives, they're specifically assigned to overhaul whichever section has gone most stale — turning documentation maintenance into a natural, built-in part of onboarding rather than a separate, perpetually neglected chore nobody owns.</p>
+
+    <h3>5. Shadow on-call, early and often</h3>
+    <p>Once fundamentals are solid, route real incoming pages to the newbie too — initially just during business hours — with zero actual response responsibility or time pressure attached. They get a genuine front-row seat to a live incident as it actually unfolds, ideally sharing a terminal or sitting alongside the primary on-caller to compare live notes, followed by a proper debrief once things settle. Shadowing several different team members before going live also builds the whole team's comfort with that person eventually joining the rotation — which is itself a meaningful trust-building mechanism, not just a knowledge-transfer one.</p>
+    <div class="callout"><b>An important norm the chapter calls out explicitly:</b> if an incident during a shadow shift genuinely merits a postmortem, credit the newbie as a <em>coauthor</em> — never hand off the entire write-up to them solo. Doing otherwise risks quietly teaching the team that postmortem-writing is junior grunt work, which corrodes the very psychological safety Chapter 15's postmortem culture depends on.</div>
+    <p>Some teams add a final capstone: <strong>reverse shadowing</strong>, where the newbie takes primary on-call for real, while an experienced SRE quietly observes in the background — diagnosing independently without touching anything themselves — ready to step in with guidance only if genuinely needed. It's the closest possible approximation of the real thing, with an experienced safety net still present.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the milestone</div>
+    <h2>Going on-call is a rite of passage — and learning never actually stops</h2>
+    <p>Once a student can reason through most of the stack confidently and improvise competently through the rest, they're ready — whether that's gated by a final assessment or simply completing the learning checklist to a mentor's satisfaction. The chapter is explicit this moment deserves genuine team celebration, not a quiet, unmarked transition.</p>
+    <p>But learning doesn't stop there — production systems keep evolving even while a fully ramped SRE's attention is elsewhere, which can leave anyone's operational knowledge quietly stale without them fully realizing it. The chapter's recommended fix: a standing team learning series, where the SREs actually driving upcoming changes present them directly (co-presenting with developers when useful), ideally recorded to build a growing, genuinely current training library for the next round of new hires. The same instinct extends outward too — SREs presenting to their developer counterparts pays off symmetrically, since developers who genuinely understand SRE's real constraints make better-informed decisions on future projects, closing the loop in both directions.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Trial by fire is a trap, not efficiency</td><td>If the ticket queue alone is sufficient training, the role isn't really SRE — and it erodes the trust on-call depends on</td></tr>
+      <tr><td>Sequenced, cumulative learning paths</td><td>Front-load recurring abstract concepts; get hands-on as early as practical, not after</td></tr>
+      <tr><td>Learning checklists point to truth, don't encode it</td><td>Expert contacts and comprehension questions age far better than baked-in procedures</td></tr>
+      <tr><td>Three core skills: reverse engineering, statistical thinking, improvisation</td><td>What actually separates a strong SRE from a traditional sysadmin at scale</td></tr>
+      <tr><td>Wheel of Misfortune</td><td>Low-stakes, playful group role-play that builds shared problem-solving instincts across experience levels</td></tr>
+      <tr><td>Break real things before going on-call</td><td>Hands-on practice under synthetic load builds reflexes hypotheticals alone can't</td></tr>
+      <tr><td>Shadow, then reverse-shadow on-call</td><td>Real incident exposure with zero (then reduced) pressure, before the newbie owns it solo</td></tr>
+      <tr><td>Learning continues after on-call</td><td>Systems keep changing — ongoing team learning series keep even senior knowledge from quietly going stale</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Book, Ch. 28, CC BY-NC-ND 4.0 · sre.google/sre-book/accelerating-sre-on-call</footer>
+</div>
+</body>
+</html>

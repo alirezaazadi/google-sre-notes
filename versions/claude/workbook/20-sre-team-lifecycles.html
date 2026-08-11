@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.20 — SRE Team Lifecycles</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/20-sre-team-lifecycles.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part III — Processes</div>
+    <h1 class="title">Chapter 20: SRE Team Lifecycles</h1>
+    <p class="subtitle">Three principles that work with zero SREs on staff, Tuckman's forming-storming-norming-performing applied to a brand-new team, and why splitting across three time zones quietly backfired.</p>
+    <div class="source-note">📖 Based on <em>Chapter 20</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/team-lifecycles/" target="_blank">sre.google/workbook/team-lifecycles</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="19-sre-reaching-beyond-your-walls.html">← Ch.19 SRE: Reaching Beyond Your Walls</a><a href="21-organizational-change-management-in-sre.html">next: Ch.21 Organizational Change Management →</a></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the premise</div>
+    <h2>SRE is implementable at any scale — a genuine roadmap, not just Google's own story</h2>
+    <p>The chapter's explicit goal is dispelling the idea that SRE only works "at Google scale" — it lays out a maturity roadmap from zero SRE staff through to a robust, potentially globally distributed SRE organization, organized around three principles that hold at every stage.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">principle 1</div>
+    <h2>SRE without SREs — SLOs with real consequences</h2>
+    <div class="callout"><b>Principle #1: SRE needs SLOs with consequences.</b> A service's SLO performance should genuinely guide business decisions — and this is achievable with zero dedicated SRE headcount.</div>
+    <p>Even without a single SRE, an organization can adopt the core practice: acknowledge that 100% reliability isn't the right target; set a genuine SLO measuring what actually matters to users; agree on an error budget policy that guides both tactical response (mitigating an active outage) and longer-term prioritization (reducing future budget consumption); and — critically — actually measure the SLO and commit to following the error budget policy, with real buy-in from company leadership. An implicit 100% SLO forces a team into permanent reactive mode; an explicit, lower target is what enables genuinely data-informed reliability decisions.</p>
+  </section>
+
+  <section card class="card">
+    <div class="tab">starting the role</div>
+    <h2>Finding, placing, and bootstrapping your first SRE</h2>
+    <p>Your first SRE likely won't have prior explicit "SRE" job experience — relevant background instead spans operations (production insight that's hard to gain elsewhere), software engineering (understanding and improving the code being supported), monitoring systems (measurable SLOs), production automation (scale demands it), and system architecture. This first hire will occupy a genuinely ambiguous position between velocity and reliability goals, requiring real resilience and flexibility to strike that balance.</p>
+
+    <h3>Where to place them</h3>
+    <p>Three options: embedded in a product development team, embedded in operations, or in a horizontal consulting role across several teams. The right choice depends on your own sphere of influence, the immediate challenges you face, what you expect over the next 12 months, and your longer-term organizational plan — if you're eventually aiming for a centralized SRE org, embedding too early in product development can make later extraction genuinely hard. Experimentation across models is fine early on, but the chapter is firm: settle on one stable, coherent model for the long term, since instability itself undermines SRE's effectiveness.</p>
+
+    <h3>Principle 2, and initial project focus</h3>
+    <div class="callout"><b>Principle #2: SREs must have time to make tomorrow better than today.</b> Without this, toil only grows as usage scales — a healthy balance between operations and project work is essential, or talented engineers simply leave.</div>
+    <p>If SLOs and error budgets don't already exist, building them <em>is</em> your first SRE's initial engineering project. Beyond that, good starting projects: improving monitoring so failures are genuinely understandable when they happen; addressing high-priority postmortem action items; automating a specific, well-understood source of toil. Warning signs the placement isn't working: their work is indistinguishable from ordinary engineering; they're carrying disproportionate operational load or are the sole person touching service configuration; or SLOs simply aren't being taken seriously and no real progress is being made defending the customer experience.</p>
+    <p>Without a discrete SRE team (or with no plans for one), build a genuine <strong>community</strong> for distributed SREs regardless — advocating their distinctive role and driving consistent reliability practice across teams. Without that social grouping, individual SREs can feel genuinely isolated.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">the first team</div>
+    <h2>Three ways to start a team, and Tuckman's four stages</h2>
+    <p>Three approaches, roughly least to most complex: create a new team as part of a major project; assemble a small horizontal team consulting across many services; or convert an existing team in place (typically an operations team, or one already managing a heavily-used internal component). A good starting team combines: reliability/performance-focused software changes; writing code that speeds up detection and mitigation, or automates manual work; strong software practices for long-term maintainability; a methodical, explainable approach to operational change; and real distributed-systems architecture understanding. Seeding a new team with internal transfers meaningfully accelerates ramp-up over building purely from external hires.</p>
+    <p>The chapter walks team formation through <strong>Tuckman's model</strong> — forming, storming, norming, performing.</p>
+
+    <h3>Forming</h3>
+    <p>Assembling the team itself. Whichever of the three creation paths you choose, avoid the specific trap of simply renaming an "Operations" team to "SRE" without actually changing its practices first — a failed rebrand can poison the whole organization against the concept of SRE going forward.</p>
+
+    <h3>Storming — and the risks specific to each formation path</h3>
+    <p>The team needs to genuinely learn to work together, and with the teams around it — regular shared learning forums (a book club, a recorded-talk lunch) help build this. New SREs should feel free to speak up when a standard SRE practice genuinely doesn't fit the organization, rather than silently forcing an ill-fitting template.</p>
+    <table class="recap">
+      <tr><th>Formation path</th><th>Real risks</th><th>Mitigations</th></tr>
+      <tr><td>New team, major project</td><td>Spreading too thin across too many services; over-indexing on theoretical SRE purity while underdelivering; ignoring pages that don't demand immediate action until service management quietly reverts to old habits; abandoning SRE principles under launch-deadline pressure; conflict with teams perceiving a loss of influence; insufficient skill breadth (e.g., can't program well enough to instrument the service)</td><td>Engage on one important service first, as early as the design phase; have real input into SLO definition and risk analysis; partner rather than take over — no operational responsibility on day one; keep new hires under a third of the team so training doesn't overwhelm existing members</td></tr>
+      <tr><td>Horizontal team</td><td>Perceived as a value-free "gating" org that blocks work without contributing</td><td>Seed with respected engineers with genuine subject-matter expertise; ship tools (monitoring, alerting, rollout) with short-term visible benefit to at least two teams; actively communicate wins; see the team as an enabler, not a gatekeeper</td></tr>
+      <tr><td>Converted in-place team</td><td>Fear that conversion is really the first step toward job losses via automation; no slack capacity to actually change daily habits; systems that don't support scripting; missing or uninterested-in-acquiring the needed software skills</td><td>Secure real senior leadership backing; deliberately renegotiate responsibilities to create genuine slack; address the job-loss fear directly and honestly (automation typically eliminates *portions* of toil, not whole roles, and frees time for more valuable, more transferable work); add an experienced SRE or developer to the team; change how performance is actually evaluated to reward SRE-aligned outcomes</td></tr>
+    </table>
+
+    <h3>Norming</h3>
+    <p>Reaching broad agreement on acceptable toil levels, alert thresholds, and core SRE practices, while becoming genuinely self-sufficient at spotting challenges ahead and setting real medium/long-term goals. Concrete maturity markers to look for: SLOs and error budgets are actually in place and exercised after real incidents, with leadership genuinely interested in the numbers; sustainable, compensated on-call rotations with adequate tooling and documentation exist; toil is documented, bounded, and actively managed; a real postmortem culture is established; the team exhibits most DevOps-aligned tenets from Chapter 1; regular training drills (Wheel of Misfortune, DiRT) are already routine, not novel; the product development team stays meaningfully involved in on-call; and the team produces regular stakeholder reports covering highlights, lowlights, and key metrics.</p>
+
+    <h3>New York Times case study: inverting the responsibility model</h3>
+    <p>An existing team had organically accumulated ownership of configuration, change requests, and operations for a core sitewide component — effectively becoming a reactive service team for every product team at once, permanently ticket-driven, with zero time for real strategic work, and a genuine bus-factor risk sitting on top of years of accumulated institutional knowledge. The guiding fix: invert the responsibility model so product teams could push their own changes directly, speeding up delivery while freeing SRE from perpetual configuration churn. Concretely: embed an SRE in the development team to relieve immediate pressure; break each service's configuration into its own team-owned repo; migrate every service onto a standard CI/CD pipeline driven by GitHub events; and onboard each product team onto the new self-service workflow. Because pull-request review still often needed SRE expertise, daily office hours batched and made those interrupts predictable rather than randomly disruptive. The result: the team hit its target of over 50% project work, with institutional knowledge now propagating more broadly and the bus factor gradually improving.</p>
+  </section>
+
+  <section card class="card">
+    <div class="tab">principle 3</div>
+    <h2>Performing — architecture partnership and genuine workload self-regulation</h2>
+    <p>A mature team partners on architecture from the design phase forward, shaping how software gets built and structured for reliability from the start, rather than reviewing decisions after the fact.</p>
+    <div class="callout"><b>Principle #3: SRE teams have the ability to regulate their workload.</b> The chapter calls this the most subtle of the three principles, and the hardest to put into practice organizationally — but it's what secures SRE's position as a genuine engineering peer to product development, not a permanently reactive support function.</div>
+    <p>In practice, self-regulation means: an SRE team decides if and when to onboard a service at all; facing overload, it can reduce the SLO or transfer operational work elsewhere; if a service genuinely can't be operated within agreed toil constraints, SRE can hand it back to product development outright. And engagement is explicitly not meant to be perpetual — an SRE team that has fully solved a service's reliability problems needs a deliberate decision: find new reliability work worth tackling, or intentionally hand the service back. Skipping that decision risks slow attrition as SREs drift toward more interesting work elsewhere, quietly putting production at risk in the meantime. For SRE teams with no partner product-development team to hand work back to (teams that both build and run their own systems, or that package third-party software into internal services), the fallback is different: pause feature work in favor of reliability work when out of SLO, or — absent additional capacity from management — deliberately lower the SLO itself rather than pretend the current target is sustainable.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">scaling to many teams</div>
+    <h2>When and how to split, and geographic distribution</h2>
+    <p>Reasons to form a second team: service complexity has outgrown one team's capacity, organizational demand for more SRE coverage after early success, or a deliberate geographic split enabling 12-hour follow-the-sun shifts. When creating a new team: read prior teams' postmortems for real lessons; seed it with experienced SREs from existing teams (qualified candidates are chronically scarce, so growing purely via new hires is rarely realistic); standardize the onboarding framework; and change on-call responsibilities gradually — keeping members on their old system's rotation briefly during transition, and waiting 3-6 months before fully splitting the on-call schedule.</p>
+    <p>Splitting an overgrown service across teams can follow architectural boundaries (compute/storage/network, frontend/backend), language boundaries, or location — with a real pitfall to guard against: some component quietly falling through the cracks, owned by neither resulting team. Mitigations: designate one team as the explicit catch-all for anything outside the other's charter, or appoint a senior technical lead spanning both.</p>
+    <p>When prioritizing which services get SRE coverage as the org grows: weight by real financial or reputational impact; identify the minimum viable service set the product actually needs to function, prioritizing those directly; and explicitly avoid making "currently unreliable" alone the deciding factor — SRE should be applied where it's genuinely strategically relevant, not as a reflexive fix for whatever's loudest right now, and developers shouldn't be allowed to defer reliability concerns purely because SRE will eventually show up to handle it.</p>
+
+    <h3>Geographic splits — real benefits, and a genuine tradeoff</h3>
+    <p>Sister teams across continents improve service reliability during regional disasters, reduce on-call stress via 12-hour shifts, broaden the recruitable talent pool (a shift overlapping normal daytime hours appeals to a wider range of candidates), and tend to naturally improve production maturity — documentation and standardization become more important once responsibility is genuinely shared across sites. Colocation with the product development team at at least one site meaningfully helps SRE stay attuned to how services actually evolve.</p>
+    <div class="callout"><b>Time zone separation is a real, unavoidable tradeoff:</b> minimizing hours worked outside normal daytime pulls one direction, while maximizing real-time overlap for the two teams to actually interact pulls the other. Google's own practical sweet spot: 6-8 hours apart, which avoids midnight-to-6am on-call shifts entirely.</div>
+    <p>Seed a new office's SRE team with someone from the original site willing to relocate temporarily or long-term — that person sets the norms the rest of the new team will inherit. Watch actively for one office quietly becoming a disconnected "night shift," carrying disproportionate toil or only receiving the less interesting projects — concrete balancing tactics: weight ticket distribution toward whichever office fields fewer pages, map specific development areas to specific offices so the product team doesn't just default to the more convenient (usually colocated) site, deliberately assign more internal improvement work to the less-colocated office, keep team size and seniority mix comparable across sites, and split individual projects across both offices on purpose to build cross-office trust and shared knowledge rather than efficiency-maximizing single-site ownership.</p>
+    <div class="fails"><b>Three-way geographic splits didn't work well in practice.</b> No single production meeting time worked for every office; parity of knowledge and capability across three sites was genuinely harder to maintain; and confining on-call purely to office hours at each site removed the sharp, immediate personal incentive to actually fix a recurring low-value page — fixing something yourself during business hours is satisfying in the moment, but the urgency to make sure it never recurs is much weaker without any real personal cost attached.</div>
+    <p>Real, face-to-face travel matters even with good video conferencing: annual visits at minimum for every SRE and manager between sister sites, twice yearly for management/tech-lead roles, and at least one full-team convening a year. With multiple SRE sites, leadership at each needs a genuinely strong personal relationship — built through regular face-to-face and video contact — specifically to debate solutions, resolve disagreements, advocate for each other's team, and actively prevent an "us versus them" dynamic from forming between sites.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">running many teams</div>
+    <h2>Practices for a mature, multi-team SRE organization</h2>
+    <ul>
+      <li><strong>Mission Control</strong> — a program letting product-development engineers spend six months embedded in an SRE team, typically outside their own area of expertise, eventually joining that service's on-call rotation. Some stay in SRE permanently; others return with a genuinely deeper appreciation for production practice. Host teams gain extra engineering capacity and real insight into gaps in their own training material.</li>
+      <li><strong>SRE Exchange</strong> — a week-long visit where an SRE observes and shares practices with a different team, closing with a written trip report of observations and recommendations for both sides — genuinely useful precisely because Google's SRE teams tend to be highly specialized.</li>
+      <li><strong>Standardized training</strong> — Google's own SRE EDU is a weeklong immersive introduction to shared concepts, tooling, and platforms every new SRE needs, followed months later by a second course on managing major incidents — creating a consistent baseline that simplifies subsequent team- and service-specific onboarding.</li>
+      <li><strong>Horizontal projects</strong> — without deliberate convergence, individually-aligned SRE teams tend to build their own proprietary monitoring, rollout, and configuration tools, duplicating effort broadly. Some healthy solution competition is fine, but eventually converging on one standard, scalable platform (typically built by an experienced horizontal team, partnering closely with adopting teams) pays off.</li>
+      <li><strong>SRE mobility</strong> — Google actively supports transfers between SRE teams (and, for those who also clear the bar, into product development roles), assuming no performance concerns. This gives engineers real agency to pursue interesting work, lets on-call demands adapt to changing personal circumstances, broadens the experience each team accumulates, and helps maintain cultural consistency across offices — while also keeping SRE managers genuinely focused on team health, since an unhealthy team or unsupportive manager risks losing people to mobility rather than merely complaints.</li>
+      <li><strong>Production Excellence reviews</strong> — senior SRE leaders regularly assess every team against standard measures (pager load, error budget usage, project completion, bug closure rate), both recognizing outstanding performance and flagging teams at genuine risk of becoming overwhelmed — with experienced reviewers specifically equipped to distinguish a real performance problem from a temporary dip caused by, say, a team merger or split.</li>
+    </ul>
+    <div class="callout"><b>Funding and hiring, deliberately kept scarce.</b> SRE funding at Google largely comes from the same source as product development funding — reliability is treated as a core pillar of the product, alongside testing and security, not a separate cost center to be minimized. And SRE supply is deliberately kept below demand — this scarcity forces regular, disciplined review and prioritization of which services genuinely deserve SRE support, rather than diluting attention evenly across everything. Actual SRE-to-developer ratios range from roughly 1:5 (low-level infrastructure) to 1:50 (consumer apps built on standard frameworks), with many services landing around 1:10.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>SRE practices work even with zero SRE headcount</td><td>Real SLOs with real consequences are achievable — and valuable — before you hire a single dedicated SRE</td></tr>
+      <tr><td>Three formation paths carry different, specific risks</td><td>New team, horizontal team, and in-place conversion each need distinct mitigations, not a generic playbook</td></tr>
+      <tr><td>Never simply rename "Operations" to "SRE"</td><td>A failed rebrand without real practice change can poison the whole organization against SRE going forward</td></tr>
+      <tr><td>Self-regulated workload is the hardest principle to actually secure</td><td>It's what elevates SRE to a genuine engineering peer rather than a permanently reactive support function</td></tr>
+      <tr><td>Engagement isn't meant to be perpetual</td><td>A fully-solved service needs a deliberate decision — new work, or intentional handback — or risks quiet SRE attrition</td></tr>
+      <tr><td>6-8 time zone hours apart is the practical sweet spot</td><td>Balances minimizing off-hours on-call against maximizing real team-to-team overlap</td></tr>
+      <tr><td>Three-way geographic splits caused real, specific problems</td><td>Meeting scheduling, knowledge parity, and reduced automation incentive all suffered</td></tr>
+      <tr><td>Deliberately keep SRE supply below demand</td><td>Scarcity forces disciplined, ongoing prioritization of which services genuinely merit dedicated support</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 20, CC BY-NC-ND 4.0 · sre.google/workbook/team-lifecycles</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<title>SRE Workbook · Ch.16 — Canarying Releases</title>
+<link rel="stylesheet" href="../../../assets/claude.css">
+  <link rel="stylesheet" href="../../../assets/site.css" data-site-controls>
+  <script src="../../../assets/site.js" data-summary-version="claude" data-counterpart="../../../workbook/16-canarying-releases.html" data-site-controls></script>
+  <link rel="icon" href="../../../assets/favicon.svg" type="image/svg+xml" data-site-favicon>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">The Site Reliability Workbook · Part II — Practices (closes here)</div>
+    <h1 class="title">Chapter 16: Canarying Releases</h1>
+    <p class="subtitle">Named for birds in coal mines — a worked App Engine example, why "errors per hour" can lie to a 30-minute canary, and the danger of teeing traffic into a shared cache.</p>
+    <div class="source-note">📖 Based on <em>Chapter 16</em> of Google's SRE Workbook — <a href="https://sre.google/workbook/canarying-releases/" target="_blank">sre.google/workbook/canarying-releases</a>. Explained in my own words; original diagrams (source is CC BY-NC-ND, so text/figures aren't reproduced here).</div>
+    <div class="navbar"><a href="15-configuration-specifics.html">← Ch.15 Configuration Specifics</a><span>Part III — Processes →</span></div>
+  </div>
+
+  <section class="card">
+    <div class="tab">the origin</div>
+    <h2>Why "canary" — and what canarying actually is</h2>
+    <p>The name comes directly from the old mining practice of bringing a canary into a coal mine — the bird, smaller and faster-breathing than a human, is overcome by dangerous gas well before its handler, giving early warning to evacuate. The chapter defines <strong>canarying</strong> the same way: a partial, time-limited deployment of a change to a small slice of a service — the <strong>canary</strong> — evaluated against the untouched remainder, the <strong>control</strong>, before deciding whether to proceed with a full rollout. Structurally, it's an A/B test applied specifically to release safety.</p>
+    <div class="callout"><b>Even a fully automated, well-tested release pipeline can't catch everything before real traffic arrives.</b> Test environments are never perfectly identical to production, and test coverage is never fully complete. If a release deploys everywhere simultaneously, any surviving defect deploys everywhere too, all at once. Canarying exists specifically to catch what testing missed, cheaply, before the whole user base is exposed.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">foundations</div>
+    <h2>Release engineering principles, and separating what changes at different rates</h2>
+    <p>Five baseline principles underpin everything that follows: <strong>reproducible builds</strong> (same inputs → same output, reliably); <strong>automated builds</strong> triggered directly by check-in; <strong>automated tests</strong> validating every build; <strong>automated deployments</strong> — performed by machines, not humans; and <strong>small deployments</strong> — self-contained, individually reviewable changes. Together these compound into a genuine virtuous cycle: automation enables more frequent releases, more frequent releases mean smaller individual changes per release, smaller changes are cheaper and safer to roll back, and faster release cadence gets fixes to users sooner.</p>
+    <p>Google's own postmortem data shows a majority of incidents trace back to a binary or configuration push — which sounds like an argument against shipping change at all, except that bug fixes, security patches, and new features are all necessary for the business to function. The right framing isn't "ship less" — it's using SLOs and error budgets (Chapter 2) to measure exactly how much reliability risk a given release actually costs, and ship as fast as that budget allows.</p>
+    <p>A genuinely useful complementary tool: <strong>feature flags</strong> (Gertrude, Feature, PlanOut, and similar frameworks) let you separate a <em>feature</em> launch from a <em>binary</em> release entirely. If one binary bundles several new features, each can be turned on independently via configuration rather than all shipping together — and if one specific feature misbehaves, it can be selectively disabled without needing to roll back the entire binary. The same decoupling principle generalizes to any kind of change to a service, not just code.</p>
+  </section>
+
+  <section card class="card">
+    <div class="tab">the requirements</div>
+    <h2>What canarying actually needs to work</h2>
+    <p>Three concrete capabilities: a way to deploy a change to just a subset of the service's population (proportional to canary size); an evaluation process that judges the canary "good" or "bad"; and integration of that evaluation directly into the release pipeline, so a bad verdict actually stops or reverts the rollout rather than being logged and ignored.</p>
+
+    <h3>A worked example: naive rollout vs. canaried rollout</h3>
+    <p>The chapter's running illustration uses a simple App Engine HTTP service with tunable failure knobs (e.g., "fail 20% of requests"), comparing a "live" version against a "release candidate." <strong>Without a canary</strong>, deploying the broken release candidate directly to 100% of traffic produces an immediate, sharp spike in overall error rate — and without any rollback mechanism, the only real fix is finding and patching the bug live in production, prolonging user impact for as long as that takes.</p>
+    <div class="math">
+      Live version: healthy, near-zero error rate
+      Release candidate: 20% error rate (simulated defect)
+
+      Naive full deployment → ~20% of ALL traffic fails immediately
+
+      5% canary deployment → 20% error rate × 5% of traffic
+      = only ~1% overall error rate — barely visible in aggregate monitoring
+    </div>
+    <div class="callout"><b>The canary's error impact is barely visible in a whole-service view — which is itself the chapter's key practical lesson.</b> Splitting the same metric (HTTP response codes) *by version* rather than looking at the aggregate reveals the canary's defect clearly, while the live version's error rate stays essentially flat. Aggregate monitoring alone can hide exactly the signal a canary process exists to surface.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">error budget math</div>
+    <h2>Canarying as a deliberate way to spend a small, bounded slice of budget</h2>
+    <div class="math">
+      Naive deployment: 20% error rate × 100% of traffic = 20% overall impact
+      5% canary: 20% error rate × 5% of traffic = 1% overall impact
+
+      → impact is directly proportional to the fraction of traffic exposed
+    </div>
+    <p>This simplified model assumes uniform load, a worst-case 100% failure rate for the affected fraction, and treats detection/rollback time as roughly equal whether or not a canary was used — real defects are rarely this clean, and the chapter is candid the model has real limits. But it's deliberately simple on purpose: the chapter explicitly warns against over-investing in modeling precision, especially for genuinely complex services, where chasing technical correctness in the model can become its own unproductive time sink with little real payoff. Use the simplest model that meets your actual technical and business needs, not the most theoretically rigorous one.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">sizing it</div>
+    <h2>Choosing canary population and duration — a genuine balancing act</h2>
+    <p>Canary duration has to fit your actual release cadence — a week-long canary makes no sense if you release daily, and continuous deployment (dozens of times a day) demands a canary duration measured in minutes, not hours. Running multiple canaries simultaneously is technically possible but strongly discouraged: it adds real cognitive load tracking overlapping system state, and risks signal contamination between overlapping canaries — the chapter's clear recommendation is one canary deployment at a time.</p>
+    <table class="recap">
+      <tr><th>Factor</th><th>Why it matters</th></tr>
+      <tr><td>Size and duration</td><td>Must last long enough, and cover enough diverse query types, to be genuinely representative — a handful of queries tells you little for a functionally diverse service</td></tr>
+      <tr><td>Traffic volume</td><td>Needs enough real traffic to actually exercise the system and let it fail if it's going to — more homogeneous request types need less volume to be representative</td></tr>
+      <tr><td>Time of day</td><td>Performance defects often only manifest under real peak load — canarying during an off-peak lull can hide exactly the problem you're trying to catch</td></tr>
+      <tr><td>Metrics evaluated</td><td>Simple metrics (request success) surface fast; others (queue depth) may genuinely need more time or population to give a clear signal</td></tr>
+    </table>
+    <p>These factors frequently conflict with each other — canarying is ultimately a judgment call informed by both worst-case analysis and a system's real historical track record. Once real canary evaluation data accumulates over time, future canary parameters can be tuned against genuine observed failure rates rather than purely hypothetical worst cases.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">choosing metrics</div>
+    <h2>Not every metric belongs in a canary evaluation</h2>
+    <p>Raw success ratio alone is an obvious starting metric but genuinely insufficient — a release that succeeds on every request while running at 10x the latency, or 10x the memory, is still a real problem a pure success-rate check would miss entirely.</p>
+
+    <h3>Metrics should indicate real problems</h3>
+    <p>What counts as "a problem" isn't always obvious — a failed request usually is, but is a request that's 10% slower, or a service using 10% more memory, actually problematic? The chapter's recommended starting point: use your existing SLIs, since good SLIs already have demonstrated attribution to real service health, and reusing them means the canary evaluation doesn't require inventing new measurement infrastructure from scratch.</p>
+    <div class="fails"><b>Both too-strict and too-loose acceptable-behavior thresholds cause real harm, in opposite directions.</b> Too strict, and you get frequent false positives — good releases repeatedly flagged as bad, eroding trust in the canary process itself until operators start ignoring or disabling it (defeating its entire purpose). Too loose, and genuinely bad releases slip through undetected. Correctly calibrating "acceptable behavior" is genuinely expensive to get right, needs regular re-evaluation as the service evolves, and getting it wrong can actively mislead you rather than just fail silently.</div>
+    <p>Stack-rank candidate metrics by how strongly they actually indicate user-perceivable problems, and keep the working set small — the chapter suggests no more than roughly a dozen. In the example service, HTTP response codes and response latency are strong candidates because their degradation maps directly onto real user pain; raw CPU usage is a weaker candidate, since elevated resource usage doesn't necessarily translate into actual user impact, and using it invites a flaky, noisy canary process that operators learn to distrust.</p>
+    <p>HTTP status codes carry a specific trap worth naming: a 404 might reflect a genuine server-side regression, or it might just be a user hitting a broken shared link — an entirely normal, expected occurrence unrelated to the release. A practical fix: exclude 4xx codes from canary evaluation and instead run dedicated black-box monitoring checking that specific known-good URLs remain reachable, isolating the canary signal from ordinary, unrelated user behavior.</p>
+
+    <h3>Metrics should be representative and attributable</h3>
+    <p>Any observed difference between canary and control needs to be genuinely attributable to the change being canaried — not to unrelated infrastructure noise. In a large population, outliers are inevitable: an oversubscribed machine, a host running a different kernel, a segment of network under unrelated load. A larger canary population helps average out this noise, but even at reasonable size, watch for metrics with inherently high natural variance that could produce a false signal on their own.</p>
+    <div class="callout"><b>Watch for shared failure domains between canary and control — contamination runs both directions.</b> A genuinely bad canary can degrade the control (if they share backends or infrastructure), and unrelated bad behavior in shared infrastructure can make a perfectly healthy canary look bad. The chapter's specific example of a poorly isolated metric: total system CPU usage on a machine also running unrelated processes (database load, log rotation) is a bad canary metric, since spikes there may have nothing to do with your change at all — CPU time actually spent serving the canaried request specifically is a far better, more attributable signal.</div>
+
+    <h3>Before/after evaluation is genuinely risky</h3>
+    <p>An alternative to population-splitting: fully replace the old system and compare behavior <em>before</em> versus <em>after</em> the change over some time window — effectively an A/B split along the time axis instead of the population axis. This is risky specifically because time itself is one of the largest sources of change in almost any observed metric — a release on Monday inevitably gets compared against weekend traffic patterns that may look nothing like it, introducing real noise that has nothing to do with the release itself. Even setting timing noise aside, a before/after approach still faces a genuine tradeoff: it may detect a total failure faster than a small population-based canary would, but the actual time-to-recovery for users can end up comparable either way — and in the meantime, 100% of users are exposed rather than a small fraction.</p>
+
+    <h3>Gradual, staged canaries make weaker metrics usable</h3>
+    <p>Rather than one all-or-nothing canary evaluation, run multiple stages with increasing population size and correspondingly increasing confidence. The first, smallest stage — where you have essentially zero prior confidence in the release — should lean on the clearest, most unambiguous signals available (application crashes, outright request failures). Once that first stage passes, a larger subsequent stage can support evaluating subtler metrics that genuinely need more volume or time to produce a clean signal.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">isolation</div>
+    <h2>Canary and control are never in a perfect vacuum</h2>
+    <p>Canary and control populations routinely share backends, networks, and data stores for entirely practical reasons — and imperfect isolation has real, non-obvious consequences. The chapter's specific example: two consecutive requests from the same client, where the first hits the canary and somehow alters state (a cookie, a cache entry) that then influences how the <em>second</em> request behaves once it lands on the control — silently blurring the line between the two groups the evaluation assumes are cleanly separated.</p>
+    <div class="fails"><b>A canary evaluation flagging a problem doesn't automatically mean the canary itself is at fault.</b> Shared infrastructure means bad canary behavior can genuinely degrade the control too — a canary and control changing in tandem is a real, confusing possibility, not a hypothetical edge case. This is exactly why absolute measures — a defined SLO threshold, independent of the A/B comparison — remain essential as a backstop, rather than relying purely on the relative canary-vs-control comparison to catch every failure mode.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">noninteractive systems</div>
+    <h2>Canarying pipelines, not just request/response services</h2>
+    <p>Asynchronous processing pipelines (rendering, video encoding, batch data jobs) need a genuinely different set of considerations than the interactive request/response case this chapter mostly focuses on. Canary <em>duration</em> is directly bound by how long a single work unit actually takes to process — the chapter's interactive examples implicitly assume processing finishes in seconds, well under the overall canary window, an assumption that simply doesn't hold for a video-encoding job that might run for minutes or hours. The canary duration needs to span at least one full unit of work, at minimum.</p>
+    <p>Isolation gets genuinely trickier too: in multistage pipelines, a work unit often gets handed off between workers pulled from a shared pool across stages. For clean canary analysis, all stages processing a given unit of work should consistently draw from the <em>same</em> pool — either entirely canary or entirely control — or the resulting signal mixes together in ways that become very hard to untangle. Metric selection also shifts: end-to-end processing time (the pipeline's analog to interactive latency) matters, alongside processing <em>quality</em>, which is inherently application-specific and has to be defined fresh for each pipeline. With these adjustments in mind, the chapter is clear that canarying's core underlying principles remain fully applicable.</p>
+  </section>
+
+  <section class="card">
+    <div class="tab">monitoring gotcha</div>
+    <h2>A subtle trap: metric aggregation windows longer than the canary itself</h2>
+    <p>Effective canary comparison genuinely requires monitoring that can break metrics down by population (canary vs. control) — a whole-service aggregate view, as shown earlier, can hide even a real, significant canary-only defect entirely.</p>
+    <div class="fails"><b>A second, subtler trap: mismatched aggregation windows can actively corrupt a canary's own evaluation.</b> Consider an "errors per hour" metric computed by summing the past 60 minutes of requests — used to evaluate a canary that only runs for 30 minutes. If an unrelated error spike happened earlier in that same hour, it bleeds directly into the canary's own errors-per-hour reading, potentially flagging a perfectly healthy 30-minute canary as bad purely because of noise from before the canary even started. The concrete rule: any metric's aggregation interval needs to be equal to or shorter than the canary's own duration — otherwise the metric is measuring a mixture of the canary period and unrelated history, not the canary itself.</div>
+  </section>
+
+  <section class="card">
+    <div class="tab">related concepts</div>
+    <h2>Blue/green, artificial load, and traffic teeing — canary-adjacent, not canaries themselves</h2>
+    <ul>
+      <li><strong>Blue/green deployment</strong> maintains two full environments — one live ("green"), one standing by ("blue"). Cutover is instant (a router change) and rollback is just as trivial to reverse — at the real cost of running double the infrastructure. Used naively, this is really a before/after canary with all its timing-noise risk. Used well, both environments run simultaneously with traffic gradually split between them — functionally becoming a genuine A/B canary, with "blue" as the canary population and traffic-control settings determining exactly how much exposure it gets.</li>
+      <li><strong>Artificial load generation</strong> — running load tests against QA, preproduction, or even production without exposing real users. This maximizes code coverage but not <em>state</em> coverage, and struggles badly against mutable, stateful systems (caches, cookies, request affinity) since synthetic traffic can't faithfully replicate organic real-world state drift. It can also be genuinely dangerous against systems with real side effects — the chapter's sharp example: synthetic load against a billing system risks actually triggering live credit-card charges through a real payment provider, which is precisely the kind of path you'd want to avoid load-testing carelessly.</li>
+      <li><strong>Traffic teeing</strong> — copying (not redirecting) real production traffic to a parallel test environment, whose responses are discarded (or compared against the real ones for analysis) rather than served to the actual user. This gets genuinely representative traffic without any user-facing risk, but setup is meaningfully more complex than a straightforward canary, and it handles stateful systems poorly — the chapter's example: a teed system sharing a cache with production can see an artificially inflated hit rate, invalidating any performance conclusions drawn from it.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="tab">recap</div>
+    <h2>What to remember</h2>
+    <table class="recap">
+      <tr><th>Idea</th><th>Why it matters</th></tr>
+      <tr><td>Canarying is a partial, time-limited A/B deployment</td><td>Exposes a defect to a small population before it reaches everyone</td></tr>
+      <tr><td>Impact is proportional to canary size</td><td>A 20% failure rate at 5% traffic is only ~1% overall impact — a deliberate, bounded spend of error budget</td></tr>
+      <tr><td>Run one canary at a time</td><td>Overlapping canaries add cognitive load and risk genuine signal contamination between them</td></tr>
+      <tr><td>Pick metrics with real user attribution, not just anything measurable</td><td>Too-strict thresholds erode trust via false positives; too-loose ones let real defects through</td></tr>
+      <tr><td>Before/after canarying is riskier than population-splitting</td><td>Time itself is a huge, uncontrolled source of metric noise (weekday vs. weekend traffic, say)</td></tr>
+      <tr><td>Watch for shared failure domains</td><td>A bad canary can drag down the control; unrelated infra noise can make a healthy canary look bad</td></tr>
+      <tr><td>Aggregation windows must not exceed canary duration</td><td>An hourly metric evaluating a 30-minute canary can be corrupted by unrelated noise from before the canary began</td></tr>
+      <tr><td>Blue/green, artificial load, and traffic teeing are adjacent, not identical</td><td>Each trades off representativeness, complexity, and real-world risk differently than a straightforward canary</td></tr>
+    </table>
+  </section>
+
+  <footer>Original condensed write-up and diagrams · source: Google SRE Workbook, Ch. 16, CC BY-NC-ND 4.0 · sre.google/workbook/canarying-releases</footer>
+</div>
+</body>
+</html>
